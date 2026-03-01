@@ -14,7 +14,15 @@ export default function InicioSesion() {
       Alert.alert("Campos vacíos", "Por favor llena todos los campos.");
       return;
     }
-}
+  }
+
+  const handleAdminDashboard = () => {
+    navigation.navigate('dashboard-ad');
+  };
+
+  const handleCompradorDashboard = () => {
+    navigation.navigate('dashboard-cm');
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -63,6 +71,22 @@ export default function InicioSesion() {
             >
               <Text style={styles.buttonPrimaryText}>Entrar</Text>
             </TouchableOpacity>
+
+            <View style={styles.buttonContainer}>
+              <TouchableOpacity
+                style={styles.buttonSecondary}
+                onPress={handleAdminDashboard}
+              >
+                <Text style={styles.buttonSecondaryText}>Admin</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.buttonSecondary}
+                onPress={handleCompradorDashboard}
+              >
+                <Text style={styles.buttonSecondaryText}>Comprador</Text>
+              </TouchableOpacity>
+            </View>
           </View>
           <View style={styles.registerContainer}>
             <Text style={styles.termsText}>¿No tienes cuenta? </Text>
@@ -160,6 +184,26 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  buttonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    gap: 12,
+  },
+  buttonSecondary: {
+    backgroundColor: '#E8EEFB',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#1C273F',
+  },
+  buttonSecondaryText: {
+    color: '#1C273F',
+    fontSize: 14,
+    fontWeight: '600',
   },
   registerContainer: {
     alignItems: 'center',

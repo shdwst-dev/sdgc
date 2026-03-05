@@ -17,6 +17,8 @@ class usuarios extends Model
         'id_estatus',
     ];
 
+    protected $hidden = ['contrasena'];
+
     public function persona()
     {
         return $this->belongsTo(personas::class, 'id_persona');
@@ -30,5 +32,10 @@ class usuarios extends Model
     public function estatus()
     {
         return $this->belongsTo(estatus::class, 'id_estatus');
+    }
+
+    public function getAuthPassword()
+    {
+        return $this->contrasena;
     }
 }

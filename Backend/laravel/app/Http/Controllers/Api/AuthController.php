@@ -48,4 +48,21 @@ class AuthController extends Controller
             ]
         ]);
     }
+
+    public function me(Request $request){
+        $user = $request->user();
+        $user -> load([
+            'personas',
+            'roles',
+            'estatus',
+        ]);
+
+        return response()->json($user);
+    }
+
+    public function logout(Request $request)
+    {
+        $request->user()->currentAccessToken()->delete();
+        return response()->noContent();
+    }
 }

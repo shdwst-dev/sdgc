@@ -18,7 +18,13 @@ class AuthController extends Controller
             'contrasena' => 'required|string',
         ]);
 
-        $user = usuarios::where('email', $data['email'])->first();
+        $user = usuarios::where('email', $data['email'])
+            ->with([
+                'persona.direccion.calle.colonia.municipio.estado.pais',
+                'rol',
+                'estatus'
+            ])
+            ->first();
 
         if (!$user || !Hash::check($data['contrasena'], $user->contrasena)) {
             throw ValidationException::withMessages([
@@ -33,18 +39,41 @@ class AuthController extends Controller
             'usuario' => [
                 'id_usuario' => $user->id_usuario,
                 'email' => $user->email,
-                'rol' => $user->roles?->nombre,
+                'rol' => $user->rol?->nombre,
                 'estatus' => $user->estatus?->nombre,
-                'persona' => $user->personas ? [
-                    'id_persona' => $user->personas->id_persona,
-                    'nombre' => $user->personas->nombre,
-                    'ap' => $user->personas->apellido_paterno,
-                    'am' => $user->personas->apellido_materno,
-                    'telefono' => $user->personas->telefono,
-                    'direccion' => $user->personas->direccion ? [
-
-                    ]: null,
-                ]: null,
+                'persona' => $user->persona ? [
+                    'id_persona' => $user->persona->id_persona,
+                    'nombre' => $user->persona->nombre,
+                    'ap' => $user->persona->apellido_paterno,
+                    'am' => $user->persona->apellido_materno,
+                    'telefono' => $user->persona->telefono,
+                    'direccion' => $user->persona->direccion ? [
+                        'id_direccion' => $user->persona->direccion->id_direccion,
+                        'numero_int' => $user->persona->direccion->numero_int,
+                        'numero_ext' => $user->persona->direccion->numero_ext,
+                        'calle' => $user->persona->direccion->calle ? [
+                            'id_calle' => $user->persona->direccion->calle->id_calle,
+                            'nombre' => $user->persona->direccion->calle->nombre,
+                            'colonia' => $user->persona->direccion->calle->colonia ? [
+                                'id_colonia' => $user->persona->direccion->calle->colonia->id_colonia,
+                                'nombre' => $user->persona->direccion->calle->colonia->nombre,
+                                'cp' => $user->persona->direccion->calle->colonia->cp,
+                                'municipio' => $user->persona->direccion->calle->colonia->municipio ? [
+                                    'id_municipio' => $user->persona->direccion->calle->colonia->municipio->id_municipio,
+                                    'nombre' => $user->persona->direccion->calle->colonia->municipio->nombre,
+                                    'estado' => $user->persona->direccion->calle->colonia->municipio->estado ? [
+                                        'id_estado' => $user->persona->direccion->calle->colonia->municipio->estado->id_estado,
+                                        'nombre' => $user->persona->direccion->calle->colonia->municipio->estado->nombre,
+                                        'pais' => $user->persona->direccion->calle->colonia->municipio->estado->pais ? [
+                                            'id_pais' => $user->persona->direccion->calle->colonia->municipio->estado->pais->id_pais,
+                                            'nombre' => $user->persona->direccion->calle->colonia->municipio->estado->pais->nombre,
+                                        ] : null,
+                                    ] : null,
+                                ] : null,
+                            ] : null,
+                        ] : null,
+                    ] : null,
+                ] : null,
             ]
         ]);
     }
@@ -52,8 +81,8 @@ class AuthController extends Controller
     public function me(Request $request){
         $user = $request->user();
         $user -> load([
-            'personas',
-            'roles',
+            'persona',
+            'rol',
             'estatus',
         ]);
 

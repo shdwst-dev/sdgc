@@ -14,6 +14,14 @@ const menuItems = [
 
 export default function Sidebar() {
   const navigate = useNavigate();
+  const rolUsuario = localStorage.getItem("rolUsuario");
+
+  const menuVisible =
+    rolUsuario === "Vendedor"
+      ? menuItems.filter((item) => item.to === "/ventas" || item.to === "/reportes")
+      : rolUsuario === "Comprador"
+        ? menuItems.filter((item) => item.to === "/compras")
+      : menuItems;
 
   const cerrarSesion = () => {
     localStorage.removeItem("rolUsuario");
@@ -27,7 +35,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="sidebar-menu" aria-label="Navegacion principal">
-        {menuItems.map((item) => (
+        {menuVisible.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -40,9 +48,14 @@ export default function Sidebar() {
         <div className="sidebar-footer">
           <div className="sidebar-divider" />
 
-          <button type="button" className="sidebar-action">
-            Configuracion
-          </button>
+          {rolUsuario === "Administrador" ? (
+            <NavLink
+              to="/configuracion"
+              className={({ isActive }) => `sidebar-action${isActive ? " active" : ""}`}
+            >
+              Configuracion
+            </NavLink>
+          ) : null}
 
           <button type="button" className="sidebar-action" onClick={cerrarSesion}>
             Cerrar sesion

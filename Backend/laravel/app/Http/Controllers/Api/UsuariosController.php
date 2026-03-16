@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 
 class UsuariosController extends Controller
@@ -33,7 +34,7 @@ class UsuariosController extends Controller
                     $data['telefono'],
                     $data['id_direccion'],
                     $data['email'],
-                    $data['contrasena'],
+                    $this->hashPassword($data['contrasena']),
                     $data['id_rol'] ?? 2,
                     $data['id_estatus'] ?? 1,
                 ]
@@ -45,8 +46,13 @@ class UsuariosController extends Controller
         } catch (QueryException $e) {
             return response()->json([
                 'message' => 'No fue posible registrar el usuario.',
-                'error' => $e->getMessage(),
+                'error' => $e->errorInfo[2] ?? $e->getMessage(),
             ], 422);
         }
+    }
+
+    private function hashPassword(string $plainPassword): string
+    {
+        return Hash::make($plainPassword);
     }
 }

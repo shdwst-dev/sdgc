@@ -43,7 +43,7 @@ class VentasController extends Controller
         } catch (QueryException $e) {
             return response()->json([
                 'message' => 'No fue posible registrar la venta.',
-                'error' => $e->getMessage(),
+                'error' => $e->errorInfo[2] ?? $e->getMessage(),
             ], 422);
         }
     }

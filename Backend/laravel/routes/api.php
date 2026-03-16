@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ComprasController;
+use App\Http\Controllers\Api\ProductosController;
 use App\Http\Controllers\Api\UsuariosController;
 use App\Http\Controllers\Api\VentasController;
 use Illuminate\Support\Facades\Route;
@@ -16,5 +17,9 @@ Route::prefix('v1')->group(function () {
 
         Route::post('/compras/registrar', [ComprasController::class, 'registrar']);
         Route::post('/ventas/registrar', [VentasController::class, 'registrar']);
+
+        Route::post('/productos', [ProductosController::class, 'crear']);
+        Route::put('/productos/{idProducto}', [ProductosController::class, 'actualizar']);
+        Route::delete('/productos/{idProducto}', [ProductosController::class, 'eliminar']);
     });
 });

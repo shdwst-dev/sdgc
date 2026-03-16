@@ -40,7 +40,7 @@ class ComprasController extends Controller
         } catch (QueryException $e) {
             return response()->json([
                 'message' => 'No fue posible registrar la compra.',
-                'error' => $e->getMessage(),
+                'error' => $e->errorInfo[2] ?? $e->getMessage(),
             ], 422);
         }
     }

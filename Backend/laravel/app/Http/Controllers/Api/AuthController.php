@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use RuntimeException;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use App\Models\usuarios;
@@ -26,7 +27,7 @@ class AuthController extends Controller
             ])
             ->first();
 
-        if (!$user || !Hash::check($data['contrasena'], $user->contrasena)) {
+        if (!$user || !$this->isValidPassword($data['contrasena'], $user)) {
             throw ValidationException::withMessages([
                 'email' => ['Las credenciales son incorrectas.'],
             ]);
@@ -93,5 +94,25 @@ class AuthController extends Controller
     {
         $request->user()->currentAccessToken()->delete();
         return response()->noContent();
+    }
+
+    private function isValidPassword(string $plainPassword, usuarios $user): bool
+    {
+        try {
+            if (Hash::check($plainPassword, $user->contrasena)) {
+                return true;
+            }
+        } catch (RuntimeException $e) {
+            // If the old password is not hashed, allow legacy comparison once.
+        }
+
+        if (hash_equals((string) $user->contrasena, $plainPassword)) {
+            $user->contrasena = Hash::make($plainPassword);
+            $user->save();
+
+            return true;
+        }
+
+        return false;
     }
 }

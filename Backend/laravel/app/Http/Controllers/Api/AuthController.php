@@ -93,7 +93,10 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
-        return response()->noContent();
+
+        return response()->json([
+            'message' => 'Sesión cerrada exitosamente.'
+        ]);
     }
 
     private function isValidPassword(string $plainPassword, usuarios $user): bool

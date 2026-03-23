@@ -79,3 +79,18 @@ export async function login(email: string, contrasena: string): Promise<LoginRes
 
   return successBody;
 }
+
+export async function logout(token: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/auth/logout`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    console.error('Error al cerrar sesión en el servidor');
+  }
+}

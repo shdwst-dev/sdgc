@@ -23,9 +23,28 @@ export default function Sidebar() {
         ? menuItems.filter((item) => item.to === "/compras")
       : menuItems;
 
-  const cerrarSesion = () => {
-    localStorage.removeItem("rolUsuario");
-    navigate("/");
+  const cerrarSesion = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const currentHost = window.location.hostname;
+      const API_URL = `http://${currentHost}:8000/api/v1/auth/logout`;
+
+      if (token) {
+        await fetch(API_URL, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Accept": "application/json",
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Error al cerrar sesión en el servidor:", error);
+    } finally {
+      localStorage.removeItem("rolUsuario");
+      localStorage.removeItem("token");
+      navigate("/");
+    }
   };
 
   return (

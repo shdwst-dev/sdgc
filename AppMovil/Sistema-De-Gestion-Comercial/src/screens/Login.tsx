@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ApiError, login } from '../services/auth';
 import { RootStackParamList } from '../navigation/types';
+import { setToken } from '../services/storage';
 
 const logo = require('../../assets/logosdgc.jpeg');
 type LoginNavigationProp = NativeStackNavigationProp<RootStackParamList, 'InicioSesion'>;
@@ -34,6 +35,7 @@ export default function InicioSesion() {
       setIsLoading(true);
 
       const response = await login(email.trim(), password.trim());
+      setToken(response.token);
       const role = normalizeRole(response.usuario.rol ?? '');
 
       if (role.includes('admin')) {

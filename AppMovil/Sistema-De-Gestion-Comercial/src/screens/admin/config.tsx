@@ -1,7 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert, Platform } from 'react-native';
 import { Users, Store, Bell, Download, ChevronRight, LogOut, Info } from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, CommonActions } from '@react-navigation/native';
+import { logout } from '../../services/auth';
+import { getToken, setToken } from '../../services/storage';
 
 const settingsOptions = [
   {
@@ -37,19 +39,45 @@ const settingsOptions = [
 export default function Configuracion() {
   const navigation = useNavigation();
 
-  const handleLogout = () => {
-    Alert.alert(
-      "Cerrar Sesión",
-      "¿Estás seguro de que quieres salir?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        { 
-          text: "Salir", 
-          style: "destructive",
-          onPress: () => navigation.navigate('InicioSesion' as never) 
-        }
-      ]
+  const performLogout = () => {
+    // 1. Intentar notificar al servidor (fire and forget)
+    const token = getToken();
+    if (token) {
+      logout(token).catch(err => console.error("Error cierre sesión remoto:", err));
+    }
+    
+    // 2. Limpiar localmente
+    setToken(null);
+    
+    // 3. Navegar inmediatamente
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'InicioSesion' }],
+      })
     );
+  };
+
+  const handleLogout = () => {
+    if (Platform.OS === 'web') {
+      const confirm = window.confirm("¿Estás seguro de que quieres salir?");
+      if (confirm) {
+        performLogout();
+      }
+    } else {
+      Alert.alert(
+        "Cerrar Sesión",
+        "¿Estás seguro de que quieres salir?",
+        [
+          { text: "Cancelar", style: "cancel" },
+          { 
+            text: "Salir", 
+            style: "destructive",
+            onPress: performLogout
+          }
+        ]
+      );
+    }
   };
 
   return (

@@ -5,8 +5,9 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import InicioSesion from './src/screens/Login';
 import { AdminTabs } from './src/screens/admin/AdminTabs';
 import { CompradorTabs } from './src/screens/comprador/CompradorTabs';
+import { RootStackParamList } from './src/navigation/types';
 
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
   return (

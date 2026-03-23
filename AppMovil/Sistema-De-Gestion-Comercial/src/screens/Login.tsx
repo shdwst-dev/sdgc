@@ -1,27 +1,78 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, SafeAreaView, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, SafeAreaView, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { ApiError, login } from '../services/auth';
+import { RootStackParamList } from '../navigation/types';
 
 const logo = require('../../assets/logosdgc.jpeg');
+type LoginNavigationProp = NativeStackNavigationProp<RootStackParamList, 'InicioSesion'>;
 
 export default function InicioSesion() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<LoginNavigationProp>();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  const normalizeRole = (role: string) =>
+    role
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
 
   const handleLogin = async () => {
+    if (isLoading) {
+      return;
+    }
+
     if (email.trim() === '' || password.trim() === '') {
       Alert.alert("Campos vacíos", "Por favor llena todos los campos.");
       return;
     }
-  }
+
+    try {
+      setIsLoading(true);
+
+      const response = await login(email.trim(), password.trim());
+      const role = normalizeRole(response.usuario.rol ?? '');
+
+      if (role.includes('admin')) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'dashboard-ad' }],
+        });
+        return;
+      }
+
+      if (role.includes('comprador')) {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: 'dashboard-cm' }],
+        });
+        return;
+      }
+
+      Alert.alert('Sin acceso', 'Tu usuario no tiene un rol habilitado en la app movil.');
+    } catch (error) {
+      if (error instanceof ApiError) {
+        Alert.alert('No se pudo iniciar sesion', error.message);
+      } else {
+        Alert.alert(
+          'Error de conexion',
+          'No se pudo conectar al servidor. Verifica EXPO_PUBLIC_API_URL y tu red.',
+        );
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleAdminDashboard = () => {
-    navigation.navigate('dashboard-ad');
+    navigation.navigate('dashboard-ad' as never);
   };
 
   const handleCompradorDashboard = () => {
-    navigation.navigate('dashboard-cm');
+    navigation.navigate('dashboard-cm' as never);
   };
 
   return (
@@ -68,14 +119,20 @@ export default function InicioSesion() {
             <TouchableOpacity
               style={styles.buttonPrimary}
               onPress={handleLogin}
+              disabled={isLoading}
             >
-              <Text style={styles.buttonPrimaryText}>Entrar</Text>
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.buttonPrimaryText}>Entrar</Text>
+              )}
             </TouchableOpacity>
 
             <View style={styles.buttonContainer}>
               <TouchableOpacity
                 style={styles.buttonSecondary}
                 onPress={handleAdminDashboard}
+                disabled={isLoading}
               >
                 <Text style={styles.buttonSecondaryText}>Admin</Text>
               </TouchableOpacity>
@@ -83,6 +140,7 @@ export default function InicioSesion() {
               <TouchableOpacity
                 style={styles.buttonSecondary}
                 onPress={handleCompradorDashboard}
+                disabled={isLoading}
               >
                 <Text style={styles.buttonSecondaryText}>Comprador</Text>
               </TouchableOpacity>

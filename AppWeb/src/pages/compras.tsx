@@ -1,30 +1,42 @@
+import { useState } from "react";
 import Layout from "./layout";
 import "../styles/dashboard.css";
+import { useApiData } from "../hooks/useApiData";
+import { formatCurrency, formatDate } from "../lib/format";
 
 export default function Compras() {
-  const ordenes = [
-    {
-      folio: "OC-001",
-      proveedor: "Proveedor A",
-      fecha: "2026-02-15",
-      total: "$500.00",
-      estado: "Ordenada",
+  const [busqueda, setBusqueda] = useState("");
+  const [proveedorSeleccionado, setProveedorSeleccionado] = useState("Todos");
+  const [estadoSeleccionado, setEstadoSeleccionado] = useState("Todos");
+  const { data, loading, error } = useApiData("/compras", {
+    periodo_referencia: { mes: "" },
+    metricas: {
+      ordenes_mes: 0,
+      por_recibir: 0,
+      gasto_acumulado: 0,
+      proveedores_activos: 0,
     },
-    {
-      folio: "OC-002",
-      proveedor: "Proveedor B",
-      fecha: "2026-02-14",
-      total: "$1,200.00",
-      estado: "Recibida",
-    },
-    {
-      folio: "OC-003",
-      proveedor: "Proveedor C",
-      fecha: "2026-02-10",
-      total: "$350.00",
-      estado: "Borrador",
-    },
-  ];
+    proveedores: [] as string[],
+    ordenes: [] as Array<{
+      folio: string;
+      proveedor: string;
+      fecha: string;
+      total: number;
+      estado: string;
+    }>,
+  });
+
+  const ordenesFiltradas = data.ordenes.filter((orden) => {
+    const coincideBusqueda =
+      orden.folio.toLowerCase().includes(busqueda.toLowerCase()) ||
+      orden.proveedor.toLowerCase().includes(busqueda.toLowerCase());
+    const coincideProveedor =
+      proveedorSeleccionado === "Todos" || orden.proveedor === proveedorSeleccionado;
+    const coincideEstado =
+      estadoSeleccionado === "Todos" || orden.estado === estadoSeleccionado;
+
+    return coincideBusqueda && coincideProveedor && coincideEstado;
+  });
 
   return (
     <Layout>
@@ -56,10 +68,10 @@ export default function Compras() {
       <section className="stats-grid">
         <div className="stat-card">
           <div className="stat-title-row">
-            <span>Órdenes del mes</span>
+            <span>Órdenes ({data.periodo_referencia.mes || "Mes"})</span>
             <span>🧾</span>
           </div>
-          <h3>28</h3>
+          <h3>{data.metricas.ordenes_mes}</h3>
         </div>
 
         <div className="stat-card">
@@ -67,7 +79,7 @@ export default function Compras() {
             <span>Por recibir</span>
             <span>⏳</span>
           </div>
-          <h3>7</h3>
+          <h3>{data.metricas.por_recibir}</h3>
         </div>
 
         <div className="stat-card">
@@ -75,7 +87,7 @@ export default function Compras() {
             <span>Gasto acumulado</span>
             <span>$</span>
           </div>
-          <h3>$24,800</h3>
+          <h3>{formatCurrency(data.metricas.gasto_acumulado)}</h3>
         </div>
 
         <div className="stat-card">
@@ -83,27 +95,30 @@ export default function Compras() {
             <span>Proveedores activos</span>
             <span>🏢</span>
           </div>
-          <h3>14</h3>
+          <h3>{data.metricas.proveedores_activos}</h3>
         </div>
       </section>
 
       <section className="panel inventory-panel">
         <div className="inventory-filters">
-          <input type="text" placeholder="Buscar órdenes de compra..." />
-          <select defaultValue="Todos">
-            <option>Todos los proveedores</option>
-            <option>Proveedor A</option>
-            <option>Proveedor B</option>
-            <option>Proveedor C</option>
+          <input type="text" placeholder="Buscar órdenes de compra..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+          <select value={proveedorSeleccionado} onChange={(e) => setProveedorSeleccionado(e.target.value)}>
+            <option value="Todos">Todos los proveedores</option>
+            {data.proveedores.map((proveedor) => (
+              <option key={proveedor} value={proveedor}>
+                {proveedor}
+              </option>
+            ))}
           </select>
-          <select defaultValue="Todos">
-            <option>Todos los estados</option>
-            <option>Ordenada</option>
-            <option>Recibida</option>
-            <option>Borrador</option>
+          <select value={estadoSeleccionado} onChange={(e) => setEstadoSeleccionado(e.target.value)}>
+            <option value="Todos">Todos los estados</option>
+            <option value="Pendiente">Pendiente</option>
+            <option value="Completado">Completado</option>
+            <option value="En Proceso">En Proceso</option>
+            <option value="Cancelado">Cancelado</option>
           </select>
           <button type="button" className="inventory-secondary-button">
-            Filtrar
+            {ordenesFiltradas.length} resultados
           </button>
         </div>
 
@@ -120,20 +135,20 @@ export default function Compras() {
               </tr>
             </thead>
             <tbody>
-              {ordenes.map((orden) => (
+              {ordenesFiltradas.map((orden) => (
                 <tr key={orden.folio}>
                   <td>{orden.folio}</td>
                   <td>{orden.proveedor}</td>
-                  <td>{orden.fecha}</td>
-                  <td>{orden.total}</td>
+                  <td>{formatDate(orden.fecha)}</td>
+                  <td>{formatCurrency(orden.total)}</td>
                   <td>
                     <span
                       className={`inventory-status ${
-                        orden.estado === "Recibida"
+                        orden.estado === "Completado"
                           ? "inventory-status-ok"
-                          : orden.estado === "Ordenada"
+                          : orden.estado === "Pendiente" || orden.estado === "En Proceso"
                             ? "inventory-status-low"
-                            : ""
+                            : "invoice-status-overdue"
                       }`}
                     >
                       {orden.estado}
@@ -150,6 +165,9 @@ export default function Compras() {
           </table>
         </div>
       </section>
+
+      {loading ? <p className="panel">Cargando compras...</p> : null}
+      {error ? <p className="panel">Error al cargar compras: {error}</p> : null}
     </Layout>
   );
 }

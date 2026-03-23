@@ -1,18 +1,29 @@
 import Layout from "./layout";
 import "../styles/dashboard.css";
+import { useApiData } from "../hooks/useApiData";
+import { formatCurrency } from "../lib/format";
 
 export default function Ventas() {
-  const productos = [
-    { sku: "SKU-001", nombre: "Producto A", precio: "$15.00", stock: 50 },
-    { sku: "SKU-002", nombre: "Producto B", precio: "$30.00", stock: 20 },
-    { sku: "SKU-003", nombre: "Producto C", precio: "$8.00", stock: 100 },
-    { sku: "SKU-004", nombre: "Producto D", precio: "$45.00", stock: 15 },
-  ];
-
-  const carrito = [
-    { nombre: "Producto A", precioUnitario: "$15.00", cantidad: 2, total: "$30.00" },
-    { nombre: "Producto B", precioUnitario: "$30.00", cantidad: 1, total: "$25.00", descuento: "-$5.00" },
-  ];
+  const { data, loading, error } = useApiData("/ventas", {
+    productos: [] as Array<{ sku: string; nombre: string; precio: number; stock: number }>,
+    metodos_pago: [] as string[],
+    venta_en_curso: {
+      cliente: "",
+      metodo_pago: "Efectivo",
+      carrito: [] as Array<{
+        nombre: string;
+        precio_unitario: number;
+        cantidad: number;
+        total: number;
+        descuento: string | null;
+      }>,
+      resumen: {
+        subtotal: 0,
+        iva: 0,
+        total: 0,
+      },
+    },
+  });
 
   return (
     <Layout>
@@ -46,14 +57,14 @@ export default function Ventas() {
             </div>
 
             <div className="sales-products-grid">
-              {productos.map((producto) => (
+              {data.productos.map((producto) => (
                 <article key={producto.sku} className="sales-product-card">
                   <div className="sales-product-image">Imagen del producto</div>
                   <div className="sales-product-meta">
                     <span className="sales-product-sku">{producto.sku}</span>
                     <h4>{producto.nombre}</h4>
                     <div className="sales-product-row">
-                      <strong>{producto.precio}</strong>
+                      <strong>{formatCurrency(producto.precio)}</strong>
                       <span>Stock: {producto.stock}</span>
                     </div>
                   </div>
@@ -67,7 +78,7 @@ export default function Ventas() {
           <div className="sales-customer-block">
             <label htmlFor="cliente">Cliente</label>
             <div className="sales-customer-row">
-              <input id="cliente" type="text" placeholder="Seleccionar cliente..." />
+              <input id="cliente" type="text" placeholder="Seleccionar cliente..." value={data.venta_en_curso.cliente} readOnly />
               <button type="button" className="sales-add-button">+</button>
             </div>
           </div>
@@ -77,12 +88,12 @@ export default function Ventas() {
           </div>
 
           <div className="sales-cart-items">
-            {carrito.map((item) => (
+            {data.venta_en_curso.carrito.map((item) => (
               <div key={item.nombre} className="sales-cart-item">
                 <div className="sales-cart-item-top">
                   <div>
                     <strong>{item.nombre}</strong>
-                    <p>{item.precioUnitario} c/u</p>
+                    <p>{formatCurrency(item.precio_unitario)} c/u</p>
                   </div>
                   <button type="button" className="sales-remove-button">
                     Eliminar
@@ -95,7 +106,7 @@ export default function Ventas() {
                     <span>{item.cantidad}</span>
                     <button type="button">+</button>
                   </div>
-                  <strong>{item.total}</strong>
+                  <strong>{formatCurrency(item.total)}</strong>
                 </div>
 
                 {item.descuento ? <span className="sales-discount">Descuento: {item.descuento}</span> : null}
@@ -106,24 +117,24 @@ export default function Ventas() {
           <div className="sales-summary">
             <div>
               <span>Subtotal:</span>
-              <strong>$55.00</strong>
+              <strong>{formatCurrency(data.venta_en_curso.resumen.subtotal)}</strong>
             </div>
             <div>
               <span>IVA (10%):</span>
-              <strong>$5.50</strong>
+              <strong>{formatCurrency(data.venta_en_curso.resumen.iva)}</strong>
             </div>
             <div className="sales-total">
               <span>Total:</span>
-              <strong>$60.50</strong>
+              <strong>{formatCurrency(data.venta_en_curso.resumen.total)}</strong>
             </div>
           </div>
 
           <div className="sales-payment-block">
             <label htmlFor="metodo-pago">Método de pago</label>
-            <select id="metodo-pago" defaultValue="Efectivo">
-              <option>Efectivo</option>
-              <option>Tarjeta</option>
-              <option>Transferencia</option>
+            <select id="metodo-pago" value={data.venta_en_curso.metodo_pago} disabled onChange={() => undefined}>
+              {data.metodos_pago.map((metodo) => (
+                <option key={metodo}>{metodo}</option>
+              ))}
             </select>
           </div>
 
@@ -132,6 +143,9 @@ export default function Ventas() {
           </button>
         </aside>
       </section>
+
+      {loading ? <p className="panel">Cargando punto de venta...</p> : null}
+      {error ? <p className="panel">Error al cargar ventas: {error}</p> : null}
     </Layout>
   );
 }

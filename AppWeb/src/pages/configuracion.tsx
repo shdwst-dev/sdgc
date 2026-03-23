@@ -1,5 +1,6 @@
 import Layout from "./layout";
 import "../styles/dashboard.css";
+import { useApiData } from "../hooks/useApiData";
 
 export default function Configuracion() {
   const secciones = [
@@ -9,6 +10,18 @@ export default function Configuracion() {
     "Metodos de pago",
     "Plantillas de factura",
   ];
+  const { data, loading, error } = useApiData("/configuracion", {
+    negocio: {
+      nombre: "",
+      correo: "",
+      telefono: "",
+      direccion: "",
+      ciudad: "",
+      estado: "",
+      cp: "",
+      rfc: "",
+    },
+  });
 
   return (
     <Layout>
@@ -55,42 +68,42 @@ export default function Configuracion() {
           <div className="settings-form">
             <div className="settings-field settings-field-full">
               <label htmlFor="nombre-negocio">Nombre del negocio</label>
-              <input id="nombre-negocio" type="text" placeholder="Nombre de tu negocio" />
+              <input id="nombre-negocio" type="text" placeholder="Nombre de tu negocio" value={data.negocio.nombre} readOnly />
             </div>
 
             <div className="settings-field">
               <label htmlFor="correo-negocio">Correo electrónico</label>
-              <input id="correo-negocio" type="email" placeholder="negocio@ejemplo.com" />
+              <input id="correo-negocio" type="email" placeholder="negocio@ejemplo.com" value={data.negocio.correo} readOnly />
             </div>
 
             <div className="settings-field">
               <label htmlFor="telefono-negocio">Teléfono</label>
-              <input id="telefono-negocio" type="tel" placeholder="(555) 000-0000" />
+              <input id="telefono-negocio" type="tel" placeholder="(555) 000-0000" value={data.negocio.telefono} readOnly />
             </div>
 
             <div className="settings-field settings-field-full">
               <label htmlFor="direccion-negocio">Dirección</label>
-              <input id="direccion-negocio" type="text" placeholder="Calle y número" />
+              <input id="direccion-negocio" type="text" placeholder="Calle y número" value={data.negocio.direccion} readOnly />
             </div>
 
             <div className="settings-field">
               <label htmlFor="ciudad-negocio">Ciudad</label>
-              <input id="ciudad-negocio" type="text" placeholder="Ciudad" />
+              <input id="ciudad-negocio" type="text" placeholder="Ciudad" value={data.negocio.ciudad} readOnly />
             </div>
 
             <div className="settings-field">
               <label htmlFor="estado-negocio">Estado</label>
-              <input id="estado-negocio" type="text" placeholder="Estado" />
+              <input id="estado-negocio" type="text" placeholder="Estado" value={data.negocio.estado} readOnly />
             </div>
 
             <div className="settings-field">
               <label htmlFor="cp-negocio">Código postal</label>
-              <input id="cp-negocio" type="text" placeholder="12345" />
+              <input id="cp-negocio" type="text" placeholder="12345" value={String(data.negocio.cp)} readOnly />
             </div>
 
             <div className="settings-field settings-field-full">
               <label htmlFor="rfc-negocio">RFC / Identificación fiscal</label>
-              <input id="rfc-negocio" type="text" placeholder="00-0000000" />
+              <input id="rfc-negocio" type="text" placeholder="00-0000000" value={data.negocio.rfc} readOnly />
             </div>
           </div>
 
@@ -99,6 +112,9 @@ export default function Configuracion() {
           </button>
         </section>
       </section>
+
+      {loading ? <p className="panel">Cargando configuracion...</p> : null}
+      {error ? <p className="panel">Error al cargar configuracion: {error}</p> : null}
     </Layout>
   );
 }

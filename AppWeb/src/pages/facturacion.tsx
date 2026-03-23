@@ -1,13 +1,18 @@
 import Layout from "./layout";
 import "../styles/dashboard.css";
+import { useApiData } from "../hooks/useApiData";
+import { formatCurrency, formatDate } from "../lib/format";
 
 export default function Facturacion() {
-  const facturas = [
-    { folio: "FAC-001", cliente: "Cliente A", fecha: "2026-02-18", total: "$250.00", estado: "Pagada" },
-    { folio: "FAC-002", cliente: "Cliente B", fecha: "2026-02-17", total: "$1,200.00", estado: "Pendiente" },
-    { folio: "FAC-003", cliente: "Cliente C", fecha: "2026-02-15", total: "$450.00", estado: "Vencida" },
-    { folio: "FAC-004", cliente: "Cliente A", fecha: "2026-02-14", total: "$180.00", estado: "Pagada" },
-  ];
+  const { data, loading, error } = useApiData("/facturacion", {
+    facturas: [] as Array<{
+      folio: string;
+      cliente: string;
+      fecha: string;
+      total: number;
+      estado: string;
+    }>,
+  });
 
   return (
     <Layout>
@@ -66,12 +71,12 @@ export default function Facturacion() {
               </tr>
             </thead>
             <tbody>
-              {facturas.map((factura) => (
+              {data.facturas.map((factura) => (
                 <tr key={factura.folio}>
                   <td>{factura.folio}</td>
                   <td>{factura.cliente}</td>
-                  <td>{factura.fecha}</td>
-                  <td>{factura.total}</td>
+                  <td>{formatDate(factura.fecha)}</td>
+                  <td>{formatCurrency(factura.total)}</td>
                   <td>
                     <span
                       className={`inventory-status ${
@@ -98,6 +103,9 @@ export default function Facturacion() {
           </table>
         </div>
       </section>
+
+      {loading ? <p className="panel">Cargando facturacion...</p> : null}
+      {error ? <p className="panel">Error al cargar facturacion: {error}</p> : null}
     </Layout>
   );
 }

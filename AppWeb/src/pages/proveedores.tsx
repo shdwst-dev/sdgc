@@ -1,30 +1,18 @@
 import Layout from "./layout";
 import "../styles/dashboard.css";
+import { useApiData } from "../hooks/useApiData";
+import { formatDate } from "../lib/format";
 
 export default function Proveedores() {
-  const proveedores = [
-    {
-      nombre: "Proveedor A",
-      correo: "contacto@proveedora.com",
-      telefono: "(555) 111-2222",
-      productos: 25,
-      ultimoPedido: "2026-02-15",
-    },
-    {
-      nombre: "Proveedor B",
-      correo: "info@proveedorb.com",
-      telefono: "(555) 333-4444",
-      productos: 18,
-      ultimoPedido: "2026-02-10",
-    },
-    {
-      nombre: "Proveedor C",
-      correo: "ventas@proveedorc.com",
-      telefono: "(555) 555-6666",
-      productos: 32,
-      ultimoPedido: "2026-02-12",
-    },
-  ];
+  const { data, loading, error } = useApiData("/proveedores", {
+    proveedores: [] as Array<{
+      nombre: string;
+      correo: string;
+      telefono: string;
+      productos: number;
+      ultimo_pedido: string | null;
+    }>,
+  });
 
   return (
     <Layout>
@@ -76,7 +64,7 @@ export default function Proveedores() {
               </tr>
             </thead>
             <tbody>
-              {proveedores.map((proveedor) => (
+              {data.proveedores.map((proveedor) => (
                 <tr key={proveedor.correo}>
                   <td>{proveedor.nombre}</td>
                   <td>
@@ -86,7 +74,7 @@ export default function Proveedores() {
                     </div>
                   </td>
                   <td>{proveedor.productos}</td>
-                  <td>{proveedor.ultimoPedido}</td>
+                  <td>{formatDate(proveedor.ultimo_pedido)}</td>
                   <td>
                     <div className="customer-actions">
                       <button type="button" className="customer-action-button">Ver</button>
@@ -100,6 +88,9 @@ export default function Proveedores() {
           </table>
         </div>
       </section>
+
+      {loading ? <p className="panel">Cargando proveedores...</p> : null}
+      {error ? <p className="panel">Error al cargar proveedores: {error}</p> : null}
     </Layout>
   );
 }

@@ -243,6 +243,32 @@ body {
   color: #8a5a11;
 }
 
+.google-chart {
+  width: 100%;
+  min-height: 260px;
+  background: linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+  border: 1px solid #d9e3f0;
+  border-radius: 14px;
+}
+
+.google-chart-large {
+  min-height: 300px;
+}
+
+.google-chart-small {
+  min-height: 300px;
+}
+
+.google-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: #64748b;
+  font-size: 14px;
+  text-align: center;
+}
+
 .customers-filters {
   display: grid;
   grid-template-columns: 2fr 1fr;

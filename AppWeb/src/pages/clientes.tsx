@@ -1,33 +1,19 @@
 import Layout from "./layout";
 import "../styles/dashboard.css";
+import { useApiData } from "../hooks/useApiData";
+import { formatCurrency, formatDate } from "../lib/format";
 
 export default function Clientes() {
-  const clientes = [
-    {
-      nombre: "Cliente A",
-      correo: "cliente.a@email.com",
-      telefono: "(555) 123-4567",
-      compras: "$2,500.00",
-      ultimaCompra: "2026-02-15",
-      estado: "Activo",
-    },
-    {
-      nombre: "Cliente B",
-      correo: "cliente.b@email.com",
-      telefono: "(555) 234-5678",
-      compras: "$1,200.00",
-      ultimaCompra: "2026-02-10",
-      estado: "Activo",
-    },
-    {
-      nombre: "Cliente C",
-      correo: "cliente.c@email.com",
-      telefono: "(555) 345-6789",
-      compras: "$5,800.00",
-      ultimaCompra: "2026-02-18",
-      estado: "VIP",
-    },
-  ];
+  const { data, loading, error } = useApiData("/clientes", {
+    clientes: [] as Array<{
+      nombre: string;
+      correo: string;
+      telefono: string;
+      compras: number;
+      ultima_compra: string | null;
+      estado: string;
+    }>,
+  });
 
   return (
     <Layout>
@@ -80,7 +66,7 @@ export default function Clientes() {
               </tr>
             </thead>
             <tbody>
-              {clientes.map((cliente) => (
+              {data.clientes.map((cliente) => (
                 <tr key={cliente.correo}>
                   <td>{cliente.nombre}</td>
                   <td>
@@ -89,8 +75,8 @@ export default function Clientes() {
                       <span>{cliente.telefono}</span>
                     </div>
                   </td>
-                  <td>{cliente.compras}</td>
-                  <td>{cliente.ultimaCompra}</td>
+                  <td>{formatCurrency(cliente.compras)}</td>
+                  <td>{formatDate(cliente.ultima_compra)}</td>
                   <td>
                     <span
                       className={`inventory-status ${
@@ -113,6 +99,9 @@ export default function Clientes() {
           </table>
         </div>
       </section>
+
+      {loading ? <p className="panel">Cargando clientes...</p> : null}
+      {error ? <p className="panel">Error al cargar clientes: {error}</p> : null}
     </Layout>
   );
 }

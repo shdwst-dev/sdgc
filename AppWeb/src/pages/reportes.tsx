@@ -1,7 +1,41 @@
+import { useMemo } from "react";
 import Layout from "./layout";
 import "../styles/dashboard.css";
+import { useApiData } from "../hooks/useApiData";
+import { formatCurrency } from "../lib/format";
+import { GoogleChart } from "../components/GoogleChart";
 
 export default function Reportes() {
+  const { data, loading, error } = useApiData("/reportes", {
+    periodo_referencia: { inicio: "", fin: "", mes: "" },
+    metricas: {
+      ventas_totales: 0,
+      costos_totales: 0,
+      utilidad_bruta: 0,
+      utilidad_neta: 0,
+      facturas_pendientes: 0,
+    },
+    flujo_periodo: {
+      labels: [] as string[],
+      ingresos: [] as number[],
+      gastos: [] as number[],
+      utilidad: [] as number[],
+    },
+  });
+
+  const reportFlowChartData = useMemo(
+    () => [
+      ["Dia", "Ventas", "Costos", "Utilidad"],
+      ...data.flujo_periodo.labels.map((label, index) => [
+        label,
+        data.flujo_periodo.ingresos[index] ?? 0,
+        data.flujo_periodo.gastos[index] ?? 0,
+        data.flujo_periodo.utilidad[index] ?? 0,
+      ]),
+    ],
+    [data.flujo_periodo],
+  );
+
   return (
     <Layout>
       <header className="topbar">
@@ -29,9 +63,9 @@ export default function Reportes() {
       <section className="panel reports-filter-panel">
         <div className="reports-filters">
           <label htmlFor="fecha-inicio">Rango de fechas:</label>
-          <input id="fecha-inicio" type="date" defaultValue="2026-02-01" />
+          <input id="fecha-inicio" type="date" value={data.periodo_referencia.inicio || "2026-02-01"} readOnly />
           <span>a</span>
-          <input id="fecha-fin" type="date" defaultValue="2026-02-29" />
+          <input id="fecha-fin" type="date" value={data.periodo_referencia.fin || "2026-02-28"} readOnly />
           <button type="button" className="inventory-primary-button">
             Aplicar
           </button>
@@ -44,8 +78,8 @@ export default function Reportes() {
             <span>Ventas totales</span>
             <span>$</span>
           </div>
-          <h3>$45,280</h3>
-          <small>+12.5% respecto al periodo anterior</small>
+          <h3>{formatCurrency(data.metricas.ventas_totales)}</h3>
+          <small>Periodo de referencia: {data.periodo_referencia.mes || "Sin datos"}</small>
         </div>
 
         <div className="stat-card">
@@ -53,8 +87,8 @@ export default function Reportes() {
             <span>Costos totales</span>
             <span>⌁</span>
           </div>
-          <h3>$28,150</h3>
-          <small>+8.2% respecto al periodo anterior</small>
+          <h3>{formatCurrency(data.metricas.costos_totales)}</h3>
+          <small>Compras registradas del periodo</small>
         </div>
 
         <div className="stat-card">
@@ -62,8 +96,8 @@ export default function Reportes() {
             <span>Utilidad bruta</span>
             <span>↗</span>
           </div>
-          <h3>$17,130</h3>
-          <small>+18.7% respecto al periodo anterior</small>
+          <h3>{formatCurrency(data.metricas.utilidad_bruta)}</h3>
+          <small>Ventas menos costos</small>
         </div>
 
         <div className="stat-card">
@@ -71,8 +105,8 @@ export default function Reportes() {
             <span>Utilidad neta</span>
             <span>↗</span>
           </div>
-          <h3>$15,220</h3>
-          <small>+21.3% respecto al periodo anterior</small>
+          <h3>{formatCurrency(data.metricas.utilidad_neta)}</h3>
+          <small>Estimado sin otros gastos operativos</small>
         </div>
 
         <div className="stat-card">
@@ -80,8 +114,8 @@ export default function Reportes() {
             <span>Facturas pendientes</span>
             <span>🧾</span>
           </div>
-          <h3>$3,450</h3>
-          <small>12 facturas por cobrar</small>
+          <h3>{formatCurrency(data.metricas.facturas_pendientes)}</h3>
+          <small>Monto pendiente por facturar o procesar</small>
         </div>
       </section>
 
@@ -92,10 +126,30 @@ export default function Reportes() {
             Exportar
           </button>
         </div>
-        <div className="chart-placeholder reports-chart-placeholder">
-          Espacio para gráfica de tendencia de utilidad
-        </div>
+        <GoogleChart
+          type="LineChart"
+          data={reportFlowChartData}
+          className="google-chart google-chart-large"
+          options={{
+            backgroundColor: "transparent",
+            chartArea: { left: 60, right: 24, top: 24, bottom: 42, width: "100%", height: "72%" },
+            colors: ["#1f4b99", "#d97706", "#15803d"],
+            curveType: "function",
+            legend: { position: "top", textStyle: { color: "#475569", fontSize: 12 } },
+            hAxis: { textStyle: { color: "#64748b", fontSize: 11 } },
+            vAxis: {
+              minValue: 0,
+              textStyle: { color: "#64748b", fontSize: 11 },
+              gridlines: { color: "#e2e8f0" },
+            },
+            lineWidth: 3,
+            pointSize: 5,
+          }}
+        />
       </section>
+
+      {loading ? <p className="panel">Cargando reportes...</p> : null}
+      {error ? <p className="panel">Error al cargar reportes: {error}</p> : null}
     </Layout>
   );
 }

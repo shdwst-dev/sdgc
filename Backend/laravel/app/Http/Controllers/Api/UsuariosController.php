@@ -25,20 +25,27 @@ class UsuariosController extends Controller
         ]);
 
         try {
-            DB::statement(
-                'CALL pa_registrar_usuario(?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [
-                    $data['nombre'],
-                    $data['apellido_paterno'],
-                    $data['apellido_materno'] ?? null,
-                    $data['telefono'],
-                    $data['id_direccion'],
-                    $data['email'],
-                    $this->hashPassword($data['contrasena']),
-                    $data['id_rol'] ?? 2,
-                    $data['id_estatus'] ?? 1,
-                ]
-            );
+            // Create person
+            $idPersona = DB::table('personas')->insertGetId([
+                'nombre' => $data['nombre'],
+                'apellido_paterno' => $data['apellido_paterno'],
+                'apellido_materno' => $data['apellido_materno'] ?? null,
+                'telefono' => $data['telefono'],
+                'id_direccion' => $data['id_direccion'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            // Create user
+            DB::table('usuarios')->insert([
+                'id_persona' => $idPersona,
+                'email' => $data['email'],
+                'contrasena' => $this->hashPassword($data['contrasena']),
+                'id_rol' => $data['id_rol'] ?? 2,
+                'id_estatus' => $data['id_estatus'] ?? 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
 
             return response()->json([
                 'message' => 'Usuario registrado correctamente.'

@@ -21,21 +21,36 @@ class ComprasController extends Controller
             'detalles.*.precio_compra' => 'required|numeric|min:0.01',
         ]);
 
-        $detalleLiteral = $this->buildDetalleCompraArrayLiteral($data['detalles']);
-
         try {
-            DB::statement(
-                'CALL pa_registrar_compra(?, ?, ?::detalle_compra_type[], ?)',
-                [
-                    $data['id_proveedor'],
-                    $data['id_tienda'],
-                    $detalleLiteral,
-                    $data['id_estatus'] ?? 1,
-                ]
-            );
+            // Insert purchase
+            $idCompra = DB::table('compras')->insertGetId([
+                'id_proveedor' => $data['id_proveedor'],
+                'id_tienda' => $data['id_tienda'],
+                'id_estatus' => $data['id_estatus'] ?? 1,
+                'fecha_compra' => now(),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+            // Insert purchase details
+            foreach ($data['detalles'] as $detalle) {
+                $cantidad = (int) $detalle['cantidad'];
+                $precioCompra = (float) $detalle['precio_compra'];
+                
+                DB::table('detalle_compras')->insert([
+                    'id_compra' => $idCompra,
+                    'id_producto' => $detalle['producto_id'],
+                    'cantidad' => $cantidad,
+                    'precio_compra' => $precioCompra,
+                    'subtotal' => $cantidad * $precioCompra,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
 
             return response()->json([
-                'message' => 'Compra registrada correctamente.'
+                'message' => 'Compra registrada correctamente.',
+                'id_compra' => $idCompra,
             ], 201);
         } catch (QueryException $e) {
             return response()->json([

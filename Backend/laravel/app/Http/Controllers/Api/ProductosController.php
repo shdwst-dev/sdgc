@@ -24,23 +24,23 @@ class ProductosController extends Controller
         ]);
 
         try {
-            DB::statement(
-                'CALL pa_crear_producto(?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [
-                    $data['id_medida'],
-                    $data['id_unidad'],
-                    $data['id_subcategoria'],
-                    $data['nombre'],
-                    $data['precio_base'],
-                    $data['precio_unitario'],
-                    $data['codigo_barras'] ?? null,
-                    $data['imagen_url'] ?? null,
-                    $data['id_estatus'] ?? 1,
-                ]
-            );
+            $idProducto = DB::table('productos')->insertGetId([
+                'id_medida' => $data['id_medida'],
+                'id_unidad' => $data['id_unidad'],
+                'id_subcategoria' => $data['id_subcategoria'],
+                'nombre' => $data['nombre'],
+                'precio_base' => $data['precio_base'],
+                'precio_unitario' => $data['precio_unitario'],
+                'codigo_barras' => $data['codigo_barras'] ?? null,
+                'imagen_url' => $data['imagen_url'] ?? null,
+                'id_estatus' => $data['id_estatus'] ?? 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
 
             return response()->json([
-                'message' => 'Producto creado correctamente.'
+                'message' => 'Producto creado correctamente.',
+                'id_producto' => $idProducto,
             ], 201);
         } catch (QueryException $e) {
             return response()->json([
@@ -62,18 +62,17 @@ class ProductosController extends Controller
         ]);
 
         try {
-            DB::statement(
-                'CALL pa_actualizar_producto(?, ?, ?, ?, ?, ?, ?)',
-                [
-                    $idProducto,
-                    $data['nombre'],
-                    $data['precio_base'],
-                    $data['precio_unitario'],
-                    $data['codigo_barras'] ?? null,
-                    $data['imagen_url'] ?? null,
-                    $data['id_estatus'],
-                ]
-            );
+            DB::table('productos')
+                ->where('id_producto', $idProducto)
+                ->update([
+                    'nombre' => $data['nombre'],
+                    'precio_base' => $data['precio_base'],
+                    'precio_unitario' => $data['precio_unitario'],
+                    'codigo_barras' => $data['codigo_barras'] ?? null,
+                    'imagen_url' => $data['imagen_url'] ?? null,
+                    'id_estatus' => $data['id_estatus'],
+                    'updated_at' => now(),
+                ]);
 
             return response()->json([
                 'message' => 'Producto actualizado correctamente.'
@@ -89,7 +88,9 @@ class ProductosController extends Controller
     public function eliminar(int $idProducto)
     {
         try {
-            DB::statement('CALL pa_eliminar_producto(?)', [$idProducto]);
+            DB::table('productos')
+                ->where('id_producto', $idProducto)
+                ->delete();
 
             return response()->json([
                 'message' => 'Producto eliminado correctamente.'

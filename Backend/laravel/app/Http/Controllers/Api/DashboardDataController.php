@@ -31,7 +31,7 @@ class DashboardDataController extends Controller
             ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'v.id_venta')
             ->select(
                 DB::raw("COALESCE(c.numero_correlativo, v.id_venta) as factura"),
-                DB::raw("CONCAT(p.nombre, ' ', p.apellido_paterno) as responsable"),
+                DB::raw("p.nombre || ' ' || p.apellido_paterno as responsable"),
                 'v.fecha_hora as fecha',
                 DB::raw('COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) as monto')
             )
@@ -292,7 +292,7 @@ class DashboardDataController extends Controller
                 'pr.id_proveedor',
                 'pr.razon_social as nombre',
                 'pe.telefono',
-                DB::raw("CONCAT(LOWER(REPLACE(pe.nombre, ' ', '.')), '.', LOWER(REPLACE(pe.apellido_paterno, ' ', '')), '@tienda.com') as correo"),
+                DB::raw("LOWER(REPLACE(pe.nombre, ' ', '.')) || '.' || LOWER(REPLACE(pe.apellido_paterno, ' ', '')) || '@tienda.com' as correo"),
                 DB::raw('COUNT(DISTINCT dc.producto_id) as productos'),
                 DB::raw('MAX(c.fecha_hora) as ultimo_pedido')
             )

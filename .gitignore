@@ -1,0 +1,34 @@
+# Backend
+Backend/laravel/.env
+Backend/laravel/.env.local
+Backend/laravel/.env.*.local
+Backend/laravel/node_modules/
+Backend/laravel/vendor/
+Backend/laravel/storage/logs/*.log
+Backend/laravel/storage/app/*
+Backend/laravel/bootstrap/cache/*
+Backend/laravel/database/*.sqlite
+Backend/laravel/database/*.sqlite-journal
+
+# Frontend
+AppWeb/node_modules/
+AppWeb/dist/
+AppWeb/.env.local
+
+# Mobile
+AppMovil/node_modules/
+AppMovil/dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# General
+*.log
+.DS_Store

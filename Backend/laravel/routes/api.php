@@ -25,6 +25,9 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
+        Route::get('/graficas/ingresos-vs-gastos', [DashboardDataController::class, 'graficaIngresosVsGastos']);
+        Route::get('/graficas/productos-mas-vendidos', [DashboardDataController::class, 'graficaProductosMasVendidos']);
+        Route::get('/graficas/utilidad', [DashboardDataController::class, 'graficaUtilidad']);
 
         Route::post('/compras/registrar', [ComprasController::class, 'registrar']);
         Route::post('/ventas/registrar', [VentasController::class, 'registrar']);
@@ -33,4 +36,10 @@ Route::prefix('v1')->group(function () {
         Route::put('/productos/{idProducto}', [ProductosController::class, 'actualizar']);
         Route::delete('/productos/{idProducto}', [ProductosController::class, 'eliminar']);
     });
+});
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/graficas/ingresos-vs-gastos', [DashboardDataController::class, 'graficaIngresosVsGastos']);
+    Route::get('/graficas/productos-mas-vendidos', [DashboardDataController::class, 'graficaProductosMasVendidos']);
+    Route::get('/graficas/utilidad', [DashboardDataController::class, 'graficaUtilidad']);
 });

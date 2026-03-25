@@ -106,7 +106,6 @@ class AuthController extends Controller
                 return true;
             }
         } catch (RuntimeException $e) {
-            // If the old password is not hashed, allow legacy comparison once.
         }
 
         if (hash_equals((string) $user->contrasena, $plainPassword)) {

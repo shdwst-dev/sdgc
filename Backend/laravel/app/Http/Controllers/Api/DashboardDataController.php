@@ -403,6 +403,77 @@ class DashboardDataController extends Controller
         ]);
     }
 
+    public function graficaIngresosVsGastos(): JsonResponse
+    {
+        $referenceDate = $this->referenceDate('ventas', 'fecha_hora') ?? Carbon::now();
+        $monthStart = $referenceDate->copy()->startOfMonth();
+        $monthEnd = $referenceDate->copy()->endOfMonth();
+        $flujo = $this->buildMonthlyFlow($monthStart, $monthEnd);
+
+        return response()->json([
+            'periodo_referencia' => [
+                'inicio' => $monthStart->toDateString(),
+                'fin' => $monthEnd->toDateString(),
+                'mes' => $referenceDate->translatedFormat('F Y'),
+            ],
+            'series' => [
+                'labels' => $flujo['labels'],
+                'ingresos' => $flujo['ingresos'],
+                'gastos' => $flujo['gastos'],
+            ],
+            'totales' => [
+                'ingresos' => array_sum($flujo['ingresos']),
+                'gastos' => array_sum($flujo['gastos']),
+            ],
+        ]);
+    }
+
+    public function graficaProductosMasVendidos(): JsonResponse
+    {
+        $referenceDate = $this->referenceDate('ventas', 'fecha_hora') ?? Carbon::now();
+        $monthStart = $referenceDate->copy()->startOfMonth();
+        $monthEnd = $referenceDate->copy()->endOfMonth();
+        $topProductos = $this->topProductosForRange($monthStart, $monthEnd);
+
+        return response()->json([
+            'periodo_referencia' => [
+                'inicio' => $monthStart->toDateString(),
+                'fin' => $monthEnd->toDateString(),
+                'mes' => $referenceDate->translatedFormat('F Y'),
+            ],
+            'series' => [
+                'labels' => $topProductos->pluck('nombre')->values(),
+                'cantidad' => $topProductos->pluck('cantidad')->values(),
+            ],
+            'top_productos' => $topProductos->values(),
+        ]);
+    }
+
+    public function graficaUtilidad(): JsonResponse
+    {
+        $referenceDate = $this->referenceDate('ventas', 'fecha_hora') ?? Carbon::now();
+        $monthStart = $referenceDate->copy()->startOfMonth();
+        $monthEnd = $referenceDate->copy()->endOfMonth();
+        $flujo = $this->buildMonthlyFlow($monthStart, $monthEnd);
+
+        return response()->json([
+            'periodo_referencia' => [
+                'inicio' => $monthStart->toDateString(),
+                'fin' => $monthEnd->toDateString(),
+                'mes' => $referenceDate->translatedFormat('F Y'),
+            ],
+            'series' => [
+                'labels' => $flujo['labels'],
+                'utilidad' => $flujo['utilidad'],
+            ],
+            'totales' => [
+                'ingresos' => array_sum($flujo['ingresos']),
+                'gastos' => array_sum($flujo['gastos']),
+                'utilidad' => array_sum($flujo['utilidad']),
+            ],
+        ]);
+    }
+
     public function configuracion(): JsonResponse
     {
         $tienda = DB::table('tiendas as t')
@@ -508,5 +579,25 @@ class DashboardDataController extends Controller
             'gastos' => $gastos,
             'utilidad' => $utilidad,
         ];
+    }
+
+    protected function topProductosForRange(Carbon $start, Carbon $end)
+    {
+        return DB::table('detalle_ventas as dv')
+            ->join('ventas as v', 'v.id_venta', '=', 'dv.venta_id')
+            ->join('productos as p', 'p.id_producto', '=', 'dv.producto_id')
+            ->whereBetween('v.fecha_hora', [$start->toDateTimeString(), $end->toDateTimeString()])
+            ->select(
+                'p.nombre',
+                DB::raw('SUM(dv.cantidad) as cantidad')
+            )
+            ->groupBy('p.nombre')
+            ->orderByDesc('cantidad')
+            ->limit(10)
+            ->get()
+            ->map(fn ($producto) => [
+                'nombre' => $producto->nombre,
+                'cantidad' => (int) $producto->cantidad,
+            ]);
     }
 }

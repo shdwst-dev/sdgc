@@ -21,36 +21,21 @@ class ComprasController extends Controller
             'detalles.*.precio_compra' => 'required|numeric|min:0.01',
         ]);
 
-        try {
-            // Insert purchase
-            $idCompra = DB::table('compras')->insertGetId([
-                'id_proveedor' => $data['id_proveedor'],
-                'id_tienda' => $data['id_tienda'],
-                'id_estatus' => $data['id_estatus'] ?? 1,
-                'fecha_compra' => now(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+        $detalleLiteral = $this->buildDetalleCompraArrayLiteral($data['detalles']);
 
-            // Insert purchase details
-            foreach ($data['detalles'] as $detalle) {
-                $cantidad = (int) $detalle['cantidad'];
-                $precioCompra = (float) $detalle['precio_compra'];
-                
-                DB::table('detalle_compras')->insert([
-                    'id_compra' => $idCompra,
-                    'id_producto' => $detalle['producto_id'],
-                    'cantidad' => $cantidad,
-                    'precio_compra' => $precioCompra,
-                    'subtotal' => $cantidad * $precioCompra,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
+        try {
+            DB::statement(
+                'CALL pa_registrar_compra(?, ?, ?, ?)',
+                [
+                    $data['id_proveedor'],
+                    $data['id_tienda'],
+                    $detalleLiteral,
+                    $data['id_estatus'] ?? 1,
+                ]
+            );
 
             return response()->json([
-                'message' => 'Compra registrada correctamente.',
-                'id_compra' => $idCompra,
+                'message' => 'Compra registrada correctamente.'
             ], 201);
         } catch (QueryException $e) {
             return response()->json([
@@ -68,13 +53,13 @@ class ComprasController extends Controller
             $precioCompra = number_format((float) $detalle['precio_compra'], 2, '.', '');
 
             return sprintf(
-                'ROW(%d,%d,%s)::detalle_compra_type',
+                'ROW(%d,%d,%s)',
                 $productoId,
                 $cantidad,
                 $precioCompra
             );
         }, $detalles);
 
-        return 'ARRAY[' . implode(',', $rows) . ']';
+        return 'ARRAY[' . implode(',', $rows) . ']::detalle_compra_type[]';
     }
 }

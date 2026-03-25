@@ -22,37 +22,23 @@ class VentasController extends Controller
             'detalles.*.cantidad' => 'required|integer|min:1',
         ]);
 
-        try {
-            // Insert sale
-            $idVenta = DB::table('ventas')->insertGetId([
-                'id_usuario' => $data['id_usuario'],
-                'id_sesion' => $data['id_sesion'] ?? null,
-                'id_metodo_pago' => $data['id_metodo_pago'],
-                'id_tienda' => $data['id_tienda'],
-                'id_estatus' => $data['id_estatus'] ?? 1,
-                'fecha_venta' => now(),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+        $detalleLiteral = $this->buildDetalleVentaArrayLiteral($data['detalles']);
 
-            // Insert sale details
-            foreach ($data['detalles'] as $detalle) {
-                $producto = DB::table('productos')->find($detalle['producto_id']);
-                
-                DB::table('detalle_ventas')->insert([
-                    'id_venta' => $idVenta,
-                    'id_producto' => $detalle['producto_id'],
-                    'cantidad' => $detalle['cantidad'],
-                    'precio_unitario' => $producto->precio_unitario,
-                    'subtotal' => $detalle['cantidad'] * $producto->precio_unitario,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ]);
-            }
+        try {
+            DB::statement(
+                'CALL pa_registrar_venta(?, ?, ?, ?, ?, ?)',
+                [
+                    $data['id_usuario'],
+                    $data['id_sesion'] ?? null,
+                    $data['id_metodo_pago'],
+                    $data['id_tienda'],
+                    $detalleLiteral,
+                    $data['id_estatus'] ?? 1,
+                ]
+            );
 
             return response()->json([
-                'message' => 'Venta registrada correctamente.',
-                'id_venta' => $idVenta,
+                'message' => 'Venta registrada correctamente.'
             ], 201);
         } catch (QueryException $e) {
             return response()->json([
@@ -60,5 +46,21 @@ class VentasController extends Controller
                 'error' => $e->errorInfo[2] ?? $e->getMessage(),
             ], 422);
         }
+    }
+
+    private function buildDetalleVentaArrayLiteral(array $detalles): string
+    {
+        $rows = array_map(function (array $detalle) {
+            $productoId = (int) $detalle['producto_id'];
+            $cantidad = (int) $detalle['cantidad'];
+
+            return sprintf(
+                'ROW(%d,%d)',
+                $productoId,
+                $cantidad
+            );
+        }, $detalles);
+
+        return 'ARRAY[' . implode(',', $rows) . ']::detalle_venta_type[]';
     }
 }

@@ -110,11 +110,26 @@ Bajo middleware auth:sanctum:
 
 - GET /api/v1/auth/me
 - POST /api/v1/auth/logout
+- GET /api/v1/graficas/ingresos-vs-gastos
+- GET /api/v1/graficas/productos-mas-vendidos
+- GET /api/v1/graficas/utilidad
 - POST /api/v1/compras/registrar
 - POST /api/v1/ventas/registrar
 - POST /api/v1/productos
 - PUT /api/v1/productos/{idProducto}
 - DELETE /api/v1/productos/{idProducto}
+- GET /api/dashboard
+- GET /api/dashboard/ventas-recientes
+- GET /api/dashboard/alertas-stock
+- GET /api/dashboard/top-productos
+- GET /api/inventario
+- GET /api/compras
+- GET /api/ventas
+- GET /api/proveedores
+- GET /api/clientes
+- GET /api/facturacion
+- GET /api/reportes
+- GET /api/configuracion
 
 ### 5.4 Nota importante de despliegue
 
@@ -128,7 +143,12 @@ Recomendacion:
 
 ## 6.1 Endpoints de dashboard (sin prefijo v1)
 
+Nota: estos endpoints no usan prefijo /v1, pero actualmente si requieren Bearer token (middleware auth:sanctum).
+
 - GET /api/dashboard
+- GET /api/dashboard/ventas-recientes
+- GET /api/dashboard/alertas-stock
+- GET /api/dashboard/top-productos
 - GET /api/inventario
 - GET /api/compras
 - GET /api/ventas
@@ -151,6 +171,9 @@ Privados (Bearer token Sanctum):
 
 - GET /api/v1/auth/me
 - POST /api/v1/auth/logout
+- GET /api/v1/graficas/ingresos-vs-gastos
+- GET /api/v1/graficas/productos-mas-vendidos
+- GET /api/v1/graficas/utilidad
 - POST /api/v1/compras/registrar
 - POST /api/v1/ventas/registrar
 - POST /api/v1/productos
@@ -284,9 +307,25 @@ Devuelve:
 - periodo_referencia
 - metricas de ingresos/gastos/ganancia
 - flujo_mensual por dia
-- top_productos
-- ventas_recientes
-- alertas_stock
+
+### GET /api/dashboard/ventas-recientes
+
+Devuelve:
+
+- ventas_recientes (ultimas ventas formateadas para dashboard)
+
+### GET /api/dashboard/alertas-stock
+
+Devuelve:
+
+- alertas_stock (productos con stock_actual <= stock_minimo)
+
+### GET /api/dashboard/top-productos
+
+Devuelve:
+
+- periodo_referencia del mes
+- top_productos (ranking de productos mas vendidos del mes)
 
 ### GET /api/inventario
 
@@ -489,7 +528,7 @@ Este backend alimenta principalmente:
 - AppWeb (pantallas dashboard, inventario, ventas, compras, proveedores, clientes, facturacion, reportes, configuracion)
 - AppMovil (segun modulo implementado)
 
-Rutas de dashboard estan pensadas para devolver objetos listos para UI (metricas + listados ya transformados).
+Rutas de dashboard estan pensadas para devolver objetos listos para UI. La informacion principal permanece en /api/dashboard y los listados de ventas recientes, alertas de stock y top productos se consultan en endpoints separados para carga modular de la interfaz.
 
 ## 14. Orden recomendado de inicializacion
 

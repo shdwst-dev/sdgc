@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import logo from "/src/assets/LogoPI.png";
+import { clearSession, getToken } from "../lib/auth";
 
 const menuItems = [
   { to: "/dashboard", label: "Inicio" },
@@ -25,7 +26,7 @@ export default function Sidebar() {
 
   const cerrarSesion = async () => {
     try {
-      const token = localStorage.getItem("token");
+      const token = getToken();
       const currentHost = window.location.hostname;
       const API_URL = `http://${currentHost}:8000/api/v1/auth/logout`;
 
@@ -41,8 +42,7 @@ export default function Sidebar() {
     } catch (error) {
       console.error("Error al cerrar sesión en el servidor:", error);
     } finally {
-      localStorage.removeItem("rolUsuario");
-      localStorage.removeItem("token");
+      clearSession();
       navigate("/");
     }
   };

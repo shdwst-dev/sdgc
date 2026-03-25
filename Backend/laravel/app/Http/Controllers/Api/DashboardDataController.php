@@ -128,6 +128,26 @@ class DashboardDataController extends Controller
                 'valor_inventario' => $productos->sum(fn ($producto) => $producto['stock'] * $producto['costo']),
             ],
             'categorias' => $productos->pluck('categoria')->unique()->values(),
+            'catalogos' => [
+                'subcategorias' => DB::table('subcategorias as s')
+                    ->join('categorias as c', 'c.id_categoria', '=', 's.id_categoria')
+                    ->select('s.id_subcategoria', 's.nombre', 'c.nombre as categoria')
+                    ->orderBy('c.nombre')
+                    ->orderBy('s.nombre')
+                    ->get(),
+                'medidas' => DB::table('medidas')
+                    ->select('id_medida', 'altura', 'ancho', 'peso', 'volumen')
+                    ->orderBy('id_medida')
+                    ->get(),
+                'unidades' => DB::table('unidades_medida')
+                    ->select('id_unidad', 'nombre', 'abreviatura')
+                    ->orderBy('nombre')
+                    ->get(),
+                'estatus' => DB::table('estatus')
+                    ->select('id_estatus', 'nombre')
+                    ->orderBy('id_estatus')
+                    ->get(),
+            ],
             'productos' => $productos->values(),
         ]);
     }
@@ -144,15 +164,20 @@ class DashboardDataController extends Controller
             ->leftJoin('detalle_compras as dc', 'dc.id_compra', '=', 'c.id_compra')
             ->select(
                 'c.id_compra',
+                'c.id_proveedor',
+                'c.id_estatus',
                 'c.fecha_hora',
                 'pr.razon_social as proveedor',
                 'e.nombre as estado',
                 DB::raw('COALESCE(SUM(dc.cantidad * dc.precio_compra), 0) as total')
             )
-            ->groupBy('c.id_compra', 'c.fecha_hora', 'pr.razon_social', 'e.nombre')
+            ->groupBy('c.id_compra', 'c.id_proveedor', 'c.id_estatus', 'c.fecha_hora', 'pr.razon_social', 'e.nombre')
             ->orderByDesc('c.fecha_hora')
             ->get()
             ->map(fn ($orden) => [
+                'id_compra' => $orden->id_compra,
+                'id_proveedor' => $orden->id_proveedor,
+                'id_estatus' => $orden->id_estatus,
                 'folio' => 'OC-' . str_pad((string) $orden->id_compra, 3, '0', STR_PAD_LEFT),
                 'proveedor' => $orden->proveedor,
                 'fecha' => Carbon::parse($orden->fecha_hora)->toDateString(),
@@ -173,6 +198,30 @@ class DashboardDataController extends Controller
                 'proveedores_activos' => DB::table('proveedores')->count(),
             ],
             'proveedores' => $ordenes->pluck('proveedor')->unique()->values(),
+            'catalogos' => [
+                'proveedores' => DB::table('proveedores')
+                    ->select('id_proveedor', 'razon_social as nombre')
+                    ->orderBy('razon_social')
+                    ->get(),
+                'productos' => DB::table('productos')
+                    ->select('id_producto', 'nombre', 'precio_base')
+                    ->orderBy('nombre')
+                    ->get()
+                    ->map(fn ($producto) => [
+                        'id_producto' => $producto->id_producto,
+                        'nombre' => $producto->nombre,
+                        'precio_base' => (float) $producto->precio_base,
+                    ]),
+                'tiendas' => DB::table('tiendas')
+                    ->select('id_tienda', 'nombre')
+                    ->orderBy('nombre')
+                    ->get(),
+                'estatus' => DB::table('estatus')
+                    ->select('id_estatus', 'nombre')
+                    ->whereIn('nombre', ['Pendiente', 'Completado', 'Cancelado', 'En Proceso', 'Activo'])
+                    ->orderBy('id_estatus')
+                    ->get(),
+            ],
             'ordenes' => $ordenes->values(),
         ]);
     }
@@ -282,6 +331,12 @@ class DashboardDataController extends Controller
             ]);
 
         return response()->json([
+            'catalogos' => [
+                'metodos_pago' => DB::table('metodos_pago')
+                    ->select('id_metodo_pago', 'nombre')
+                    ->orderBy('nombre')
+                    ->get(),
+            ],
             'proveedores' => $proveedores,
         ]);
     }
@@ -313,6 +368,12 @@ class DashboardDataController extends Controller
             ]);
 
         return response()->json([
+            'catalogos' => [
+                'estatus' => DB::table('estatus')
+                    ->select('id_estatus', 'nombre')
+                    ->orderBy('id_estatus')
+                    ->get(),
+            ],
             'clientes' => $clientes,
         ]);
     }
@@ -586,15 +647,23 @@ class DashboardDataController extends Controller
         return DB::table('stock as s')
             ->join('productos as pr', 'pr.id_producto', '=', 's.id_producto')
             ->select(
+                'pr.id_producto',
                 'pr.codigo_barras as sku',
                 'pr.nombre as producto',
-                's.stock_actual as actual',
-                's.stock_minimo as minimo'
+                DB::raw('COALESCE(SUM(s.stock_actual), 0) as actual'),
+                DB::raw('COALESCE(SUM(s.stock_minimo), 0) as minimo')
             )
-            ->whereColumn('s.stock_actual', '<=', 's.stock_minimo')
-            ->orderBy('s.stock_actual')
+            ->groupBy('pr.id_producto', 'pr.codigo_barras', 'pr.nombre')
+            ->havingRaw('COALESCE(SUM(s.stock_actual), 0) <= COALESCE(SUM(s.stock_minimo), 0)')
+            ->orderByRaw('COALESCE(SUM(s.stock_actual), 0) asc')
             ->limit($limit)
-            ->get();
+            ->get()
+            ->map(fn ($item) => [
+                'sku' => $item->sku,
+                'producto' => $item->producto,
+                'actual' => (int) $item->actual,
+                'minimo' => (int) $item->minimo,
+            ]);
     }
 
     protected function topProductosForRange(Carbon $start, Carbon $end, int $limit = 10)

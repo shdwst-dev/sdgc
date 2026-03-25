@@ -10,11 +10,12 @@ import Proveedores from "./proveedores";
 import Facturacion from "./facturacion";
 import Reportes from "./reportes";
 import Configuracion from "./configuracion";
+import { getStoredRole, getToken } from "../lib/auth";
 
 type Rol = "Administrador" | "Vendedor" | "Comprador" | null;
 
 function obtenerRol(): Rol {
-  const rol = localStorage.getItem("rolUsuario");
+  const rol = getStoredRole();
 
   if (rol === "Administrador" || rol === "Vendedor" || rol === "Comprador") {
     return rol;
@@ -30,9 +31,10 @@ function RutaProtegida({
   element: ReactElement;
   permitidos?: Array<Exclude<Rol, null>>;
 }) {
+  const token = getToken();
   const rol = obtenerRol();
 
-  if (!rol) {
+  if (!token || !rol) {
     return <Navigate to="/" replace />;
   }
 

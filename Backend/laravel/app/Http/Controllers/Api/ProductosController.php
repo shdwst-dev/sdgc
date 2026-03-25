@@ -25,7 +25,7 @@ class ProductosController extends Controller
 
         try {
             DB::statement(
-                'CALL pa_crear_producto(?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                'CALL pa_crear_producto(?::integer, ?::integer, ?::integer, ?::varchar, ?::numeric, ?::numeric, ?::varchar, ?::text, ?::integer)',
                 [
                     $data['id_medida'],
                     $data['id_unidad'],
@@ -63,7 +63,7 @@ class ProductosController extends Controller
 
         try {
             DB::statement(
-                'CALL pa_actualizar_producto(?, ?, ?, ?, ?, ?, ?)',
+                'CALL pa_actualizar_producto(?::integer, ?::varchar, ?::numeric, ?::numeric, ?::varchar, ?::text, ?::integer)',
                 [
                     $idProducto,
                     $data['nombre'],
@@ -89,7 +89,7 @@ class ProductosController extends Controller
     public function eliminar(int $idProducto)
     {
         try {
-            DB::statement('CALL pa_eliminar_producto(?)', [$idProducto]);
+            DB::statement('CALL pa_eliminar_producto(?::integer)', [$idProducto]);
 
             return response()->json([
                 'message' => 'Producto eliminado correctamente.'

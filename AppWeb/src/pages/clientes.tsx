@@ -23,7 +23,7 @@ export default function Clientes() {
         </div>
 
         <div className="topbar-actions">
-          <button className="icon-button" type="button">🔔</button>
+          <button className="icon-button" type="button">Notificación</button>
           <select className="user-select" defaultValue={localStorage.getItem("rolUsuario") || "Administrador"}>
             <option>Administrador</option>
             <option>Vendedor</option>

@@ -2,49 +2,23 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "../styles/login.css";
 import logo from "/src/assets/LogoPI.png";
-
-type Rol = "Administrador" | "Vendedor" | "Comprador" | "";
+import { saveSession } from "../lib/auth";
 
 export default function Login() {
   const navigate = useNavigate();
-  const [rolSeleccionado, setRolSeleccionado] = useState<Rol>("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  const roles = [
-    {
-      title: "Administrador",
-      subtitle: "Acceso total al sistema",
-      detail: "Todos los permisos",
-      icon: "🛡️",
-    },
-    {
-      title: "Vendedor",
-      subtitle: "Operador de venta",
-      detail: "Vender y desplegar reportes",
-      icon: "🛒",
-    },
-    {
-      title: "Comprador",
-      subtitle: "Comprar",
-      detail: "Ver y pedir productos",
-      icon: "📦",
-    },
-  ];
+  const [error, setError] = useState<string | null>(null);
 
   const iniciarSesion = async () => {
-    if (!rolSeleccionado) {
-      alert("Por favor selecciona un rol");
-      return;
-    }
-
     setIsLoading(true);
+    setError(null);
+
     try {
-      // Usar la IP del error si es que el frontend también está corriendo en esa IP
       const currentHost = window.location.hostname;
-      const API_URL = `http://${currentHost}:8000/api/v1/auth/login`; 
-      
+      const API_URL = `http://${currentHost}:8000/api/v1/auth/login`;
+
       const response = await fetch(API_URL, {
         method: "POST",
         headers: {
@@ -63,8 +37,7 @@ export default function Login() {
         throw new Error(data.message || "Error al iniciar sesión");
       }
 
-      localStorage.setItem("token", data.token);
-      localStorage.setItem("rolUsuario", data.usuario.rol);
+      saveSession(data.token, data.usuario);
 
       if (data.usuario.rol === "Administrador") {
         navigate("/dashboard");
@@ -73,8 +46,8 @@ export default function Login() {
       } else if (data.usuario.rol === "Comprador") {
         navigate("/compras");
       }
-    } catch (error: any) {
-      alert(error.message);
+    } catch (submitError: unknown) {
+      setError(submitError instanceof Error ? submitError.message : "No fue posible iniciar sesion.");
     } finally {
       setIsLoading(false);
     }
@@ -88,26 +61,7 @@ export default function Login() {
             <img src={logo} alt="Logo" className="logo-img" />
           </div>
           <h1>Inicio de sesión</h1>
-          <p className="description">Selecciona tu rol para continuar</p>
-        </div>
-
-        <div className="role-section">
-          <label>Selecciona el rol</label>
-          <div className="roles-grid">
-            {roles.map((role) => (
-              <button
-                key={role.title}
-                type="button"
-                className={`role-card ${rolSeleccionado === role.title ? "role-card-active" : ""}`}
-                onClick={() => setRolSeleccionado(role.title as Rol)}
-              >
-                <div className="role-icon">{role.icon}</div>
-                <h3>{role.title}</h3>
-                <p>{role.subtitle}</p>
-                <p>{role.detail}</p>
-              </button>
-            ))}
-          </div>
+          <p className="description">Ingresa tus credenciales para continuar. El sistema detecta tu rol automaticamente.</p>
         </div>
 
         <form
@@ -117,6 +71,8 @@ export default function Login() {
             iniciarSesion();
           }}
         >
+          {error ? <p className="form-message form-message-error">{error}</p> : null}
+
           <div className="form-group">
             <label htmlFor="email">Correo electrónico</label>
             <input
@@ -142,7 +98,7 @@ export default function Login() {
           </div>
 
           <button type="submit" disabled={isLoading}>
-            {isLoading ? "Cargando..." : (rolSeleccionado ? `Iniciar sesión como ${rolSeleccionado}` : "Iniciar sesión")}
+            {isLoading ? "Cargando..." : "Iniciar sesión"}
           </button>
         </form>
       </div>

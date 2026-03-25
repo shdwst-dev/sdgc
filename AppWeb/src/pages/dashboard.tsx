@@ -20,10 +20,21 @@ export default function Dashboard() {
       gastos: [] as number[],
       utilidad: [] as number[],
     },
+  });
+  const { data: graficaFlujo } = useApiData("/v1/graficas/ingresos-vs-gastos", {
+    series: {
+      labels: [] as string[],
+      ingresos: [] as number[],
+      gastos: [] as number[],
+    },
+  });
+  const { data: topProductosData } = useApiData("/dashboard/top-productos", {
     top_productos: [] as Array<{
       nombre: string;
       cantidad: number;
     }>,
+  });
+  const { data: ventasRecientesData } = useApiData("/dashboard/ventas-recientes", {
     ventas_recientes: [] as Array<{
       factura: string;
       cliente: string;
@@ -31,6 +42,8 @@ export default function Dashboard() {
       monto: number;
       fecha: string;
     }>,
+  });
+  const { data: alertasStockData } = useApiData("/dashboard/alertas-stock", {
     alertas_stock: [] as Array<{
       sku: string;
       producto: string;
@@ -45,23 +58,22 @@ export default function Dashboard() {
 
   const flowChartData = useMemo(
     () => [
-      ["Dia", "Ingresos", "Gastos", "Utilidad"],
-      ...data.flujo_mensual.labels.map((label, index) => [
+      ["Dia", "Ingresos", "Gastos"],
+      ...graficaFlujo.series.labels.map((label, index) => [
         label,
-        data.flujo_mensual.ingresos[index] ?? 0,
-        data.flujo_mensual.gastos[index] ?? 0,
-        data.flujo_mensual.utilidad[index] ?? 0,
+        graficaFlujo.series.ingresos[index] ?? 0,
+        graficaFlujo.series.gastos[index] ?? 0,
       ]),
     ],
-    [data.flujo_mensual],
+    [graficaFlujo.series],
   );
 
   const topProductsChartData = useMemo(
     () => [
       ["Producto", "Cantidad"],
-      ...data.top_productos.map((producto) => [producto.nombre, producto.cantidad]),
+      ...topProductosData.top_productos.map((producto) => [producto.nombre, producto.cantidad]),
     ],
-    [data.top_productos],
+    [topProductosData.top_productos],
   );
 
   return (
@@ -125,7 +137,7 @@ export default function Dashboard() {
             options={{
               backgroundColor: "transparent",
               chartArea: { left: 60, right: 24, top: 24, bottom: 42, width: "100%", height: "72%" },
-              colors: ["#1f4b99", "#d97706", "#15803d"],
+              colors: ["#1f4b99", "#d97706"],
               curveType: "function",
               legend: { position: "top", textStyle: { color: "#475569", fontSize: 12 } },
               hAxis: { textStyle: { color: "#64748b", fontSize: 11 } },
@@ -177,7 +189,7 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {data.ventas_recientes.map((venta) => (
+              {ventasRecientesData.ventas_recientes.map((venta) => (
                 <tr key={venta.factura}>
                   <td>{venta.factura}</td>
                   <td>{venta.cliente}</td>
@@ -202,7 +214,7 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {data.alertas_stock.map((item) => (
+              {alertasStockData.alertas_stock.map((item) => (
                 <tr key={item.sku}>
                   <td>{item.sku}</td>
                   <td>{item.producto}</td>

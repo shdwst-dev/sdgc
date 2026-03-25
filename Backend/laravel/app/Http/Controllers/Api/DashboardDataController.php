@@ -24,59 +24,6 @@ class DashboardDataController extends Controller
         $gastosMes = $this->purchaseTotalForRange($monthStart, $monthEnd);
         $flujoMensual = $this->buildMonthlyFlow($monthStart, $monthEnd);
 
-        $ventasRecientes = DB::table('ventas as v')
-            ->leftJoin('comprobantes as c', 'c.id_venta', '=', 'v.id_venta')
-            ->join('usuarios as u', 'u.id_usuario', '=', 'v.id_usuario')
-            ->join('personas as p', 'p.id_persona', '=', 'u.id_persona')
-            ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'v.id_venta')
-            ->select(
-                DB::raw("COALESCE(c.numero_correlativo, v.id_venta) as factura"),
-                DB::raw("CONCAT(p.nombre, ' ', p.apellido_paterno) as responsable"),
-                'v.fecha_hora as fecha',
-                DB::raw('COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) as monto')
-            )
-            ->groupBy('v.id_venta', 'c.numero_correlativo', 'p.nombre', 'p.apellido_paterno', 'v.fecha_hora')
-            ->orderByDesc('v.fecha_hora')
-            ->limit(5)
-            ->get()
-            ->map(fn ($venta) => [
-                'factura' => 'FAC-' . str_pad((string) $venta->factura, 4, '0', STR_PAD_LEFT),
-                'cliente' => 'Venta mostrador',
-                'responsable' => $venta->responsable,
-                'monto' => (float) $venta->monto,
-                'fecha' => Carbon::parse($venta->fecha)->toDateString(),
-            ]);
-
-        $alertasStock = DB::table('stock as s')
-            ->join('productos as pr', 'pr.id_producto', '=', 's.id_producto')
-            ->select(
-                'pr.codigo_barras as sku',
-                'pr.nombre as producto',
-                's.stock_actual as actual',
-                's.stock_minimo as minimo'
-            )
-            ->whereColumn('s.stock_actual', '<=', 's.stock_minimo')
-            ->orderBy('s.stock_actual')
-            ->limit(5)
-            ->get();
-
-        $topProductos = DB::table('detalle_ventas as dv')
-            ->join('ventas as v', 'v.id_venta', '=', 'dv.venta_id')
-            ->join('productos as p', 'p.id_producto', '=', 'dv.producto_id')
-            ->whereBetween('v.fecha_hora', [$monthStart->toDateTimeString(), $monthEnd->toDateTimeString()])
-            ->select(
-                'p.nombre',
-                DB::raw('SUM(dv.cantidad) as cantidad')
-            )
-            ->groupBy('p.nombre')
-            ->orderByDesc('cantidad')
-            ->limit(5)
-            ->get()
-            ->map(fn ($producto) => [
-                'nombre' => $producto->nombre,
-                'cantidad' => (int) $producto->cantidad,
-            ]);
-
         return response()->json([
             'periodo_referencia' => [
                 'fecha' => $referenceDate->toDateString(),
@@ -89,9 +36,36 @@ class DashboardDataController extends Controller
                 'ganancia_mes' => $ingresosMes - $gastosMes,
             ],
             'flujo_mensual' => $flujoMensual,
-            'top_productos' => $topProductos,
-            'ventas_recientes' => $ventasRecientes,
-            'alertas_stock' => $alertasStock,
+        ]);
+    }
+
+    public function ventasRecientes(): JsonResponse
+    {
+        return response()->json([
+            'ventas_recientes' => $this->recentSales(5)->values(),
+        ]);
+    }
+
+    public function alertasStock(): JsonResponse
+    {
+        return response()->json([
+            'alertas_stock' => $this->stockAlerts(5)->values(),
+        ]);
+    }
+
+    public function topProductos(): JsonResponse
+    {
+        $referenceDate = $this->referenceDate('ventas', 'fecha_hora') ?? Carbon::now();
+        $monthStart = $referenceDate->copy()->startOfMonth();
+        $monthEnd = $referenceDate->copy()->endOfMonth();
+
+        return response()->json([
+            'periodo_referencia' => [
+                'inicio' => $monthStart->toDateString(),
+                'fin' => $monthEnd->toDateString(),
+                'mes' => $referenceDate->translatedFormat('F Y'),
+            ],
+            'top_productos' => $this->topProductosForRange($monthStart, $monthEnd, 5)->values(),
         ]);
     }
 
@@ -581,7 +555,49 @@ class DashboardDataController extends Controller
         ];
     }
 
-    protected function topProductosForRange(Carbon $start, Carbon $end)
+    protected function recentSales(int $limit = 5)
+    {
+        return DB::table('ventas as v')
+            ->leftJoin('comprobantes as c', 'c.id_venta', '=', 'v.id_venta')
+            ->join('usuarios as u', 'u.id_usuario', '=', 'v.id_usuario')
+            ->join('personas as p', 'p.id_persona', '=', 'u.id_persona')
+            ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'v.id_venta')
+            ->select(
+                DB::raw("COALESCE(c.numero_correlativo, v.id_venta) as factura"),
+                DB::raw("CONCAT(p.nombre, ' ', p.apellido_paterno) as responsable"),
+                'v.fecha_hora as fecha',
+                DB::raw('COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) as monto')
+            )
+            ->groupBy('v.id_venta', 'c.numero_correlativo', 'p.nombre', 'p.apellido_paterno', 'v.fecha_hora')
+            ->orderByDesc('v.fecha_hora')
+            ->limit($limit)
+            ->get()
+            ->map(fn ($venta) => [
+                'factura' => 'FAC-' . str_pad((string) $venta->factura, 4, '0', STR_PAD_LEFT),
+                'cliente' => 'Venta mostrador',
+                'responsable' => $venta->responsable,
+                'monto' => (float) $venta->monto,
+                'fecha' => Carbon::parse($venta->fecha)->toDateString(),
+            ]);
+    }
+
+    protected function stockAlerts(int $limit = 5)
+    {
+        return DB::table('stock as s')
+            ->join('productos as pr', 'pr.id_producto', '=', 's.id_producto')
+            ->select(
+                'pr.codigo_barras as sku',
+                'pr.nombre as producto',
+                's.stock_actual as actual',
+                's.stock_minimo as minimo'
+            )
+            ->whereColumn('s.stock_actual', '<=', 's.stock_minimo')
+            ->orderBy('s.stock_actual')
+            ->limit($limit)
+            ->get();
+    }
+
+    protected function topProductosForRange(Carbon $start, Carbon $end, int $limit = 10)
     {
         return DB::table('detalle_ventas as dv')
             ->join('ventas as v', 'v.id_venta', '=', 'dv.venta_id')
@@ -593,7 +609,7 @@ class DashboardDataController extends Controller
             )
             ->groupBy('p.nombre')
             ->orderByDesc('cantidad')
-            ->limit(10)
+            ->limit($limit)
             ->get()
             ->map(fn ($producto) => [
                 'nombre' => $producto->nombre,

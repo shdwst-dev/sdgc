@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Image, StyleSheet, SafeAreaView, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ApiError, login } from '../services/auth';
+import { ApiError, getMe, login } from '../services/auth';
 import { RootStackParamList } from '../navigation/types';
-import { setToken } from '../services/storage';
+import { clearToken, hydrateToken, setToken } from '../services/storage';
 
 const logo = require('../../assets/logosdgc.jpeg');
 type LoginNavigationProp = NativeStackNavigationProp<RootStackParamList, 'InicioSesion'>;
@@ -14,6 +14,7 @@ export default function InicioSesion() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
 
   const normalizeRole = (role: string) =>
     role
@@ -21,8 +22,51 @@ export default function InicioSesion() {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '');
 
+  useEffect(() => {
+    const restoreSession = async () => {
+      try {
+        const token = await hydrateToken();
+
+        if (!token) {
+          return;
+        }
+
+        const me = await getMe(token);
+        const roleValue = typeof me.rol === 'string' ? me.rol : (me.rol?.nombre ?? '');
+        const role = normalizeRole(roleValue);
+
+        if (role.includes('admin')) {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'dashboard-ad' }],
+          });
+          return;
+        }
+
+        if (role.includes('comprador')) {
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'dashboard-cm' }],
+          });
+          return;
+        }
+
+        await clearToken();
+      } catch {
+        await clearToken();
+      } finally {
+        setIsRestoringSession(false);
+      }
+    };
+
+    restoreSession().catch(async () => {
+      await clearToken();
+      setIsRestoringSession(false);
+    });
+  }, [navigation]);
+
   const handleLogin = async () => {
-    if (isLoading) {
+    if (isLoading || isRestoringSession) {
       return;
     }
 
@@ -35,7 +79,7 @@ export default function InicioSesion() {
       setIsLoading(true);
 
       const response = await login(email.trim(), password.trim());
-      setToken(response.token);
+      await setToken(response.token);
       const role = normalizeRole(response.usuario.rol ?? '');
 
       if (role.includes('admin')) {
@@ -121,9 +165,9 @@ export default function InicioSesion() {
             <TouchableOpacity
               style={styles.buttonPrimary}
               onPress={handleLogin}
-              disabled={isLoading}
+              disabled={isLoading || isRestoringSession}
             >
-              {isLoading ? (
+              {(isLoading || isRestoringSession) ? (
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.buttonPrimaryText}>Entrar</Text>

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert,
 import { Users, Store, Bell, Download, ChevronRight, LogOut, Info } from 'lucide-react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { ApiError, getMe, MeResponse, logout } from '../../services/auth';
-import { getToken, setToken } from '../../services/storage';
+import { clearToken, getToken, hydrateToken } from '../../services/storage';
 
 const settingsOptions = [
   {
@@ -69,6 +69,18 @@ export default function Configuracion() {
     return fullName || 'Usuario';
   }, [profile]);
 
+  const statusName = useMemo(() => {
+    if (!profile?.estatus) {
+      return 'Sin estatus';
+    }
+
+    if (typeof profile.estatus === 'string') {
+      return profile.estatus;
+    }
+
+    return profile.estatus.nombre ?? 'Sin estatus';
+  }, [profile]);
+
   const goToLogin = useCallback(() => {
     navigation.dispatch(
       CommonActions.reset({
@@ -79,10 +91,14 @@ export default function Configuracion() {
   }, [navigation]);
 
   const loadProfile = useCallback(async () => {
-    const token = getToken();
+    let token = getToken();
 
     if (!token) {
-      setToken(null);
+      token = await hydrateToken();
+    }
+
+    if (!token) {
+      await clearToken();
       goToLogin();
       return;
     }
@@ -93,7 +109,7 @@ export default function Configuracion() {
       setProfile(me);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        setToken(null);
+        await clearToken();
         Alert.alert('Sesion expirada', 'Inicia sesion nuevamente.');
         goToLogin();
         return;
@@ -127,7 +143,7 @@ export default function Configuracion() {
     } catch {
       // Si falla remoto, se cierra igual localmente para no bloquear al usuario.
     } finally {
-      setToken(null);
+      await clearToken();
       goToLogin();
       setIsLoggingOut(false);
     }
@@ -173,6 +189,7 @@ export default function Configuracion() {
                 <Text style={styles.profileName}>{displayName}</Text>
                 <Text style={styles.profileEmail}>{profile?.email ?? 'Sin correo'}</Text>
                 <Text style={styles.profileRole}>{roleName}</Text>
+                <Text style={styles.profileStatus}>{statusName}</Text>
               </>
             )}
           </View>
@@ -232,6 +249,7 @@ const styles = StyleSheet.create({
   profileName: { fontSize: 18, fontWeight: 'bold', color: '#FFF' },
   profileEmail: { fontSize: 14, color: '#CBD5F5' },
   profileRole: { fontSize: 12, color: '#E2E8F0', marginTop: 2 },
+  profileStatus: { fontSize: 12, color: '#E2E8F0' },
   editBtn: { backgroundColor: 'rgba(255, 255, 255, 0.1)', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
   editBtnText: { color: '#FFF', fontSize: 14, fontWeight: '500' },
   optionsList: { gap: 12, marginBottom: 24 },

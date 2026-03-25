@@ -1,4 +1,7 @@
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://10.0.2.2:8000/api/v1';
+import { Platform } from 'react-native';
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL 
+  ?? (Platform.OS === 'web' ? 'http://localhost:8000/api/v1' : 'http://10.0.2.2:8000/api/v1');
 
 export type UsuarioAutenticado = {
   id_usuario: number;
@@ -9,6 +12,22 @@ export type UsuarioAutenticado = {
 export type LoginResponse = {
   token: string;
   usuario: UsuarioAutenticado;
+};
+
+type EntityNombre = {
+  nombre?: string;
+} | null;
+
+export type MeResponse = {
+  id_usuario: number;
+  email: string;
+  rol?: EntityNombre | string;
+  estatus?: EntityNombre | string;
+  persona?: {
+    nombre?: string;
+    apellido_paterno?: string;
+    apellido_materno?: string;
+  } | null;
 };
 
 type ApiErrorResponse = {
@@ -94,3 +113,38 @@ export async function logout(token: string): Promise<void> {
     console.error('Error al cerrar sesión en el servidor');
   }
 }
+
+export async function getMe(token: string): Promise<MeResponse> {
+  const response = await fetch(`${API_BASE_URL}/auth/me`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+  });
+
+  let body: MeResponse | ApiErrorResponse | null;
+
+  try {
+    body = (await response.json()) as MeResponse | ApiErrorResponse;
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      buildApiErrorMessage(response.status, body as ApiErrorResponse | null),
+      response.status,
+    );
+  }
+
+  const successBody = body as MeResponse;
+
+  if (!successBody?.email) {
+    throw new ApiError('La respuesta del servidor no es valida.', 500);
+  }
+
+  return successBody;
+}
+

@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert, Platform } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Alert, Platform, ActivityIndicator } from 'react-native';
 import { Users, Store, Bell, Download, ChevronRight, LogOut, Info } from 'lucide-react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
-import { logout } from '../../services/auth';
+import { ApiError, getMe, MeResponse, logout } from '../../services/auth';
 import { getToken, setToken } from '../../services/storage';
 
 const settingsOptions = [
@@ -38,24 +38,99 @@ const settingsOptions = [
 
 export default function Configuracion() {
   const navigation = useNavigation();
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [profile, setProfile] = useState<MeResponse | null>(null);
 
-  const performLogout = () => {
-    // 1. Intentar notificar al servidor (fire and forget)
-    const token = getToken();
-    if (token) {
-      logout(token).catch(err => console.error("Error cierre sesión remoto:", err));
+  const roleName = useMemo(() => {
+    if (!profile?.rol) {
+      return 'Sin rol';
     }
-    
-    // 2. Limpiar localmente
-    setToken(null);
-    
-    // 3. Navegar inmediatamente
+
+    if (typeof profile.rol === 'string') {
+      return profile.rol;
+    }
+
+    return profile.rol.nombre ?? 'Sin rol';
+  }, [profile]);
+
+  const displayName = useMemo(() => {
+    const persona = profile?.persona;
+
+    if (!persona) {
+      return 'Usuario';
+    }
+
+    const fullName = [persona.nombre, persona.apellido_paterno, persona.apellido_materno]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+
+    return fullName || 'Usuario';
+  }, [profile]);
+
+  const goToLogin = useCallback(() => {
     navigation.dispatch(
       CommonActions.reset({
         index: 0,
-        routes: [{ name: 'InicioSesion' }],
-      })
+        routes: [{ name: 'InicioSesion' as never }],
+      }),
     );
+  }, [navigation]);
+
+  const loadProfile = useCallback(async () => {
+    const token = getToken();
+
+    if (!token) {
+      setToken(null);
+      goToLogin();
+      return;
+    }
+
+    try {
+      setIsLoadingProfile(true);
+      const me = await getMe(token);
+      setProfile(me);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        setToken(null);
+        Alert.alert('Sesion expirada', 'Inicia sesion nuevamente.');
+        goToLogin();
+        return;
+      }
+
+      Alert.alert('Error', 'No se pudo cargar la informacion del perfil.');
+    } finally {
+      setIsLoadingProfile(false);
+    }
+  }, [goToLogin]);
+
+  useEffect(() => {
+    loadProfile().catch(() => {
+      setIsLoadingProfile(false);
+    });
+  }, [loadProfile]);
+
+  const performLogout = async () => {
+    if (isLoggingOut) {
+      return;
+    }
+
+    setIsLoggingOut(true);
+
+    const token = getToken();
+
+    try {
+      if (token) {
+        await logout(token);
+      }
+    } catch {
+      // Si falla remoto, se cierra igual localmente para no bloquear al usuario.
+    } finally {
+      setToken(null);
+      goToLogin();
+      setIsLoggingOut(false);
+    }
   };
 
   const handleLogout = () => {
@@ -90,13 +165,20 @@ export default function Configuracion() {
           <View style={styles.avatarContainer}>
             <Users size={32} color="#FFF" />
           </View>
-          <View>
-            <Text style={styles.profileName}>Administrador</Text>
-            <Text style={styles.profileEmail}>admin@tienda.com</Text>
+          <View style={styles.profileTextContainer}>
+            {isLoadingProfile ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <>
+                <Text style={styles.profileName}>{displayName}</Text>
+                <Text style={styles.profileEmail}>{profile?.email ?? 'Sin correo'}</Text>
+                <Text style={styles.profileRole}>{roleName}</Text>
+              </>
+            )}
           </View>
         </View>
-        <TouchableOpacity style={styles.editBtn}>
-          <Text style={styles.editBtnText}>Editar Perfil</Text>
+        <TouchableOpacity style={styles.editBtn} onPress={loadProfile} disabled={isLoadingProfile}>
+          <Text style={styles.editBtnText}>{isLoadingProfile ? 'Cargando...' : 'Recargar Perfil'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -130,9 +212,9 @@ export default function Configuracion() {
         </View>
       </View>
 
-      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+      <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} disabled={isLoggingOut}>
         <LogOut size={20} color="#FFF" />
-        <Text style={styles.logoutBtnText}>Cerrar Sesión</Text>
+        <Text style={styles.logoutBtnText}>{isLoggingOut ? 'Cerrando...' : 'Cerrar Sesión'}</Text>
       </TouchableOpacity>
 
       <View style={{ height: 40 }} />
@@ -145,9 +227,11 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#1C273F', marginBottom: 20, marginTop: 40 },
   profileCard: { backgroundColor: '#1C273F', borderRadius: 16, padding: 20, marginBottom: 24, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
   profileInfo: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 },
+  profileTextContainer: { flexShrink: 1 },
   avatarContainer: { width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255, 255, 255, 0.2)', justifyContent: 'center', alignItems: 'center' },
   profileName: { fontSize: 18, fontWeight: 'bold', color: '#FFF' },
   profileEmail: { fontSize: 14, color: '#CBD5F5' },
+  profileRole: { fontSize: 12, color: '#E2E8F0', marginTop: 2 },
   editBtn: { backgroundColor: 'rgba(255, 255, 255, 0.1)', paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
   editBtnText: { color: '#FFF', fontSize: 14, fontWeight: '500' },
   optionsList: { gap: 12, marginBottom: 24 },

@@ -18,6 +18,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/compras/registrar', [ComprasController::class, 'registrar']);
         Route::post('/ventas/registrar', [VentasController::class, 'registrar']);
 
+        Route::get('/productos', [ProductosController::class, 'listar']);
+        Route::get('/productos/{idProducto}', [ProductosController::class, 'leer'])->whereNumber('idProducto');
         Route::post('/productos', [ProductosController::class, 'crear']);
         Route::put('/productos/{idProducto}', [ProductosController::class, 'actualizar']);
         Route::delete('/productos/{idProducto}', [ProductosController::class, 'eliminar']);

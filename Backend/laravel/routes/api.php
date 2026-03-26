@@ -21,6 +21,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/graficas/ingresos-vs-gastos', [DashboardDataController::class, 'graficaIngresosVsGastos']);
         Route::get('/graficas/productos-mas-vendidos', [DashboardDataController::class, 'graficaProductosMasVendidos']);
         Route::get('/graficas/utilidad', [DashboardDataController::class, 'graficaUtilidad']);
+        Route::get('/facturacion/{idComprobante}', [DashboardDataController::class, 'verFactura']);
 
         Route::post('/compras/registrar', [ComprasController::class, 'registrar']);
         Route::get('/compras/{idCompra}', [ComprasController::class, 'ver']);

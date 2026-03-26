@@ -41,6 +41,11 @@ class VentasController extends Controller
 
         try {
             DB::transaction(function () use ($data, $userId, $storeId, $statusId) {
+                DB::statement('SELECT set_config(?, ?, false)', [
+                    'app.id_tienda',
+                    (string) $storeId,
+                ]);
+
                 $ventaId = DB::table('ventas')->insertGetId([
                     'id_usuario' => $userId,
                     'id_sesion' => $data['id_sesion'] ?? null,

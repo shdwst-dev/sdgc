@@ -475,16 +475,22 @@ class DashboardDataController extends Controller
             ->join('estatus as e', 'e.id_estatus', '=', 'c.id_estatus')
             ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'v.id_venta')
             ->select(
+                'c.id_comprobante',
+                'c.id_venta',
+                'c.codigo_hash',
                 'c.numero_correlativo',
                 'c.fecha_emision',
                 'e.nombre as estado',
                 DB::raw('COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) as total')
             )
-            ->groupBy('c.numero_correlativo', 'c.fecha_emision', 'e.nombre')
+            ->groupBy('c.id_comprobante', 'c.id_venta', 'c.codigo_hash', 'c.numero_correlativo', 'c.fecha_emision', 'e.nombre')
             ->orderByDesc('c.fecha_emision')
             ->get()
             ->map(fn ($factura) => [
+                'id_comprobante' => $factura->id_comprobante,
+                'id_venta' => $factura->id_venta,
                 'folio' => 'FAC-' . str_pad((string) $factura->numero_correlativo, 4, '0', STR_PAD_LEFT),
+                'codigo_hash' => $factura->codigo_hash,
                 'cliente' => 'Venta mostrador',
                 'fecha' => Carbon::parse($factura->fecha_emision)->toDateString(),
                 'total' => (float) $factura->total,
@@ -493,6 +499,62 @@ class DashboardDataController extends Controller
 
         return response()->json([
             'facturas' => $facturas,
+        ]);
+    }
+
+    public function verFactura(int $idComprobante): JsonResponse
+    {
+        $factura = DB::table('comprobantes as c')
+            ->join('ventas as v', 'v.id_venta', '=', 'c.id_venta')
+            ->join('estatus as e', 'e.id_estatus', '=', 'c.id_estatus')
+            ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'v.id_venta')
+            ->leftJoin('productos as p', 'p.id_producto', '=', 'dv.producto_id')
+            ->where('c.id_comprobante', $idComprobante)
+            ->select(
+                'c.id_comprobante',
+                'c.id_venta',
+                'c.codigo_hash',
+                'c.numero_correlativo',
+                'c.fecha_emision',
+                'e.nombre as estado',
+                'dv.producto_id',
+                'p.nombre as producto',
+                'dv.cantidad',
+                'dv.precio_unitario'
+            )
+            ->orderBy('dv.id_detalle_venta')
+            ->get();
+
+        if ($factura->isEmpty()) {
+            return response()->json([
+                'message' => 'La factura no existe.',
+            ], 404);
+        }
+
+        $primeraFila = $factura->first();
+        $detalles = $factura
+            ->filter(fn ($detalle) => $detalle->producto_id !== null)
+            ->map(fn ($detalle) => [
+                'producto_id' => $detalle->producto_id,
+                'producto' => $detalle->producto ?? 'Producto',
+                'cantidad' => (int) $detalle->cantidad,
+                'precio_unitario' => (float) $detalle->precio_unitario,
+                'subtotal' => (float) $detalle->cantidad * (float) $detalle->precio_unitario,
+            ])
+            ->values();
+
+        return response()->json([
+            'factura' => [
+                'id_comprobante' => $primeraFila->id_comprobante,
+                'id_venta' => $primeraFila->id_venta,
+                'folio' => 'FAC-' . str_pad((string) $primeraFila->numero_correlativo, 4, '0', STR_PAD_LEFT),
+                'codigo_hash' => $primeraFila->codigo_hash,
+                'cliente' => 'Venta mostrador',
+                'fecha' => Carbon::parse($primeraFila->fecha_emision)->toDateString(),
+                'estado' => $primeraFila->estado,
+                'total' => (float) $detalles->sum('subtotal'),
+                'detalles' => $detalles,
+            ],
         ]);
     }
 

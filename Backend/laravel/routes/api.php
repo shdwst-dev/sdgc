@@ -36,6 +36,8 @@ Route::prefix('v1')->group(function () {
         Route::put('/clientes/{idCliente}', [ClientesController::class, 'actualizar']);
         Route::delete('/clientes/{idCliente}', [ClientesController::class, 'eliminar']);
 
+        Route::get('/productos', [ProductosController::class, 'listar']);
+        Route::get('/productos/{idProducto}', [ProductosController::class, 'leer'])->whereNumber('idProducto');
         Route::post('/productos', [ProductosController::class, 'crear']);
         Route::put('/productos/{idProducto}', [ProductosController::class, 'actualizar']);
         Route::put('/productos/{idProducto}/stock-tienda', [ProductosController::class, 'actualizarStockTienda']);

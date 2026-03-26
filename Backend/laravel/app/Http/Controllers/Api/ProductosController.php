@@ -9,6 +9,47 @@ use Illuminate\Support\Facades\DB;
 
 class ProductosController extends Controller
 {
+    public function listar()
+    {
+        try {
+            $productos = DB::table('productos as p')
+                ->leftJoin('subcategorias as s', 's.id_subcategoria', '=', 'p.id_subcategoria')
+                ->leftJoin('stock as st', 'st.id_producto', '=', 'p.id_producto')
+                ->select(
+                    'p.id_producto',
+                    'p.nombre',
+                    'p.codigo_barras',
+                    'p.precio_base',
+                    'p.precio_unitario',
+                    'p.id_estatus',
+                    's.nombre as categoria',
+                    DB::raw('COALESCE(SUM(st.stock_actual), 0) as stock_actual'),
+                    DB::raw('MIN(st.stock_minimo) as stock_minimo')
+                )
+                ->groupBy(
+                    'p.id_producto',
+                    'p.nombre',
+                    'p.codigo_barras',
+                    'p.precio_base',
+                    'p.precio_unitario',
+                    'p.id_estatus',
+                    's.nombre'
+                )
+                ->orderBy('p.id_producto', 'desc')
+                ->get();
+
+            return response()->json([
+                'message' => 'Productos obtenidos correctamente.',
+                'data' => $productos,
+            ]);
+        } catch (QueryException $e) {
+            return response()->json([
+                'message' => 'No fue posible obtener los productos.',
+                'error' => $e->errorInfo[2] ?? $e->getMessage(),
+            ], 422);
+        }
+    }
+
     public function crear(Request $request)
     {
         $data = $request->validate([
@@ -208,5 +249,51 @@ class ProductosController extends Controller
         return response()->json([
             'message' => 'Stock por tienda actualizado correctamente.'
         ]);
+    }
+    public function leer(int $idProducto)
+    {
+        try {
+            $producto = DB::table('productos as p')
+                ->leftJoin('subcategorias as s', 's.id_subcategoria', '=', 'p.id_subcategoria')
+                ->leftJoin('stock as st', 'st.id_producto', '=', 'p.id_producto')
+                ->select(
+                    'p.id_producto',
+                    'p.nombre',
+                    'p.codigo_barras',
+                    'p.precio_base',
+                    'p.precio_unitario',
+                    'p.id_estatus',
+                    's.nombre as categoria',
+                    DB::raw('COALESCE(SUM(st.stock_actual), 0) as stock_actual'),
+                    DB::raw('MIN(st.stock_minimo) as stock_minimo')
+                )
+                ->where('p.id_producto', $idProducto)
+                ->groupBy(
+                    'p.id_producto',
+                    'p.nombre',
+                    'p.codigo_barras',
+                    'p.precio_base',
+                    'p.precio_unitario',
+                    'p.id_estatus',
+                    's.nombre'
+                )
+                ->first();
+
+            if (!$producto) {
+                return response()->json([
+                    'message' => 'Producto no encontrado.',
+                ], 404);
+            }
+
+            return response()->json([
+                'message' => 'Producto leido correctamente.',
+                'data' => $producto,
+            ]);
+        } catch (QueryException $e) {
+            return response()->json([
+                'message' => 'No fue posible leer el producto.',
+                'error' => $e->errorInfo[2] ?? $e->getMessage(),
+            ], 422);
+        }
     }
 }

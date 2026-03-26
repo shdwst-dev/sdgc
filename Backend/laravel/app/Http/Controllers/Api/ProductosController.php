@@ -54,6 +54,7 @@ class ProductosController extends Controller
     {
         $data = $request->validate([
             'nombre' => 'required|string|max:200',
+            'stock' => 'required|integer|min:0',
             'precio_base' => 'required|numeric|min:0.01',
             'precio_unitario' => 'required|numeric|min:0.01',
             'codigo_barras' => 'nullable|string|max:50',
@@ -62,18 +63,52 @@ class ProductosController extends Controller
         ]);
 
         try {
-            DB::statement(
-                'CALL pa_actualizar_producto(?::integer, ?::varchar, ?::numeric, ?::numeric, ?::varchar, ?::text, ?::integer)',
-                [
-                    $idProducto,
-                    $data['nombre'],
-                    $data['precio_base'],
-                    $data['precio_unitario'],
-                    $data['codigo_barras'] ?? null,
-                    $data['imagen_url'] ?? null,
-                    $data['id_estatus'],
-                ]
-            );
+            DB::transaction(function () use ($idProducto, $data) {
+                DB::statement(
+                    'CALL pa_actualizar_producto(?::integer, ?::varchar, ?::numeric, ?::numeric, ?::varchar, ?::text, ?::integer)',
+                    [
+                        $idProducto,
+                        $data['nombre'],
+                        $data['precio_base'],
+                        $data['precio_unitario'],
+                        $data['codigo_barras'] ?? null,
+                        $data['imagen_url'] ?? null,
+                        $data['id_estatus'],
+                    ]
+                );
+
+                $stockRows = DB::table('stock')
+                    ->where('id_producto', $idProducto)
+                    ->orderBy('id_stock')
+                    ->get(['id_stock']);
+
+                if ($stockRows->isEmpty()) {
+                    DB::table('stock')->insert([
+                        'id_tienda' => 1,
+                        'id_producto' => $idProducto,
+                        'stock_minimo' => 0,
+                        'stock_actual' => $data['stock'],
+                    ]);
+
+                    return;
+                }
+
+                $primaryStockId = $stockRows->first()->id_stock;
+
+                DB::table('stock')
+                    ->where('id_stock', $primaryStockId)
+                    ->update(['stock_actual' => $data['stock']]);
+
+                $secondaryStockIds = $stockRows
+                    ->skip(1)
+                    ->pluck('id_stock');
+
+                if ($secondaryStockIds->isNotEmpty()) {
+                    DB::table('stock')
+                        ->whereIn('id_stock', $secondaryStockIds)
+                        ->update(['stock_actual' => 0]);
+                }
+            });
 
             return response()->json([
                 'message' => 'Producto actualizado correctamente.'
@@ -89,7 +124,31 @@ class ProductosController extends Controller
     public function eliminar(int $idProducto)
     {
         try {
-            DB::statement('CALL pa_eliminar_producto(?::integer)', [$idProducto]);
+            $productoExiste = DB::table('productos')
+                ->where('id_producto', $idProducto)
+                ->exists();
+
+            if (!$productoExiste) {
+                return response()->json([
+                    'message' => 'El producto no existe.',
+                ], 404);
+            }
+
+            $estatusInactivo = DB::table('estatus')
+                ->where('nombre', 'Inactivo')
+                ->value('id_estatus');
+
+            if (!$estatusInactivo) {
+                return response()->json([
+                    'message' => 'No existe el estatus Inactivo en el sistema.',
+                ], 422);
+            }
+
+            DB::table('productos')
+                ->where('id_producto', $idProducto)
+                ->update([
+                    'id_estatus' => $estatusInactivo,
+                ]);
 
             return response()->json([
                 'message' => 'Producto eliminado correctamente.'
@@ -100,5 +159,54 @@ class ProductosController extends Controller
                 'error' => $e->errorInfo[2] ?? $e->getMessage(),
             ], 422);
         }
+    }
+
+    public function actualizarStockTienda(Request $request, int $idProducto)
+    {
+        $data = $request->validate([
+            'id_tienda' => 'required|integer|exists:tiendas,id_tienda',
+            'stock_actual' => 'required|integer|min:0',
+            'stock_minimo' => 'required|integer|min:0',
+        ]);
+
+        $productoExiste = DB::table('productos')
+            ->where('id_producto', $idProducto)
+            ->exists();
+
+        if (!$productoExiste) {
+            return response()->json([
+                'message' => 'El producto no existe.',
+            ], 404);
+        }
+
+        DB::transaction(function () use ($idProducto, $data) {
+            $stockExistente = DB::table('stock')
+                ->where('id_producto', $idProducto)
+                ->where('id_tienda', $data['id_tienda'])
+                ->lockForUpdate()
+                ->first();
+
+            if ($stockExistente) {
+                DB::table('stock')
+                    ->where('id_stock', $stockExistente->id_stock)
+                    ->update([
+                        'stock_actual' => $data['stock_actual'],
+                        'stock_minimo' => $data['stock_minimo'],
+                    ]);
+
+                return;
+            }
+
+            DB::table('stock')->insert([
+                'id_tienda' => $data['id_tienda'],
+                'id_producto' => $idProducto,
+                'stock_actual' => $data['stock_actual'],
+                'stock_minimo' => $data['stock_minimo'],
+            ]);
+        });
+
+        return response()->json([
+            'message' => 'Stock por tienda actualizado correctamente.'
+        ]);
     }
 }

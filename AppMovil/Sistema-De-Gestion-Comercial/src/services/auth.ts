@@ -11,6 +11,7 @@ export type UsuarioAutenticado = {
 
 export type LoginResponse = {
   token: string;
+  hash?: string;
   usuario: UsuarioAutenticado;
 };
 
@@ -147,4 +148,3 @@ export async function getMe(token: string): Promise<MeResponse> {
 
   return successBody;
 }
-

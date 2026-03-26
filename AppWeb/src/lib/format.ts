@@ -18,5 +18,17 @@ export function formatDate(value: string | null) {
     return "Sin registro";
   }
 
-  return dateFormatter.format(new Date(`${value}T00:00:00`));
+  const normalizedValue = value.includes("T")
+    ? value
+    : value.includes(" ")
+      ? value.replace(" ", "T")
+      : `${value}T00:00:00`;
+
+  const parsedDate = new Date(normalizedValue);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "Fecha invalida";
+  }
+
+  return dateFormatter.format(parsedDate);
 }

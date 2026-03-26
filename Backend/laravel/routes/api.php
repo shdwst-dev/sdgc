@@ -28,10 +28,17 @@ Route::prefix('v1')->group(function () {
         Route::delete('/compras/{idCompra}', [ComprasController::class, 'eliminar']);
         Route::post('/ventas/registrar', [VentasController::class, 'registrar']);
         Route::post('/proveedores/registrar', [ProveedoresController::class, 'registrar']);
+        Route::get('/proveedores/{idProveedor}', [ProveedoresController::class, 'ver']);
+        Route::put('/proveedores/{idProveedor}', [ProveedoresController::class, 'actualizar']);
+        Route::delete('/proveedores/{idProveedor}', [ProveedoresController::class, 'eliminar']);
         Route::post('/clientes/registrar', [ClientesController::class, 'registrar']);
+        Route::get('/clientes/{idCliente}', [ClientesController::class, 'ver']);
+        Route::put('/clientes/{idCliente}', [ClientesController::class, 'actualizar']);
+        Route::delete('/clientes/{idCliente}', [ClientesController::class, 'eliminar']);
 
         Route::post('/productos', [ProductosController::class, 'crear']);
         Route::put('/productos/{idProducto}', [ProductosController::class, 'actualizar']);
+        Route::put('/productos/{idProducto}/stock-tienda', [ProductosController::class, 'actualizarStockTienda']);
         Route::delete('/productos/{idProducto}', [ProductosController::class, 'eliminar']);
     });
 });

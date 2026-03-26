@@ -38,21 +38,6 @@ export default function Reportes() {
 
   return (
     <Layout>
-      <header className="topbar">
-        <div className="topbar-search">
-          <input type="text" placeholder="Buscar en reportes..." />
-        </div>
-
-        <div className="topbar-actions">
-          <button className="icon-button" type="button">🔔</button>
-          <select className="user-select" defaultValue={localStorage.getItem("rolUsuario") || "Administrador"}>
-            <option>Administrador</option>
-            <option>Vendedor</option>
-            <option>Comprador</option>
-          </select>
-        </div>
-      </header>
-
       <section className="inventory-header">
         <div>
           <h1>Reportes y analítica</h1>

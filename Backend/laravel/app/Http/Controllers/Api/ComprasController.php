@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use Throwable;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,18 +22,48 @@ class ComprasController extends Controller
             'detalles.*.precio_compra' => 'required|numeric|min:0.01',
         ]);
 
-        $detalleLiteral = $this->buildDetalleCompraArrayLiteral($data['detalles']);
-
         try {
-            DB::statement(
-                'CALL pa_registrar_compra(?, ?, ?, ?)',
-                [
-                    $data['id_proveedor'],
-                    $data['id_tienda'],
-                    $detalleLiteral,
-                    $data['id_estatus'] ?? 1,
-                ]
-            );
+            DB::transaction(function () use ($data) {
+                DB::statement('SELECT set_config(?, ?, false)', [
+                    'app.id_tienda',
+                    (string) $data['id_tienda'],
+                ]);
+
+                $idCompra = DB::table('compras')->insertGetId([
+                    'id_proveedor' => $data['id_proveedor'],
+                    'id_estatus' => $data['id_estatus'] ?? 1,
+                ], 'id_compra');
+
+                foreach ($data['detalles'] as $detalle) {
+                    DB::table('detalle_compras')->insert([
+                        'id_compra' => $idCompra,
+                        'producto_id' => $detalle['producto_id'],
+                        'cantidad' => $detalle['cantidad'],
+                        'precio_compra' => $detalle['precio_compra'],
+                    ]);
+
+                    $stockExistente = DB::table('stock')
+                        ->where('id_tienda', $data['id_tienda'])
+                        ->where('id_producto', $detalle['producto_id'])
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($stockExistente) {
+                        DB::table('stock')
+                            ->where('id_stock', $stockExistente->id_stock)
+                            ->update([
+                                'stock_actual' => (int) $stockExistente->stock_actual + (int) $detalle['cantidad'],
+                            ]);
+                    } else {
+                        DB::table('stock')->insert([
+                            'id_tienda' => $data['id_tienda'],
+                            'id_producto' => $detalle['producto_id'],
+                            'stock_minimo' => 0,
+                            'stock_actual' => $detalle['cantidad'],
+                        ]);
+                    }
+                }
+            });
 
             return response()->json([
                 'message' => 'Compra registrada correctamente.'
@@ -42,6 +73,11 @@ class ComprasController extends Controller
                 'message' => 'No fue posible registrar la compra.',
                 'error' => $e->errorInfo[2] ?? $e->getMessage(),
             ], 422);
+        } catch (Throwable $e) {
+            return response()->json([
+                'message' => 'No fue posible registrar la compra.',
+                'error' => $e->getMessage(),
+            ], 500);
         }
     }
 
@@ -163,21 +199,4 @@ class ComprasController extends Controller
         ]);
     }
 
-    private function buildDetalleCompraArrayLiteral(array $detalles): string
-    {
-        $rows = array_map(function (array $detalle) {
-            $productoId = (int) $detalle['producto_id'];
-            $cantidad = (int) $detalle['cantidad'];
-            $precioCompra = number_format((float) $detalle['precio_compra'], 2, '.', '');
-
-            return sprintf(
-                'ROW(%d,%d,%s)',
-                $productoId,
-                $cantidad,
-                $precioCompra
-            );
-        }, $detalles);
-
-        return 'ARRAY[' . implode(',', $rows) . ']::detalle_compra_type[]';
-    }
 }

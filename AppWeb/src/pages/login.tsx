@@ -37,7 +37,7 @@ export default function Login() {
         throw new Error(data.message || "Error al iniciar sesión");
       }
 
-      saveSession(data.token, data.usuario);
+      saveSession(data.token, data.usuario, data.hash);
 
       if (data.usuario.rol === "Administrador") {
         navigate("/dashboard");
@@ -60,8 +60,8 @@ export default function Login() {
           <div className="logo-circle">
             <img src={logo} alt="Logo" className="logo-img" />
           </div>
-          <h1>Inicio de sesión</h1>
-          <p className="description">Ingresa tus credenciales para continuar. El sistema detecta tu rol automaticamente.</p>
+          <h1>Iniciar sesión</h1>
+          <p className="description">Introduce tus datos para ingresar</p>
         </div>
 
         <form

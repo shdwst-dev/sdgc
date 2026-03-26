@@ -4,7 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ApiError, getMe, login } from '../services/auth';
 import { RootStackParamList } from '../navigation/types';
-import { clearToken, hydrateToken, setToken } from '../services/storage';
+import { clearHash, clearToken, hydrateToken, setHash, setToken } from '../services/storage';
 
 const logo = require('../../assets/logosdgc.jpeg');
 type LoginNavigationProp = NativeStackNavigationProp<RootStackParamList, 'InicioSesion'>;
@@ -51,8 +51,10 @@ export default function InicioSesion() {
           return;
         }
 
+        await clearHash();
         await clearToken();
       } catch {
+        await clearHash();
         await clearToken();
       } finally {
         setIsRestoringSession(false);
@@ -60,6 +62,7 @@ export default function InicioSesion() {
     };
 
     restoreSession().catch(async () => {
+      await clearHash();
       await clearToken();
       setIsRestoringSession(false);
     });
@@ -80,6 +83,7 @@ export default function InicioSesion() {
 
       const response = await login(email.trim(), password.trim());
       await setToken(response.token);
+      await setHash(response.hash ?? null);
       const role = normalizeRole(response.usuario.rol ?? '');
 
       if (role.includes('admin')) {

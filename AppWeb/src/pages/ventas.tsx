@@ -1,16 +1,42 @@
+import { useEffect, useMemo, useState } from "react";
 import Layout from "./layout";
 import "../styles/dashboard.css";
 import { useApiData } from "../hooks/useApiData";
-import { formatCurrency } from "../lib/format";
+import { getStoredUser } from "../lib/auth";
+import { postApi } from "../lib/api";
+import { ProductCatalog } from "../components/sales/ProductCatalog";
+import { SaleCheckout } from "../components/sales/SaleCheckout";
+import { SalesStoreStep } from "../components/sales/SalesStoreStep";
+import { useSaleCheckout } from "../hooks/useSaleCheckout";
+import type {
+  ClienteVenta,
+  MetodoPago,
+  ProductoVenta,
+  TiendaVenta,
+} from "../components/sales/types";
 
 export default function Ventas() {
-  const { data, loading, error } = useApiData("/ventas", {
-    productos: [] as Array<{ sku: string; nombre: string; precio: number; stock: number }>,
-    metodos_pago: [] as string[],
+  const [busqueda, setBusqueda] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState("mostrador");
+  const [metodoPagoSeleccionado, setMetodoPagoSeleccionado] = useState("");
+  const [tiendaSeleccionada, setTiendaSeleccionada] = useState("");
+  const [guardandoVenta, setGuardandoVenta] = useState(false);
+  const { data, loading, error } = useApiData(`/ventas?refresh=${reloadKey}`, {
+    productos: [] as ProductoVenta[],
+    catalogos: {
+      clientes: [] as ClienteVenta[],
+      metodos_pago: [] as MetodoPago[],
+      tiendas: [] as TiendaVenta[],
+    },
     venta_en_curso: {
       cliente: "",
-      metodo_pago: "Efectivo",
+      cliente_id: null as number | null,
+      id_metodo_pago: null as number | null,
+      id_tienda: null as number | null,
       carrito: [] as Array<{
+        producto_id: number;
+        sku: string;
         nombre: string;
         precio_unitario: number;
         cantidad: number;
@@ -25,123 +51,159 @@ export default function Ventas() {
     },
   });
 
+  const {
+    carrito,
+    mostrarCheckout,
+    obtenerStockDisponible,
+    productosOcultos,
+    resumen,
+    ventaError,
+    ventaSuccess,
+    setMostrarCheckout,
+    setVentaError,
+    setVentaSuccess,
+    agregarProducto,
+    actualizarCantidad,
+    eliminarProducto,
+    reiniciarVenta,
+  } = useSaleCheckout({
+    productos: data.productos,
+    tiendaSeleccionada,
+  });
+
+  useEffect(() => {
+    setClienteSeleccionado(data.venta_en_curso.cliente_id ? String(data.venta_en_curso.cliente_id) : "mostrador");
+    setMetodoPagoSeleccionado(
+      data.venta_en_curso.id_metodo_pago
+        ? String(data.venta_en_curso.id_metodo_pago)
+        : (data.catalogos.metodos_pago[0]?.id_metodo_pago?.toString() ?? ""),
+    );
+    setTiendaSeleccionada("");
+    reiniciarVenta();
+  }, [data]);
+
+  const productosFiltrados = useMemo(() => {
+    const query = busqueda.trim().toLowerCase();
+    const productosDisponibles = data.productos.filter(
+      (producto) => !productosOcultos.has(producto.id_producto),
+    );
+
+    if (!query) {
+      return productosDisponibles;
+    }
+
+    return productosDisponibles.filter((producto) =>
+      producto.nombre.toLowerCase().includes(query) ||
+      producto.sku.toLowerCase().includes(query),
+    );
+  }, [busqueda, data.productos, productosOcultos]);
+
+  const manejarCambioTienda = (value: string) => {
+    setVentaError(null);
+    setVentaSuccess(null);
+    setTiendaSeleccionada(value);
+    reiniciarVenta();
+  };
+
+  const completarVenta = async () => {
+    const usuario = getStoredUser();
+
+    if (!usuario?.id_usuario) {
+      setVentaError("No fue posible identificar al usuario actual.");
+      setVentaSuccess(null);
+      return;
+    }
+
+    if (!tiendaSeleccionada) {
+      setVentaError("Selecciona una tienda para registrar la venta.");
+      setVentaSuccess(null);
+      return;
+    }
+
+    if (!metodoPagoSeleccionado) {
+      setVentaError("Selecciona un metodo de pago.");
+      setVentaSuccess(null);
+      return;
+    }
+
+    if (carrito.length === 0) {
+      setVentaError("Agrega al menos un producto al carrito.");
+      setVentaSuccess(null);
+      return;
+    }
+
+    setGuardandoVenta(true);
+    setVentaError(null);
+    setVentaSuccess(null);
+
+    try {
+      await postApi("/v1/ventas/registrar", {
+        id_usuario: usuario.id_usuario,
+        id_metodo_pago: Number(metodoPagoSeleccionado),
+        id_tienda: Number(tiendaSeleccionada),
+        detalles: carrito.map((item) => ({
+          producto_id: item.producto_id,
+          cantidad: item.cantidad,
+        })),
+      });
+
+      reiniciarVenta();
+      setClienteSeleccionado("mostrador");
+      setVentaSuccess("Venta registrada correctamente.");
+      setReloadKey((actual) => actual + 1);
+    } catch (submitError) {
+      setVentaError(submitError instanceof Error ? submitError.message : "No fue posible registrar la venta.");
+    } finally {
+      setGuardandoVenta(false);
+    }
+  };
+
   return (
     <Layout>
-      <header className="topbar">
-        <div className="topbar-search">
-          <input type="text" placeholder="Buscar en ventas..." />
-        </div>
-
-        <div className="topbar-actions">
-          <button className="icon-button" type="button">🔔</button>
-          <select className="user-select" defaultValue={localStorage.getItem("rolUsuario") || "Administrador"}>
-            <option>Administrador</option>
-            <option>Vendedor</option>
-            <option>Comprador</option>
-          </select>
-        </div>
-      </header>
-
       <section className="inventory-header">
         <div>
           <h1>Ventas / Punto de venta</h1>
-          <p>Agrega productos al carrito, selecciona cliente y finaliza la venta desde una sola pantalla.</p>
+          <p>Primero selecciona una tienda y despues elige productos para completar la venta.</p>
         </div>
       </section>
 
+      <SalesStoreStep
+        tiendaSeleccionada={tiendaSeleccionada}
+        tiendas={data.catalogos.tiendas}
+        onChange={manejarCambioTienda}
+      />
+
       <section className="sales-layout">
-        <div className="sales-catalog">
-          <div className="panel inventory-panel">
-            <div className="sales-search">
-              <input type="text" placeholder="Buscar productos por nombre o SKU..." />
-            </div>
+        <ProductCatalog
+          busqueda={busqueda}
+          tiendaSeleccionada={tiendaSeleccionada}
+          productos={productosFiltrados}
+          onBusquedaChange={setBusqueda}
+          onSeleccionarProducto={agregarProducto}
+          obtenerStockDisponible={obtenerStockDisponible}
+        />
 
-            <div className="sales-products-grid">
-              {data.productos.map((producto) => (
-                <article key={producto.sku} className="sales-product-card">
-                  <div className="sales-product-image">Imagen del producto</div>
-                  <div className="sales-product-meta">
-                    <span className="sales-product-sku">{producto.sku}</span>
-                    <h4>{producto.nombre}</h4>
-                    <div className="sales-product-row">
-                      <strong>{formatCurrency(producto.precio)}</strong>
-                      <span>Stock: {producto.stock}</span>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <aside className="panel sales-cart">
-          <div className="sales-customer-block">
-            <label htmlFor="cliente">Cliente</label>
-            <div className="sales-customer-row">
-              <input id="cliente" type="text" placeholder="Seleccionar cliente..." value={data.venta_en_curso.cliente} readOnly />
-              <button type="button" className="sales-add-button">+</button>
-            </div>
-          </div>
-
-          <div className="sales-cart-header">
-            <h4>Artículos del carrito</h4>
-          </div>
-
-          <div className="sales-cart-items">
-            {data.venta_en_curso.carrito.map((item) => (
-              <div key={item.nombre} className="sales-cart-item">
-                <div className="sales-cart-item-top">
-                  <div>
-                    <strong>{item.nombre}</strong>
-                    <p>{formatCurrency(item.precio_unitario)} c/u</p>
-                  </div>
-                  <button type="button" className="sales-remove-button">
-                    Eliminar
-                  </button>
-                </div>
-
-                <div className="sales-cart-item-controls">
-                  <div className="sales-quantity-box">
-                    <button type="button">-</button>
-                    <span>{item.cantidad}</span>
-                    <button type="button">+</button>
-                  </div>
-                  <strong>{formatCurrency(item.total)}</strong>
-                </div>
-
-                {item.descuento ? <span className="sales-discount">Descuento: {item.descuento}</span> : null}
-              </div>
-            ))}
-          </div>
-
-          <div className="sales-summary">
-            <div>
-              <span>Subtotal:</span>
-              <strong>{formatCurrency(data.venta_en_curso.resumen.subtotal)}</strong>
-            </div>
-            <div>
-              <span>IVA (10%):</span>
-              <strong>{formatCurrency(data.venta_en_curso.resumen.iva)}</strong>
-            </div>
-            <div className="sales-total">
-              <span>Total:</span>
-              <strong>{formatCurrency(data.venta_en_curso.resumen.total)}</strong>
-            </div>
-          </div>
-
-          <div className="sales-payment-block">
-            <label htmlFor="metodo-pago">Método de pago</label>
-            <select id="metodo-pago" value={data.venta_en_curso.metodo_pago} disabled onChange={() => undefined}>
-              {data.metodos_pago.map((metodo) => (
-                <option key={metodo}>{metodo}</option>
-              ))}
-            </select>
-          </div>
-
-          <button type="button" className="sales-complete-button">
-            Completar venta
-          </button>
-        </aside>
+        <SaleCheckout
+          mostrarCheckout={mostrarCheckout}
+          carrito={carrito}
+          clienteSeleccionado={clienteSeleccionado}
+          metodoPagoSeleccionado={metodoPagoSeleccionado}
+          tiendaSeleccionada={tiendaSeleccionada}
+          clientes={data.catalogos.clientes}
+          metodosPago={data.catalogos.metodos_pago}
+          tiendas={data.catalogos.tiendas}
+          resumen={resumen}
+          ventaError={ventaError}
+          ventaSuccess={ventaSuccess}
+          guardandoVenta={guardandoVenta}
+          onClienteChange={setClienteSeleccionado}
+          onMetodoPagoChange={setMetodoPagoSeleccionado}
+          onTiendaChange={manejarCambioTienda}
+          onActualizarCantidad={actualizarCantidad}
+          onEliminarProducto={eliminarProducto}
+          onCompletarVenta={completarVenta}
+          onOcultarCheckout={() => setMostrarCheckout(false)}
+        />
       </section>
 
       {loading ? <p className="panel">Cargando punto de venta...</p> : null}

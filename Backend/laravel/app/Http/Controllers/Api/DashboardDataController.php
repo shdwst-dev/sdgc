@@ -71,11 +71,19 @@ class DashboardDataController extends Controller
 
     public function inventario(): JsonResponse
     {
+        $stockPorProducto = DB::table('stock as st')
+            ->select('st.id_producto', 'st.id_tienda', 't.nombre as tienda', 'st.stock_actual', 'st.stock_minimo')
+            ->join('tiendas as t', 't.id_tienda', '=', 'st.id_tienda')
+            ->orderBy('t.nombre')
+            ->get()
+            ->groupBy('id_producto');
+
         $productos = DB::table('productos as p')
             ->leftJoin('subcategorias as s', 's.id_subcategoria', '=', 'p.id_subcategoria')
             ->leftJoin('categorias as c', 'c.id_categoria', '=', 's.id_categoria')
             ->leftJoin('stock as st', 'st.id_producto', '=', 'p.id_producto')
             ->leftJoin('estatus as e', 'e.id_estatus', '=', 'p.id_estatus')
+            ->where('e.nombre', '!=', 'Inactivo')
             ->select(
                 'p.id_producto',
                 'p.codigo_barras as sku',
@@ -98,7 +106,7 @@ class DashboardDataController extends Controller
             )
             ->orderBy('p.nombre')
             ->get()
-            ->map(function ($producto) {
+            ->map(function ($producto) use ($stockPorProducto) {
                 $estadoStock = 'Disponible';
                 if ((int) $producto->stock <= 0) {
                     $estadoStock = 'Sin stock';
@@ -117,6 +125,14 @@ class DashboardDataController extends Controller
                     'precio' => (float) $producto->precio,
                     'estatus' => $producto->estatus,
                     'estado' => $estadoStock,
+                    'stock_por_tienda' => ($stockPorProducto->get($producto->id_producto) ?? collect())
+                        ->map(fn ($stock) => [
+                            'id_tienda' => (int) $stock->id_tienda,
+                            'tienda' => $stock->tienda,
+                            'stock_actual' => (int) $stock->stock_actual,
+                            'stock_minimo' => (int) $stock->stock_minimo,
+                        ])
+                        ->values(),
                 ];
             });
 
@@ -146,6 +162,10 @@ class DashboardDataController extends Controller
                 'estatus' => DB::table('estatus')
                     ->select('id_estatus', 'nombre')
                     ->orderBy('id_estatus')
+                    ->get(),
+                'tiendas' => DB::table('tiendas')
+                    ->select('id_tienda', 'nombre')
+                    ->orderBy('nombre')
                     ->get(),
             ],
             'productos' => $productos->values(),
@@ -228,27 +248,54 @@ class DashboardDataController extends Controller
 
     public function ventas(): JsonResponse
     {
-        $productos = DB::table('productos as p')
-            ->leftJoin('stock as s', 's.id_producto', '=', 'p.id_producto')
+        $metodosPago = DB::table('metodos_pago')
+            ->select('id_metodo_pago', 'nombre')
+            ->orderBy('nombre')
+            ->get();
+
+        $tiendas = DB::table('tiendas')
+            ->select('id_tienda', 'nombre')
+            ->orderBy('nombre')
+            ->get();
+
+        $productosBase = DB::table('productos as p')
+            ->join('estatus as e', 'e.id_estatus', '=', 'p.id_estatus')
+            ->where('e.nombre', '!=', 'Inactivo')
             ->select(
                 'p.id_producto',
                 'p.codigo_barras as sku',
                 'p.nombre',
                 'p.imagen_url',
-                'p.precio_unitario as precio',
-                DB::raw('COALESCE(SUM(s.stock_actual), 0) as stock')
+                'p.precio_unitario as precio'
             )
-            ->groupBy('p.id_producto', 'p.codigo_barras', 'p.nombre', 'p.imagen_url', 'p.precio_unitario')
             ->orderBy('p.nombre')
+            ->get();
+
+        $stockRows = DB::table('stock as s')
+            ->join('tiendas as t', 't.id_tienda', '=', 's.id_tienda')
+            ->select('s.id_producto', 's.id_tienda', 't.nombre as tienda', 's.stock_actual')
             ->get()
-            ->map(fn ($producto) => [
+            ->groupBy('id_producto');
+
+        $productos = $productosBase->map(function ($producto) use ($stockRows) {
+            $stockPorTienda = ($stockRows->get($producto->id_producto) ?? collect())
+                ->map(fn ($stock) => [
+                    'id_tienda' => (int) $stock->id_tienda,
+                    'tienda' => $stock->tienda,
+                    'stock' => (int) $stock->stock_actual,
+                ])
+                ->values();
+
+            return [
                 'id_producto' => $producto->id_producto,
                 'sku' => $producto->sku,
                 'nombre' => $producto->nombre,
                 'imagen' => $producto->imagen_url,
                 'precio' => (float) $producto->precio,
-                'stock' => (int) $producto->stock,
-            ]);
+                'stock' => $stockPorTienda->sum('stock'),
+                'stock_por_tienda' => $stockPorTienda,
+            ];
+        });
 
         $ventaPendiente = DB::table('ventas as v')
             ->join('estatus as e', 'e.id_estatus', '=', 'v.id_estatus')
@@ -268,12 +315,14 @@ class DashboardDataController extends Controller
             $carrito = DB::table('detalle_ventas as dv')
                 ->join('productos as p', 'p.id_producto', '=', 'dv.producto_id')
                 ->where('dv.venta_id', $ventaPendiente->id_venta)
-                ->select('p.nombre', 'dv.cantidad', 'dv.precio_unitario')
+                ->select('p.id_producto', 'p.codigo_barras as sku', 'p.nombre', 'dv.cantidad', 'dv.precio_unitario')
                 ->get()
                 ->map(function ($item) {
                     $subtotal = (float) $item->cantidad * (float) $item->precio_unitario;
 
                     return [
+                        'producto_id' => (int) $item->id_producto,
+                        'sku' => $item->sku,
                         'nombre' => $item->nombre,
                         'precio_unitario' => (float) $item->precio_unitario,
                         'cantidad' => (int) $item->cantidad,
@@ -293,12 +342,26 @@ class DashboardDataController extends Controller
 
         return response()->json([
             'productos' => $productos,
-            'metodos_pago' => DB::table('metodos_pago')->orderBy('nombre')->pluck('nombre'),
+            'catalogos' => [
+                'clientes' => DB::table('usuarios as u')
+                    ->join('roles as r', 'r.id_rol', '=', 'u.id_rol')
+                    ->join('personas as p', 'p.id_persona', '=', 'u.id_persona')
+                    ->where('r.nombre', 'Comprador')
+                    ->select(
+                        'u.id_usuario',
+                        'u.email',
+                        DB::raw("TRIM(CONCAT(p.nombre, ' ', p.apellido_paterno, ' ', COALESCE(p.apellido_materno, ''))) as nombre")
+                    )
+                    ->orderBy('p.nombre')
+                    ->get(),
+                'metodos_pago' => $metodosPago,
+                'tiendas' => $tiendas,
+            ],
             'venta_en_curso' => [
                 'cliente' => 'Venta mostrador',
-                'metodo_pago' => DB::table('metodos_pago')
-                    ->where('id_metodo_pago', $ventaPendiente->id_metodo_pago ?? 1)
-                    ->value('nombre') ?? 'Efectivo',
+                'cliente_id' => null,
+                'id_metodo_pago' => $ventaPendiente->id_metodo_pago ?? $metodosPago->first()->id_metodo_pago ?? null,
+                'id_tienda' => $tiendas->first()->id_tienda ?? null,
                 'carrito' => $carrito->values(),
                 'resumen' => $resumen,
             ],
@@ -309,23 +372,46 @@ class DashboardDataController extends Controller
     {
         $proveedores = DB::table('proveedores as pr')
             ->join('personas as pe', 'pe.id_persona', '=', 'pr.id_persona')
+            ->leftJoin('metodos_pago as mp', 'mp.id_metodo_pago', '=', 'pr.id_metodo_pago')
             ->leftJoin('compras as c', 'c.id_proveedor', '=', 'pr.id_proveedor')
             ->leftJoin('detalle_compras as dc', 'dc.id_compra', '=', 'c.id_compra')
             ->select(
                 'pr.id_proveedor',
                 'pr.razon_social as nombre',
+                'pr.razon_social',
+                'pr.id_metodo_pago',
+                'mp.nombre as metodo_pago',
+                'pe.nombre as contacto_nombre',
+                'pe.apellido_paterno',
+                'pe.apellido_materno',
                 'pe.telefono',
                 DB::raw("CONCAT(LOWER(REPLACE(pe.nombre, ' ', '.')), '.', LOWER(REPLACE(pe.apellido_paterno, ' ', '')), '@tienda.com') as correo"),
                 DB::raw('COUNT(DISTINCT dc.producto_id) as productos'),
+                DB::raw('COUNT(DISTINCT c.id_compra) as compras'),
                 DB::raw('MAX(c.fecha_hora) as ultimo_pedido')
             )
-            ->groupBy('pr.id_proveedor', 'pr.razon_social', 'pe.telefono', 'pe.nombre', 'pe.apellido_paterno')
+            ->groupBy(
+                'pr.id_proveedor',
+                'pr.razon_social',
+                'pr.id_metodo_pago',
+                'mp.nombre',
+                'pe.telefono',
+                'pe.nombre',
+                'pe.apellido_paterno',
+                'pe.apellido_materno'
+            )
             ->orderBy('pr.razon_social')
             ->get()
             ->map(fn ($proveedor) => [
+                'id_proveedor' => $proveedor->id_proveedor,
                 'nombre' => $proveedor->nombre,
+                'razon_social' => $proveedor->razon_social,
+                'contacto' => trim($proveedor->contacto_nombre . ' ' . $proveedor->apellido_paterno . ' ' . $proveedor->apellido_materno),
                 'correo' => $proveedor->correo,
                 'telefono' => $proveedor->telefono,
+                'id_metodo_pago' => $proveedor->id_metodo_pago,
+                'metodo_pago' => $proveedor->metodo_pago,
+                'compras' => (int) $proveedor->compras,
                 'productos' => (int) $proveedor->productos,
                 'ultimo_pedido' => $proveedor->ultimo_pedido ? Carbon::parse($proveedor->ultimo_pedido)->toDateString() : null,
             ]);
@@ -349,6 +435,8 @@ class DashboardDataController extends Controller
             ->leftJoin('estatus as e', 'e.id_estatus', '=', 'u.id_estatus')
             ->where('r.nombre', 'Comprador')
             ->select(
+                'u.id_usuario',
+                'u.id_estatus',
                 'u.email as correo',
                 'p.telefono',
                 'p.nombre',
@@ -359,6 +447,8 @@ class DashboardDataController extends Controller
             ->orderBy('p.nombre')
             ->get()
             ->map(fn ($cliente) => [
+                'id_usuario' => $cliente->id_usuario,
+                'id_estatus' => $cliente->id_estatus,
                 'nombre' => trim($cliente->nombre . ' ' . $cliente->apellido_paterno . ' ' . $cliente->apellido_materno),
                 'correo' => $cliente->correo,
                 'telefono' => $cliente->telefono,

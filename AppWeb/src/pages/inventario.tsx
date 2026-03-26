@@ -16,6 +16,12 @@ type ProductoInventario = {
   precio: number;
   estatus: string;
   estado: string;
+  stock_por_tienda: Array<{
+    id_tienda: number;
+    tienda: string;
+    stock_actual: number;
+    stock_minimo: number;
+  }>;
 };
 
 export default function Inventario() {
@@ -30,11 +36,18 @@ export default function Inventario() {
   const [productoSeleccionado, setProductoSeleccionado] = useState<ProductoInventario | null>(null);
   const [productoEditando, setProductoEditando] = useState<ProductoInventario | null>(null);
   const [guardandoEdicion, setGuardandoEdicion] = useState(false);
+  const [guardandoStockTienda, setGuardandoStockTienda] = useState(false);
   const [accionError, setAccionError] = useState<string | null>(null);
   const [accionSuccess, setAccionSuccess] = useState<string | null>(null);
+  const [tiendaStockSeleccionada, setTiendaStockSeleccionada] = useState("");
+  const [stockTiendaEditable, setStockTiendaEditable] = useState({
+    stock_actual: "",
+    stock_minimo: "",
+  });
   const [productoEditable, setProductoEditable] = useState({
     nombre: "",
     codigo_barras: "",
+    stock: "",
     precio_base: "",
     precio_unitario: "",
     imagen_url: "",
@@ -64,6 +77,7 @@ export default function Inventario() {
       medidas: [] as Array<{ id_medida: number; altura: number | null; ancho: number | null; peso: number | null; volumen: number | null }>,
       unidades: [] as Array<{ id_unidad: number; nombre: string; abreviatura: string }>,
       estatus: [] as Array<{ id_estatus: number; nombre: string }>,
+      tiendas: [] as Array<{ id_tienda: number; nombre: string }>,
     },
     productos: [] as ProductoInventario[],
   });
@@ -135,10 +149,27 @@ export default function Inventario() {
     setProductoEditable({
       nombre: producto.producto,
       codigo_barras: producto.sku,
+      stock: String(producto.stock),
       precio_base: String(producto.costo),
       precio_unitario: String(producto.precio),
       imagen_url: "",
       id_estatus: data.catalogos.estatus.find((estatus) => estatus.nombre === producto.estatus)?.id_estatus?.toString() ?? "1",
+    });
+    const primeraTienda = producto.stock_por_tienda[0]?.id_tienda?.toString() ?? data.catalogos.tiendas[0]?.id_tienda?.toString() ?? "";
+    setTiendaStockSeleccionada(primeraTienda);
+    const stockTienda = producto.stock_por_tienda.find((item) => String(item.id_tienda) === primeraTienda);
+    setStockTiendaEditable({
+      stock_actual: String(stockTienda?.stock_actual ?? 0),
+      stock_minimo: String(stockTienda?.stock_minimo ?? 0),
+    });
+  };
+
+  const actualizarFormularioStockTienda = (idTienda: string) => {
+    setTiendaStockSeleccionada(idTienda);
+    const stockTienda = productoEditando?.stock_por_tienda.find((item) => String(item.id_tienda) === idTienda);
+    setStockTiendaEditable({
+      stock_actual: String(stockTienda?.stock_actual ?? 0),
+      stock_minimo: String(stockTienda?.stock_minimo ?? 0),
     });
   };
 
@@ -155,6 +186,7 @@ export default function Inventario() {
       await putApi(`/v1/productos/${productoEditando.id_producto}`, {
         nombre: productoEditable.nombre,
         codigo_barras: productoEditable.codigo_barras || null,
+        stock: productoEditando.stock,
         precio_base: Number(productoEditable.precio_base),
         precio_unitario: Number(productoEditable.precio_unitario),
         imagen_url: productoEditable.imagen_url || null,
@@ -168,6 +200,109 @@ export default function Inventario() {
       setAccionError(submitError instanceof Error ? submitError.message : "No fue posible actualizar el producto.");
     } finally {
       setGuardandoEdicion(false);
+    }
+  };
+
+  const guardarStockPorTienda = async () => {
+    if (!productoEditando || !tiendaStockSeleccionada) {
+      return;
+    }
+
+    setGuardandoStockTienda(true);
+    setAccionError(null);
+    setAccionSuccess(null);
+
+    try {
+      const stockActual = Number(stockTiendaEditable.stock_actual);
+      const stockMinimo = Number(stockTiendaEditable.stock_minimo);
+
+      await putApi(`/v1/productos/${productoEditando.id_producto}/stock-tienda`, {
+        id_tienda: Number(tiendaStockSeleccionada),
+        stock_actual: stockActual,
+        stock_minimo: stockMinimo,
+      });
+
+      const stockPorTiendaActualizado = (() => {
+        const existente = productoEditando.stock_por_tienda.some(
+          (item) => String(item.id_tienda) === tiendaStockSeleccionada,
+        );
+
+        if (existente) {
+          return productoEditando.stock_por_tienda.map((item) =>
+            String(item.id_tienda) === tiendaStockSeleccionada
+              ? { ...item, stock_actual: stockActual, stock_minimo: stockMinimo }
+              : item,
+          );
+        }
+
+        const nombreTienda =
+          data.catalogos.tiendas.find((tienda) => String(tienda.id_tienda) === tiendaStockSeleccionada)?.nombre ??
+          "Tienda";
+
+        return [
+          ...productoEditando.stock_por_tienda,
+          {
+            id_tienda: Number(tiendaStockSeleccionada),
+            tienda: nombreTienda,
+            stock_actual: stockActual,
+            stock_minimo: stockMinimo,
+          },
+        ];
+      })();
+
+      const stockTotalActualizado = stockPorTiendaActualizado.reduce(
+        (total, item) => total + item.stock_actual,
+        0,
+      );
+
+      const minimoTotalActualizado = stockPorTiendaActualizado.reduce(
+        (total, item) => total + item.stock_minimo,
+        0,
+      );
+
+      setProductoEditando((actual) => (
+        actual
+          ? {
+              ...actual,
+              stock: stockTotalActualizado,
+              minimo: minimoTotalActualizado,
+              estado:
+                stockTotalActualizado <= 0
+                  ? "Sin stock"
+                  : stockTotalActualizado <= minimoTotalActualizado
+                    ? "Stock bajo"
+                    : "Disponible",
+              stock_por_tienda: stockPorTiendaActualizado,
+            }
+          : actual
+      ));
+      setProductoEditable((actual) => ({
+        ...actual,
+        stock: String(stockTotalActualizado),
+      }));
+      setProductoSeleccionado((actual) => (
+        actual?.id_producto === productoEditando.id_producto
+          ? {
+              ...actual,
+              stock: stockTotalActualizado,
+              minimo: minimoTotalActualizado,
+              estado:
+                stockTotalActualizado <= 0
+                  ? "Sin stock"
+                  : stockTotalActualizado <= minimoTotalActualizado
+                    ? "Stock bajo"
+                    : "Disponible",
+              stock_por_tienda: stockPorTiendaActualizado,
+            }
+          : actual
+      ));
+
+      setAccionSuccess("Stock por tienda actualizado correctamente.");
+      setReloadKey((current) => current + 1);
+    } catch (submitError) {
+      setAccionError(submitError instanceof Error ? submitError.message : "No fue posible actualizar el stock por tienda.");
+    } finally {
+      setGuardandoStockTienda(false);
     }
   };
 
@@ -198,21 +333,6 @@ export default function Inventario() {
 
   return (
     <Layout>
-      <header className="topbar">
-        <div className="topbar-search">
-          <input type="text" placeholder="Buscar en inventario..." />
-        </div>
-
-        <div className="topbar-actions">
-          <button className="icon-button" type="button">🔔</button>
-          <select className="user-select" defaultValue={localStorage.getItem("rolUsuario") || "Administrador"}>
-            <option>Administrador</option>
-            <option>Vendedor</option>
-            <option>Comprador</option>
-          </select>
-        </div>
-      </header>
-
       <section className="inventory-header">
         <div>
           <h1>Catálogo de productos</h1>
@@ -357,7 +477,6 @@ export default function Inventario() {
         <div className="stat-card">
           <div className="stat-title-row">
             <span>Productos activos</span>
-            <span>📦</span>
           </div>
           <h3>{data.metricas.productos_activos}</h3>
         </div>
@@ -392,9 +511,12 @@ export default function Inventario() {
         {accionSuccess ? <p className="form-message form-message-success">{accionSuccess}</p> : null}
 
         {productoSeleccionado ? (
-          <div className="detail-card">
+          <div className="detail-card detail-card-view">
             <div className="detail-card-header">
-              <h3>Detalle del producto</h3>
+              <div>
+                <p className="detail-section-label">Vista rápida</p>
+                <h3>Detalle del producto</h3>
+              </div>
               <button type="button" className="inventory-secondary-button" onClick={() => setProductoSeleccionado(null)}>
                 Cerrar
               </button>
@@ -433,9 +555,12 @@ export default function Inventario() {
         ) : null}
 
         {productoEditando ? (
-          <div className="detail-card">
+          <div className="detail-card detail-card-edit">
             <div className="detail-card-header">
-              <h3>Editar producto</h3>
+              <div>
+                <p className="detail-section-label">Modo edición</p>
+                <h3>Editar producto</h3>
+              </div>
               <button type="button" className="inventory-secondary-button" onClick={() => setProductoEditando(null)}>
                 Cancelar
               </button>
@@ -452,6 +577,10 @@ export default function Inventario() {
                 </div>
               </div>
               <div className="detail-edit-main">
+                <div className="detail-edit-form-header">
+                  <p className="detail-section-label">Datos del producto</p>
+                  <p className="detail-edit-form-copy">Modifica los campos necesarios y revisa la información antes de guardar.</p>
+                </div>
                 <div className="form-grid">
                   <label className="form-field">
                     <span>Nombre</span>
@@ -460,6 +589,10 @@ export default function Inventario() {
                   <label className="form-field">
                     <span>SKU</span>
                     <input value={productoEditable.codigo_barras} onChange={(e) => setProductoEditable((actual) => ({ ...actual, codigo_barras: e.target.value }))} />
+                  </label>
+                  <label className="form-field">
+                    <span>Stock total</span>
+                    <input value={productoEditable.stock} readOnly />
                   </label>
                   <label className="form-field">
                     <span>Estatus</span>
@@ -483,6 +616,49 @@ export default function Inventario() {
                     <span>Imagen URL</span>
                     <input value={productoEditable.imagen_url} onChange={(e) => setProductoEditable((actual) => ({ ...actual, imagen_url: e.target.value }))} />
                   </label>
+                </div>
+
+                <div className="detail-edit-form-header">
+                  <p className="detail-section-label">Stock por tienda</p>
+                  <p className="detail-edit-form-copy">Selecciona una sucursal para ajustar existencias y stock mínimo manualmente.</p>
+                </div>
+                <div className="form-grid">
+                  <label className="form-field">
+                    <span>Tienda</span>
+                    <select value={tiendaStockSeleccionada} onChange={(e) => actualizarFormularioStockTienda(e.target.value)}>
+                      <option value="">Selecciona una tienda</option>
+                      {data.catalogos.tiendas.map((tienda) => (
+                        <option key={tienda.id_tienda} value={tienda.id_tienda}>
+                          {tienda.nombre}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="form-field">
+                    <span>Stock actual</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={stockTiendaEditable.stock_actual}
+                      onChange={(e) => setStockTiendaEditable((actual) => ({ ...actual, stock_actual: e.target.value }))}
+                    />
+                  </label>
+                  <label className="form-field">
+                    <span>Stock mínimo</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={stockTiendaEditable.stock_minimo}
+                      onChange={(e) => setStockTiendaEditable((actual) => ({ ...actual, stock_minimo: e.target.value }))}
+                    />
+                  </label>
+                </div>
+                <div className="form-actions">
+                  <button className="inventory-secondary-button" type="button" onClick={guardarStockPorTienda} disabled={guardandoStockTienda || !tiendaStockSeleccionada}>
+                    {guardandoStockTienda ? "Actualizando..." : "Guardar stock por tienda"}
+                  </button>
                 </div>
               </div>
             </div>

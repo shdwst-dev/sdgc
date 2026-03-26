@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Layout from "./layout";
 import "../styles/dashboard.css";
 import { useApiData } from "../hooks/useApiData";
@@ -35,6 +35,7 @@ type CompraDetalle = {
 };
 
 export default function Compras() {
+  const editorRef = useRef<HTMLDivElement | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState("Todos");
   const [estadoSeleccionado, setEstadoSeleccionado] = useState("Todos");
@@ -77,6 +78,25 @@ export default function Compras() {
     ordenes: [] as CompraListado[],
   });
 
+  const resetMensajesFormulario = () => {
+    setFormError(null);
+    setFormSuccess(null);
+  };
+
+  const resetMensajesAccion = () => {
+    setAccionError(null);
+    setAccionSuccess(null);
+  };
+
+  const limpiarFormularioNuevaOrden = () => {
+    setOrdenNueva({
+      id_proveedor: "",
+      id_tienda: "",
+      id_estatus: "1",
+      detalles: [{ producto_id: "", cantidad: "1", precio_compra: "" }],
+    });
+  };
+
   const ordenesFiltradas = data.ordenes.filter((orden) => {
     const coincideBusqueda =
       orden.folio.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -99,6 +119,7 @@ export default function Compras() {
   };
 
   const agregarDetalle = () => {
+    resetMensajesFormulario();
     setOrdenNueva((actual) => ({
       ...actual,
       detalles: [...actual.detalles, { producto_id: "", cantidad: "1", precio_compra: "" }],
@@ -106,6 +127,7 @@ export default function Compras() {
   };
 
   const eliminarDetalle = (index: number) => {
+    resetMensajesFormulario();
     setOrdenNueva((actual) => ({
       ...actual,
       detalles: actual.detalles.filter((_, detalleIndex) => detalleIndex !== index),
@@ -113,9 +135,32 @@ export default function Compras() {
   };
 
   const registrarCompra = async () => {
+    if (!ordenNueva.id_proveedor) {
+      setFormError("Selecciona un proveedor.");
+      setFormSuccess(null);
+      return;
+    }
+
+    if (!ordenNueva.id_tienda) {
+      setFormError("Selecciona una tienda.");
+      setFormSuccess(null);
+      return;
+    }
+
+    const detalleInvalido = ordenNueva.detalles.find((detalle) => (
+      !detalle.producto_id ||
+      Number(detalle.cantidad) <= 0 ||
+      Number(detalle.precio_compra) <= 0
+    ));
+
+    if (detalleInvalido) {
+      setFormError("Completa todos los productos con cantidad y precio de compra válidos.");
+      setFormSuccess(null);
+      return;
+    }
+
     setGuardando(true);
-    setFormError(null);
-    setFormSuccess(null);
+    resetMensajesFormulario();
 
     try {
       await postApi("/v1/compras/registrar", {
@@ -130,12 +175,7 @@ export default function Compras() {
       });
 
       setFormSuccess("Orden de compra registrada correctamente.");
-      setOrdenNueva({
-        id_proveedor: "",
-        id_tienda: "",
-        id_estatus: "1",
-        detalles: [{ producto_id: "", cantidad: "1", precio_compra: "" }],
-      });
+      limpiarFormularioNuevaOrden();
       setReloadKey((current) => current + 1);
     } catch (submitError) {
       setFormError(submitError instanceof Error ? submitError.message : "No fue posible registrar la compra.");
@@ -146,8 +186,7 @@ export default function Compras() {
 
   const cargarDetalleCompra = async (idCompra: number) => {
     setCargandoDetalle(true);
-    setAccionError(null);
-    setAccionSuccess(null);
+    resetMensajesAccion();
 
     try {
       const response = await fetchApi<{ compra: CompraDetalle }>(`/v1/compras/${idCompra}`);
@@ -161,6 +200,7 @@ export default function Compras() {
   };
 
   const abrirDetalle = async (orden: CompraListado) => {
+    setOrdenEditando(null);
     const compra = await cargarDetalleCompra(orden.id_compra);
 
     if (!compra) {
@@ -172,6 +212,9 @@ export default function Compras() {
   };
 
   const abrirEdicion = async (orden: CompraListado) => {
+    setOrdenSeleccionada(null);
+    setMostrarFormulario(false);
+    resetMensajesFormulario();
     const compra = await cargarDetalleCompra(orden.id_compra);
 
     if (!compra) {
@@ -184,6 +227,13 @@ export default function Compras() {
       id_proveedor: String(compra.id_proveedor),
       id_estatus: String(compra.id_estatus),
     });
+
+    requestAnimationFrame(() => {
+      editorRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
   };
 
   const guardarEdicion = async () => {
@@ -191,9 +241,20 @@ export default function Compras() {
       return;
     }
 
+    if (!ordenEditable.id_proveedor) {
+      setAccionError("Selecciona un proveedor para actualizar la compra.");
+      setAccionSuccess(null);
+      return;
+    }
+
+    if (!ordenEditable.id_estatus) {
+      setAccionError("Selecciona un estatus para actualizar la compra.");
+      setAccionSuccess(null);
+      return;
+    }
+
     setGuardandoEdicion(true);
-    setAccionError(null);
-    setAccionSuccess(null);
+    resetMensajesAccion();
 
     try {
       await putApi(`/v1/compras/${ordenEditando.id_compra}`, {
@@ -203,6 +264,7 @@ export default function Compras() {
 
       setAccionSuccess("Compra actualizada correctamente.");
       setOrdenEditando(null);
+      setOrdenSeleccionada(null);
       setReloadKey((current) => current + 1);
     } catch (submitError) {
       setAccionError(submitError instanceof Error ? submitError.message : "No fue posible actualizar la compra.");
@@ -212,14 +274,19 @@ export default function Compras() {
   };
 
   const eliminarCompra = async (orden: CompraListado) => {
+    if (orden.estado === "Cancelado") {
+      setAccionError(`La compra ${orden.folio} ya está cancelada.`);
+      setAccionSuccess(null);
+      return;
+    }
+
     const confirmado = window.confirm(`¿Deseas cancelar ${orden.folio}?`);
 
     if (!confirmado) {
       return;
     }
 
-    setAccionError(null);
-    setAccionSuccess(null);
+    resetMensajesAccion();
 
     try {
       await deleteApi(`/v1/compras/${orden.id_compra}`);
@@ -238,29 +305,35 @@ export default function Compras() {
     }
   };
 
+  const alternarFormulario = () => {
+    resetMensajesFormulario();
+
+    if (mostrarFormulario) {
+      limpiarFormularioNuevaOrden();
+    }
+
+    setMostrarFormulario((valor) => !valor);
+  };
+
+  const limpiarFiltros = () => {
+    setBusqueda("");
+    setProveedorSeleccionado("Todos");
+    setEstadoSeleccionado("Todos");
+  };
+
+  const hayFiltrosActivos =
+    busqueda.trim() !== "" ||
+    proveedorSeleccionado !== "Todos" ||
+    estadoSeleccionado !== "Todos";
+
   return (
     <Layout>
-      <header className="topbar">
-        <div className="topbar-search">
-          <input type="text" placeholder="Buscar en compras..." />
-        </div>
-
-        <div className="topbar-actions">
-          <button className="icon-button" type="button">🔔</button>
-          <select className="user-select" defaultValue={localStorage.getItem("rolUsuario") || "Administrador"}>
-            <option>Administrador</option>
-            <option>Vendedor</option>
-            <option>Comprador</option>
-          </select>
-        </div>
-      </header>
-
       <section className="inventory-header">
         <div>
           <h1>Compras</h1>
           <p>Da seguimiento a órdenes de compra, proveedores y recepciones de mercancía.</p>
         </div>
-        <button className="inventory-primary-button" type="button" onClick={() => setMostrarFormulario((valor) => !valor)}>
+        <button className="inventory-primary-button" type="button" onClick={alternarFormulario}>
           {mostrarFormulario ? "Ocultar formulario" : "Crear orden de compra"}
         </button>
       </section>
@@ -275,7 +348,13 @@ export default function Compras() {
           <div className="form-grid">
             <label className="form-field">
               <span>Proveedor</span>
-              <select value={ordenNueva.id_proveedor} onChange={(e) => setOrdenNueva((actual) => ({ ...actual, id_proveedor: e.target.value }))}>
+              <select
+                value={ordenNueva.id_proveedor}
+                onChange={(e) => {
+                  resetMensajesFormulario();
+                  setOrdenNueva((actual) => ({ ...actual, id_proveedor: e.target.value }));
+                }}
+              >
                 <option value="">Selecciona un proveedor</option>
                 {data.catalogos.proveedores.map((proveedor) => (
                   <option key={proveedor.id_proveedor} value={proveedor.id_proveedor}>
@@ -287,7 +366,14 @@ export default function Compras() {
 
             <label className="form-field">
               <span>Tienda</span>
-              <select value={ordenNueva.id_tienda} onChange={(e) => setOrdenNueva((actual) => ({ ...actual, id_tienda: e.target.value }))}>
+              <select
+                value={ordenNueva.id_tienda}
+                onChange={(e) => {
+                  resetMensajesFormulario();
+                  setOrdenNueva((actual) => ({ ...actual, id_tienda: e.target.value }));
+                }}
+              >
+                
                 <option value="">Selecciona una tienda</option>
                 {data.catalogos.tiendas.map((tienda) => (
                   <option key={tienda.id_tienda} value={tienda.id_tienda}>
@@ -299,7 +385,13 @@ export default function Compras() {
 
             <label className="form-field">
               <span>Estatus</span>
-              <select value={ordenNueva.id_estatus} onChange={(e) => setOrdenNueva((actual) => ({ ...actual, id_estatus: e.target.value }))}>
+              <select
+                value={ordenNueva.id_estatus}
+                onChange={(e) => {
+                  resetMensajesFormulario();
+                  setOrdenNueva((actual) => ({ ...actual, id_estatus: e.target.value }));
+                }}
+              >
                 {data.catalogos.estatus.map((estatus) => (
                   <option key={estatus.id_estatus} value={estatus.id_estatus}>
                     {estatus.nombre}
@@ -317,6 +409,7 @@ export default function Compras() {
                   <select
                     value={detalle.producto_id}
                     onChange={(e) => {
+                      resetMensajesFormulario();
                       actualizarDetalle(index, "producto_id", e.target.value);
                       const producto = data.catalogos.productos.find((item) => item.id_producto === Number(e.target.value));
                       if (producto) {
@@ -335,12 +428,29 @@ export default function Compras() {
 
                 <label className="form-field">
                   <span>Cantidad</span>
-                  <input type="number" min="1" value={detalle.cantidad} onChange={(e) => actualizarDetalle(index, "cantidad", e.target.value)} />
+                  <input
+                    type="number"
+                    min="1"
+                    value={detalle.cantidad}
+                    onChange={(e) => {
+                      resetMensajesFormulario();
+                      actualizarDetalle(index, "cantidad", e.target.value);
+                    }}
+                  />
                 </label>
 
                 <label className="form-field">
                   <span>Precio compra</span>
-                  <input type="number" min="0.01" step="0.01" value={detalle.precio_compra} onChange={(e) => actualizarDetalle(index, "precio_compra", e.target.value)} />
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={detalle.precio_compra}
+                    onChange={(e) => {
+                      resetMensajesFormulario();
+                      actualizarDetalle(index, "precio_compra", e.target.value);
+                    }}
+                  />
                 </label>
 
                 <button type="button" className="inventory-secondary-button detail-remove-button" onClick={() => eliminarDetalle(index)} disabled={ordenNueva.detalles.length === 1}>
@@ -371,7 +481,6 @@ export default function Compras() {
         <div className="stat-card">
           <div className="stat-title-row">
             <span>Órdenes ({data.periodo_referencia.mes || "Mes"})</span>
-            <span>🧾</span>
           </div>
           <h3>{data.metricas.ordenes_mes}</h3>
         </div>
@@ -379,7 +488,6 @@ export default function Compras() {
         <div className="stat-card">
           <div className="stat-title-row">
             <span>Por recibir</span>
-            <span>⏳</span>
           </div>
           <h3>{data.metricas.por_recibir}</h3>
         </div>
@@ -395,7 +503,6 @@ export default function Compras() {
         <div className="stat-card">
           <div className="stat-title-row">
             <span>Proveedores activos</span>
-            <span>🏢</span>
           </div>
           <h3>{data.metricas.proveedores_activos}</h3>
         </div>
@@ -463,7 +570,7 @@ export default function Compras() {
         ) : null}
 
         {ordenEditando ? (
-          <div className="detail-card">
+          <div ref={editorRef} className="detail-card">
             <div className="detail-card-header">
               <h3>Editar compra</h3>
               <button type="button" className="inventory-secondary-button" onClick={() => setOrdenEditando(null)}>
@@ -485,7 +592,13 @@ export default function Compras() {
                 <div className="form-grid">
                   <label className="form-field">
                     <span>Proveedor</span>
-                    <select value={ordenEditable.id_proveedor} onChange={(e) => setOrdenEditable((actual) => ({ ...actual, id_proveedor: e.target.value }))}>
+                    <select
+                      value={ordenEditable.id_proveedor}
+                      onChange={(e) => {
+                        resetMensajesAccion();
+                        setOrdenEditable((actual) => ({ ...actual, id_proveedor: e.target.value }));
+                      }}
+                    >
                       <option value="">Selecciona un proveedor</option>
                       {data.catalogos.proveedores.map((proveedor) => (
                         <option key={proveedor.id_proveedor} value={proveedor.id_proveedor}>
@@ -497,7 +610,13 @@ export default function Compras() {
 
                   <label className="form-field">
                     <span>Estatus</span>
-                    <select value={ordenEditable.id_estatus} onChange={(e) => setOrdenEditable((actual) => ({ ...actual, id_estatus: e.target.value }))}>
+                    <select
+                      value={ordenEditable.id_estatus}
+                      onChange={(e) => {
+                        resetMensajesAccion();
+                        setOrdenEditable((actual) => ({ ...actual, id_estatus: e.target.value }));
+                      }}
+                    >
                       {data.catalogos.estatus.map((estatus) => (
                         <option key={estatus.id_estatus} value={estatus.id_estatus}>
                           {estatus.nombre}
@@ -561,8 +680,14 @@ export default function Compras() {
             <option value="En Proceso">En Proceso</option>
             <option value="Cancelado">Cancelado</option>
           </select>
-          <button type="button" className="inventory-secondary-button">
-            {ordenesFiltradas.length} resultados
+          <button
+            type="button"
+            className="inventory-secondary-button"
+            onClick={limpiarFiltros}
+            disabled={!hayFiltrosActivos}
+            title={hayFiltrosActivos ? "Limpiar filtros" : "Sin filtros activos"}
+          >
+            {hayFiltrosActivos ? "Limpiar filtros" : `${ordenesFiltradas.length} resultados`}
           </button>
         </div>
 
@@ -600,14 +725,29 @@ export default function Compras() {
                   </td>
                   <td>
                     <div className="customer-actions">
-                      <button type="button" className="customer-action-button customer-action-button-view" onClick={() => abrirDetalle(orden)}>
+                      <button
+                        type="button"
+                        className="customer-action-button customer-action-button-view"
+                        onClick={() => abrirDetalle(orden)}
+                        disabled={cargandoDetalle}
+                      >
                         Ver
                       </button>
-                      <button type="button" className="customer-action-button customer-action-button-edit" onClick={() => abrirEdicion(orden)}>
+                      <button
+                        type="button"
+                        className="customer-action-button customer-action-button-edit"
+                        onClick={() => abrirEdicion(orden)}
+                        disabled={cargandoDetalle}
+                      >
                         Editar
                       </button>
-                      <button type="button" className="customer-action-button customer-action-button-delete" onClick={() => eliminarCompra(orden)}>
-                        Eliminar
+                      <button
+                        type="button"
+                        className="customer-action-button customer-action-button-delete"
+                        onClick={() => eliminarCompra(orden)}
+                        disabled={orden.estado === "Cancelado"}
+                      >
+                        {orden.estado === "Cancelado" ? "Cancelada" : "Eliminar"}
                       </button>
                     </div>
                   </td>

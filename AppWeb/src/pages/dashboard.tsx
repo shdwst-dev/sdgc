@@ -78,21 +78,6 @@ export default function Dashboard() {
 
   return (
     <Layout>
-      <header className="topbar">
-        <div className="topbar-search">
-          <input type="text" placeholder="Búsqueda global..." />
-        </div>
-
-        <div className="topbar-actions">
-          <button className="icon-button" type="button">🔔</button>
-          <select className="user-select" defaultValue={localStorage.getItem("rolUsuario") || "Administrador"}>
-            <option>Administrador</option>
-            <option>Vendedor</option>
-            <option>Comprador</option>
-          </select>
-        </div>
-      </header>
-
       <section className="stats-grid">
         <div className="stat-card">
           <div className="stat-title-row">

@@ -21,7 +21,7 @@ export default function Configuracion() {
       cp: "",
       rfc: "",
     },
-  });
+  }); 
 
   return (
     <Layout>
@@ -31,7 +31,6 @@ export default function Configuracion() {
         </div>
 
         <div className="topbar-actions">
-          <button className="icon-button" type="button">🔔</button>
           <select className="user-select" defaultValue={localStorage.getItem("rolUsuario") || "Administrador"}>
             <option>Administrador</option>
             <option>Vendedor</option>

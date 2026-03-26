@@ -1,7 +1,36 @@
 import { Platform } from 'react-native';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL 
-  ?? (Platform.OS === 'web' ? 'http://localhost:8000/api/v1' : 'http://10.0.2.2:8000/api/v1');
+function resolveApiBaseUrl(): string {
+  const fallback = Platform.OS === 'web'
+    ? 'http://localhost:8000/api/v1'
+    : 'http://10.0.2.2:8000/api/v1';
+  const configuredUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+
+  if (!configuredUrl) {
+    return fallback;
+  }
+
+  try {
+    const parsed = new URL(configuredUrl);
+    const localhostHosts = new Set(['localhost', '127.0.0.1']);
+
+    if (Platform.OS === 'android' && localhostHosts.has(parsed.hostname)) {
+      parsed.hostname = '10.0.2.2';
+      return parsed.toString().replace(/\/$/, '');
+    }
+
+    if (Platform.OS === 'web' && parsed.hostname === '10.0.2.2') {
+      parsed.hostname = 'localhost';
+      return parsed.toString().replace(/\/$/, '');
+    }
+
+    return configuredUrl.replace(/\/$/, '');
+  } catch {
+    return fallback;
+  }
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 export type UsuarioAutenticado = {
   id_usuario: number;

@@ -1,52 +1,191 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, FlatList, Alert } from 'react-native';
-import { Plus, Search, Filter, Edit, Trash2, X } from 'lucide-react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, FlatList, Alert, ActivityIndicator } from 'react-native';
+import { Plus, Search, Filter, Trash2, X } from 'lucide-react-native';
+import { CommonActions, useNavigation } from '@react-navigation/native';
+import { ApiError } from '../../services/auth';
+import { eliminarProducto, getInventario, InventarioProducto } from '../../services/inventario';
+import { clearToken, getToken, hydrateToken } from '../../services/storage';
 
-interface Product {
+type UiProduct = {
   id: string;
+  idProducto: number;
   sku: string;
   name: string;
   category: string;
   stock: number;
+  stockMinimo: number | null;
   price: string;
+};
+
+function formatCurrency(value: number | null): string {
+  if (value === null) {
+    return 'N/A';
+  }
+
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
-const productsData: Product[] = [
-  { id: '1', sku: 'LPT-001', name: 'Laptop Dell XPS 15', category: 'Electrónica', stock: 15, price: '$1,299' },
-  { id: '2', sku: 'PHN-002', name: 'iPhone 14 Pro', category: 'Electrónica', stock: 8, price: '$999' },
-  { id: '3', sku: 'TV-003', name: 'Samsung 4K TV 55"', category: 'Electrónica', stock: 12, price: '$799' },
-  { id: '4', sku: 'CHR-004', name: 'Silla Oficina Ergonómica', category: 'Muebles', stock: 25, price: '$249' },
-  { id: '5', sku: 'DSK-005', name: 'Escritorio Ejecutivo', category: 'Muebles', stock: 5, price: '$399' },
-  { id: '6', sku: 'HDH-006', name: 'Auriculares Sony WH-1000XM5', category: 'Audio', stock: 30, price: '$349' },
-];
+function toUiProduct(product: InventarioProducto): UiProduct {
+  return {
+    id: String(product.id),
+    idProducto: product.id,
+    sku: product.sku,
+    name: product.nombre,
+    category: product.categoria,
+    stock: product.stockActual,
+    stockMinimo: product.stockMinimo,
+    price: formatCurrency(product.precioUnitario),
+  };
+}
 
 export default function Inventario() {
-  const [products] = useState<Product[]>(productsData);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const navigation = useNavigation();
+  const [products, setProducts] = useState<UiProduct[]>([]);
+  const [selectedProduct, setSelectedProduct] = useState<UiProduct | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [query, setQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isDeletingId, setIsDeletingId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleEdit = (product: Product) => {
+  const goToLogin = useCallback(() => {
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'InicioSesion' as never }],
+      }),
+    );
+  }, [navigation]);
+
+  const loadInventario = useCallback(async (showFullLoader = true) => {
+    let token = getToken();
+
+    if (!token) {
+      token = await hydrateToken();
+    }
+
+    if (!token) {
+      await clearToken();
+      goToLogin();
+      return;
+    }
+
+    if (showFullLoader) {
+      setIsLoading(true);
+    } else {
+      setIsRefreshing(true);
+    }
+
+    setError(null);
+
+    try {
+      const data = await getInventario(token);
+      setProducts(data.map(toUiProduct));
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        await clearToken();
+        Alert.alert('Sesion expirada', 'Inicia sesion nuevamente.');
+        goToLogin();
+        return;
+      }
+
+      const message = requestError instanceof Error
+        ? requestError.message
+        : 'No se pudo cargar el inventario.';
+
+      setError(message);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [goToLogin]);
+
+  useEffect(() => {
+    loadInventario().catch(() => {
+      setError('No se pudo cargar el inventario.');
+      setIsLoading(false);
+      setIsRefreshing(false);
+    });
+  }, [loadInventario]);
+
+  const filteredProducts = useMemo(() => {
+    const term = query.trim().toLowerCase();
+
+    if (!term) {
+      return products;
+    }
+
+    return products.filter((product) =>
+      product.sku.toLowerCase().includes(term)
+      || product.name.toLowerCase().includes(term)
+      || product.category.toLowerCase().includes(term),
+    );
+  }, [products, query]);
+
+  const handleEdit = (product: UiProduct) => {
     setSelectedProduct(product);
     setIsModalVisible(true);
   };
 
-  const handleDelete = (name: string) => {
-    Alert.alert("Eliminar", `¿Estás seguro de eliminar ${name}?`, [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Eliminar", style: "destructive" }
+  const performDelete = async (product: UiProduct) => {
+    if (isDeletingId !== null) {
+      return;
+    }
+
+    let token = getToken();
+
+    if (!token) {
+      token = await hydrateToken();
+    }
+
+    if (!token) {
+      await clearToken();
+      goToLogin();
+      return;
+    }
+
+    setIsDeletingId(product.idProducto);
+
+    try {
+      await eliminarProducto(token, product.idProducto);
+      setProducts((prev) => prev.filter((item) => item.idProducto !== product.idProducto));
+      Alert.alert('Listo', 'Producto eliminado correctamente.');
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        await clearToken();
+        Alert.alert('Sesion expirada', 'Inicia sesion nuevamente.');
+        goToLogin();
+        return;
+      }
+
+      Alert.alert('Error', requestError instanceof Error ? requestError.message : 'No se pudo eliminar el producto.');
+    } finally {
+      setIsDeletingId(null);
+    }
+  };
+
+  const handleDelete = (product: UiProduct) => {
+    Alert.alert('Eliminar', `¿Estas seguro de eliminar ${product.name}?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Eliminar', style: 'destructive', onPress: () => performDelete(product) },
     ]);
   };
 
-  const renderProductItem = ({ item }: { item: Product }) => (
+  const renderProductItem = ({ item }: { item: UiProduct }) => (
     <TouchableOpacity 
       style={styles.productRow} 
       onPress={() => handleEdit(item)}
     >
       <View style={styles.skuCol}>
-        <Text style={styles.cellText}>{item.sku}</Text>
+        <Text style={styles.cellText} numberOfLines={1}>{item.sku}</Text>
       </View>
       <View style={styles.nameCol}>
-        <Text style={styles.productNameText}>{item.name}</Text>
+        <Text style={styles.productNameText} numberOfLines={1}>{item.name}</Text>
         <Text style={styles.categoryText}>{item.category}</Text>
       </View>
       <View style={styles.stockCol}>
@@ -63,8 +202,12 @@ export default function Inventario() {
         </View>
       </View>
       <View style={styles.actionsCol}>
-        <TouchableOpacity onPress={() => handleDelete(item.name)}>
-          <Trash2 size={18} color="#EF4444" />
+        <TouchableOpacity onPress={() => handleDelete(item)} disabled={isDeletingId === item.idProducto}>
+          {isDeletingId === item.idProducto ? (
+            <ActivityIndicator size="small" color="#EF4444" />
+          ) : (
+            <Trash2 size={18} color="#EF4444" />
+          )}
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -80,17 +223,33 @@ export default function Inventario() {
           <TextInput 
             placeholder="Buscar producto..." 
             style={styles.searchInput}
+            value={query}
+            onChangeText={setQuery}
           />
         </View>
-        <TouchableOpacity style={styles.filterBtn}>
-          <Filter size={20} color="#101828" />
+        <TouchableOpacity style={styles.filterBtn} onPress={() => loadInventario(false)} disabled={isRefreshing || isLoading}>
+          {isRefreshing ? (
+            <ActivityIndicator size="small" color="#101828" />
+          ) : (
+            <Filter size={20} color="#101828" />
+          )}
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.addBtn}>
+      <TouchableOpacity style={styles.addBtn} onPress={() => Alert.alert('Proximamente', 'Formulario de alta de producto pendiente.')}>
         <Plus size={20} color="#FFF" />
         <Text style={styles.addBtnText}>Agregar Nuevo Producto</Text>
       </TouchableOpacity>
+
+      {error ? (
+        <View style={styles.errorCard}>
+          <Text style={styles.errorTitle}>No se pudo cargar el inventario</Text>
+          <Text style={styles.errorDescription}>{error}</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => loadInventario()}>
+            <Text style={styles.retryBtnText}>Reintentar</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       <View style={styles.tableCard}>
         <View style={styles.tableHeader}>
@@ -99,12 +258,20 @@ export default function Inventario() {
           <Text style={styles.headerTextCol}>Stock</Text>
           <Text style={styles.headerTextCol}>Acción</Text>
         </View>
-        <FlatList
-          data={products}
-          renderItem={renderProductItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingBottom: 20 }}
-        />
+        {isLoading ? (
+          <View style={styles.loaderBox}>
+            <ActivityIndicator size="large" color="#1C273F" />
+            <Text style={styles.loaderText}>Cargando inventario...</Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filteredProducts}
+            renderItem={renderProductItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={filteredProducts.length === 0 ? styles.emptyContainer : { paddingBottom: 20 }}
+            ListEmptyComponent={<Text style={styles.emptyText}>No hay productos para mostrar.</Text>}
+          />
+        )}
       </View>
 
       <Modal
@@ -127,31 +294,31 @@ export default function Inventario() {
               <TextInput style={styles.inputDisabled} value={selectedProduct?.sku} editable={false} />
               
               <Text style={styles.label}>Nombre del Producto</Text>
-              <TextInput style={styles.input} defaultValue={selectedProduct?.name} />
+              <TextInput style={styles.inputDisabled} value={selectedProduct?.name} editable={false} />
               
               <Text style={styles.label}>Categoría</Text>
-              <TextInput style={styles.input} defaultValue={selectedProduct?.category} />
+              <TextInput style={styles.inputDisabled} value={selectedProduct?.category} editable={false} />
 
               <View style={styles.rowInputs}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={styles.label}>Stock</Text>
-                  <TextInput style={styles.input} keyboardType="numeric" defaultValue={selectedProduct?.stock.toString()} />
+                  <TextInput style={styles.inputDisabled} keyboardType="numeric" value={selectedProduct?.stock.toString()} editable={false} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.label}>Precio</Text>
-                  <TextInput style={styles.input} defaultValue={selectedProduct?.price} />
+                  <TextInput style={styles.inputDisabled} value={selectedProduct?.price} editable={false} />
                 </View>
               </View>
+
+              <Text style={styles.label}>Stock minimo</Text>
+              <TextInput style={styles.inputDisabled} value={selectedProduct?.stockMinimo?.toString() ?? 'N/A'} editable={false} />
 
               <View style={styles.modalFooter}>
                 <TouchableOpacity 
                   style={styles.cancelBtn} 
                   onPress={() => setIsModalVisible(false)}
                 >
-                  <Text style={styles.cancelBtnText}>Cancelar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.saveBtn}>
-                  <Text style={styles.saveBtnText}>Guardar Cambios</Text>
+                  <Text style={styles.cancelBtnText}>Cerrar</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -171,6 +338,11 @@ const styles = StyleSheet.create({
   filterBtn: { padding: 10, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8 },
   addBtn: { backgroundColor: '#1C273F', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 12, borderRadius: 8, marginBottom: 16, gap: 8 },
   addBtnText: { color: '#FFF', fontWeight: '600' },
+  errorCard: { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', borderWidth: 1, borderRadius: 10, padding: 12, marginBottom: 16 },
+  errorTitle: { color: '#991B1B', fontWeight: '700', marginBottom: 4 },
+  errorDescription: { color: '#7F1D1D', marginBottom: 10, fontSize: 12 },
+  retryBtn: { alignSelf: 'flex-start', backgroundColor: '#991B1B', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
+  retryBtnText: { color: '#FFF', fontWeight: '600', fontSize: 12 },
   tableCard: { backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', flex: 1, overflow: 'hidden' },
   tableHeader: { flexDirection: 'row', backgroundColor: '#1C273F', padding: 12 },
   headerTextCol: { flex: 1, color: '#FFF', fontSize: 12, fontWeight: 'bold', textAlign: 'center' },
@@ -184,6 +356,10 @@ const styles = StyleSheet.create({
   categoryText: { fontSize: 10, color: '#6B7280' },
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
   badgeText: { fontSize: 10, fontWeight: 'bold' },
+  loaderBox: { flex: 1, minHeight: 220, alignItems: 'center', justifyContent: 'center', gap: 10 },
+  loaderText: { color: '#4B5563', fontSize: 13 },
+  emptyContainer: { flexGrow: 1, minHeight: 220, justifyContent: 'center' },
+  emptyText: { textAlign: 'center', color: '#6B7280', fontSize: 14, paddingHorizontal: 20 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: '#FFF', width: '90%', borderRadius: 16, padding: 20, maxHeight: '80%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
@@ -195,7 +371,5 @@ const styles = StyleSheet.create({
   rowInputs: { flexDirection: 'row' },
   modalFooter: { flexDirection: 'row', gap: 10, marginTop: 10 },
   cancelBtn: { flex: 1, padding: 12, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, alignItems: 'center' },
-  cancelBtnText: { color: '#101828', fontWeight: '500' },
-  saveBtn: { flex: 1, padding: 12, backgroundColor: '#1C273F', borderRadius: 8, alignItems: 'center' },
-  saveBtnText: { color: '#FFF', fontWeight: '600' }
+  cancelBtnText: { color: '#101828', fontWeight: '500' }
 });

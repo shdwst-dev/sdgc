@@ -30,6 +30,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/proveedores/registrar', [ProveedoresController::class, 'registrar']);
         Route::post('/clientes/registrar', [ClientesController::class, 'registrar']);
 
+        Route::get('/productos', [ProductosController::class, 'listar']);
+        Route::get('/productos/{idProducto}', [ProductosController::class, 'leer'])->whereNumber('idProducto');
         Route::post('/productos', [ProductosController::class, 'crear']);
         Route::put('/productos/{idProducto}', [ProductosController::class, 'actualizar']);
         Route::delete('/productos/{idProducto}', [ProductosController::class, 'eliminar']);

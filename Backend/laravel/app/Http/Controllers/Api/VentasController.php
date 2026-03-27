@@ -83,12 +83,6 @@ class VentasController extends Controller
                         'cantidad' => $detalle['cantidad'],
                         'precio_unitario' => $producto->precio_unitario,
                     ]);
-
-                    DB::table('stock')
-                        ->where('id_stock', $stock->id_stock)
-                        ->update([
-                            'stock_actual' => $stockActual - (int) $detalle['cantidad'],
-                        ]);
                 }
             });
 

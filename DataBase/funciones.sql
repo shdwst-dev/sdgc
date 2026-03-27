@@ -380,19 +380,19 @@ RETURNS TRIGGER
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    stock_actual INTEGER;
+    v_stock_actual INTEGER;
     tienda INTEGER;
 BEGIN
 
     tienda := current_setting('app.id_tienda')::INTEGER;
 
-    SELECT stock_actual
-    INTO stock_actual
-    FROM stock
+    SELECT s.stock_actual
+    INTO v_stock_actual
+    FROM stock AS s
     WHERE id_tienda = tienda
     AND id_producto = NEW.producto_id;
 
-    IF stock_actual < NEW.cantidad THEN
+    IF COALESCE(v_stock_actual, 0) < NEW.cantidad THEN
         RAISE EXCEPTION
         'Stock insuficiente para producto %',
         NEW.producto_id;

@@ -128,12 +128,6 @@ export default function Configuracion() {
             <button type="button" className="settings-nav-item active">
               Perfil del negocio
             </button>
-            <button type="button" className="settings-nav-item" disabled>
-              Configuracion fiscal
-            </button>
-            <button type="button" className="settings-nav-item" disabled>
-              Metodos de pago
-            </button>
           </div>
         </aside>
 
@@ -197,11 +191,6 @@ export default function Configuracion() {
               <input id="estado-negocio" type="text" value={formulario.estado} onChange={(e) => actualizarCampo("estado", e.target.value)} />
             </div>
 
-            <div className="settings-field settings-field-full">
-              <label htmlFor="rfc-negocio">RFC / identificacion fiscal</label>
-              <input id="rfc-negocio" type="text" value={data.negocio.rfc} readOnly />
-              <small className="settings-help-text">Este campo aun no se persiste porque la base actual no tiene una columna para RFC en tiendas.</small>
-            </div>
           </div>
         </section>
       </section>

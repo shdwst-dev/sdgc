@@ -13,35 +13,39 @@ body,
 
 body {
   font-family: Arial, Helvetica, sans-serif;
-  background-color: #f3f5f8;
-  color: #1f2937;
+  background:
+    radial-gradient(circle at top left, rgba(42, 174, 192, 0.12), transparent 26%),
+    linear-gradient(180deg, #f7fbfc 0%, var(--surface-page) 100%);
+  color: var(--text-strong);
 }
 
 .dashboard-layout {
   display: flex;
   width: 100%;
   min-height: 100vh;
-  background-color: #f3f5f8;
+  background: transparent;
 }
 
 .sidebar {
   width: 210px;
-  background-color: #1e2c4c;
+  background: linear-gradient(180deg, var(--brand-900) 0%, var(--brand-800) 100%);
   color: #ffffff;
   display: flex;
   flex-direction: column;
   padding: 0;
-  border-right: 1px solid #253556;
+  border-right: 1px solid rgba(11, 79, 92, 0.28);
 }
 
 .sidebar-logo {
   min-height: 100px;
   padding: 14px 16px;
-  background-color: #ffffff;
+  background:
+    radial-gradient(circle at top left, rgba(42, 174, 192, 0.18), transparent 30%),
+    #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-bottom: 1px solid #d7dde6;
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .project-logo {
@@ -72,7 +76,7 @@ body {
 
 .sidebar-menu a:hover,
 .sidebar-menu a.active {
-  background-color: rgba(255, 255, 255, 0.07);
+  background-color: rgba(255, 255, 255, 0.12);
   opacity: 1;
 }
 
@@ -83,7 +87,7 @@ body {
 
 .sidebar-divider {
   height: 1px;
-  background-color: rgba(255, 255, 255, 0.25);
+  background-color: rgba(255, 255, 255, 0.22);
   margin: 8px 0 6px;
 }
 
@@ -104,12 +108,12 @@ body {
 }
 
 .sidebar-action:hover {
-  background-color: rgba(255, 255, 255, 0.07);
+  background-color: rgba(255, 255, 255, 0.12);
   opacity: 1;
 }
 
 .sidebar-action.active {
-  background-color: rgba(255, 255, 255, 0.07);
+  background-color: rgba(255, 255, 255, 0.12);
   opacity: 1;
 }
 
@@ -156,24 +160,26 @@ body {
 .inventory-header h1 {
   margin: 0 0 6px;
   font-size: 34px;
-  color: #1f2937;
+  color: var(--text-strong);
 }
 
 .inventory-header p {
   margin: 0;
-  color: #6b7280;
+  color: var(--text-muted);
   font-size: 15px;
 }
 
 .inventory-primary-button,
 .inventory-secondary-button {
   height: 42px;
-  border: 1px solid #cfd5df;
+  border: 1px solid var(--border-soft);
   background-color: #ffffff;
-  color: #1f2937;
+  color: var(--text-strong);
   padding: 0 16px;
   font-size: 14px;
   cursor: pointer;
+  border-radius: 12px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
 }
 
 .inventory-table-button {
@@ -183,9 +189,24 @@ body {
 }
 
 .inventory-primary-button {
-  background-color: #1f2d4a;
-  border-color: #1f2d4a;
+  background: linear-gradient(135deg, var(--brand-800) 0%, var(--brand-600) 100%);
+  border-color: var(--brand-800);
   color: #ffffff;
+  box-shadow: 0 12px 24px rgba(15, 103, 120, 0.2);
+}
+
+.inventory-primary-button:hover,
+.inventory-secondary-button:hover {
+  transform: translateY(-1px);
+}
+
+.inventory-primary-button:hover {
+  box-shadow: 0 16px 28px rgba(15, 103, 120, 0.24);
+}
+
+.inventory-secondary-button:hover {
+  border-color: var(--brand-500);
+  background-color: var(--brand-050);
 }
 
 .inventory-panel {
@@ -193,25 +214,25 @@ body {
 }
 
 .detail-card {
-  border: 1px solid #dbe4ef;
+  border: 1px solid var(--border-soft);
   background: #ffffff;
   padding: 18px;
   margin-bottom: 18px;
   border-radius: 22px;
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-soft);
   overflow: hidden;
 }
 
 .detail-card-view {
   background:
-    radial-gradient(circle at top right, rgba(125, 169, 255, 0.18), transparent 28%),
-    linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+    radial-gradient(circle at top right, rgba(42, 174, 192, 0.2), transparent 28%),
+    linear-gradient(180deg, #ffffff 0%, var(--brand-050) 100%);
 }
 
 .detail-card-edit {
   background:
-    radial-gradient(circle at top right, rgba(111, 214, 169, 0.16), transparent 30%),
-    linear-gradient(180deg, #ffffff 0%, #f7fffa 100%);
+    radial-gradient(circle at top right, rgba(22, 149, 170, 0.16), transparent 30%),
+    linear-gradient(180deg, #ffffff 0%, #f3fbfc 100%);
 }
 
 .detail-card-header {
@@ -226,13 +247,13 @@ body {
 
 .detail-card-header h3 {
   margin: 4px 0 0;
-  color: #10233f;
+  color: var(--text-strong);
   font-size: 26px;
 }
 
 .detail-section-label {
   margin: 0;
-  color: #47617f;
+  color: var(--brand-800);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.14em;

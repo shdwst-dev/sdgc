@@ -1,3 +1,20 @@
+:root {
+  --brand-900: #0f8ea5;
+  --brand-800: #1592a8;
+  --brand-700: #117d90;
+  --brand-600: #1590a5;
+  --brand-500: #218e9c;
+  --brand-200: #bfe8ee;
+  --brand-100: #ddf4f7;
+  --brand-050: #eef9fb;
+  --surface-page: #eef4f5;
+  --surface-card: #ffffff;
+  --text-strong: #16323a;
+  --text-muted: #5f7680;
+  --border-soft: #c8dbe0;
+  --shadow-soft: 0 18px 40px rgba(11, 79, 92, 0.1);
+}
+
 html,
 body,
 #root {
@@ -11,7 +28,9 @@ body {
   min-width: 320px;
   min-height: 100vh;
   font-family: Arial, Helvetica, sans-serif;
-  background-color: #ececf1;
+  background:
+    radial-gradient(circle at top left, rgba(42, 174, 192, 0.12), transparent 28%),
+    linear-gradient(180deg, #f7fbfc 0%, var(--surface-page) 100%);
 }
 
 * {

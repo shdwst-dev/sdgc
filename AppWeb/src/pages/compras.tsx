@@ -344,23 +344,6 @@ export default function Compras() {
         </button>
       </section>
 
-      <section className="panel sales-store-panel purchases-command-panel">
-        <div className="sales-store-panel-copy">
-          <h3>1. Prepara la orden</h3>
-          <p>Selecciona proveedor, tienda y agrega productos para registrar la compra con el mismo flujo visual del punto de venta.</p>
-        </div>
-        <div className="purchases-command-summary">
-          <div className="purchases-command-stat">
-            <span>Productos en borrador</span>
-            <strong>{ordenNueva.detalles.filter((detalle) => detalle.producto_id).length}</strong>
-          </div>
-          <div className="purchases-command-stat">
-            <span>Total estimado</span>
-            <strong>{formatCurrency(totalOrdenNueva)}</strong>
-          </div>
-        </div>
-      </section>
-
       {mostrarFormulario ? (
         <section className="panel form-panel purchases-form-panel">
           <div className="form-panel-header">

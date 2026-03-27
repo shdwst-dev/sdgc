@@ -4,7 +4,7 @@ import { Search } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { ApiError, getMe } from '../../services/auth';
-import { getDashboardCompradorData, ProductoDestacado } from '../../services/comprador';
+import { getDashboardCompradorData, ProductoDestacado, addToCarritoLocal } from '../../services/comprador';
 import { clearToken, getToken, hydrateToken } from '../../services/storage';
 
 const { width } = Dimensions.get('window');
@@ -78,9 +78,14 @@ export default function Inicio() {
     });
   }, [loadDashboardData]);
 
-  const handleAddToCart = (productName: string) => {
-    Alert.alert("Carrito", `${productName} se agregó (simulación)`);
-  };
+  const handleAddToCart = useCallback(async (product: ProductoDestacado) => {
+    try {
+      await addToCarritoLocal(product, 1);
+      Alert.alert("¡Éxito!", `${product.nombre} agregado al carrito`);
+    } catch (error) {
+      Alert.alert("Error", "No se pudo agregar al carrito");
+    }
+  }, []);
 
   const renderProduct = ({ item }: { item: ProductoDestacado }) => (
     <View style={styles.productCard}>
@@ -99,7 +104,7 @@ export default function Inicio() {
         <Text style={styles.productPrice}>${item.precio_unitario.toLocaleString('es-MX')}</Text>
         <TouchableOpacity 
           style={styles.addButton}
-          onPress={() => handleAddToCart(item.nombre)}
+          onPress={() => handleAddToCart(item)}
         >
           <Text style={styles.addButtonText}>Agregar al Carrito</Text>
         </TouchableOpacity>

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Layout from "./layout";
 import "../styles/dashboard.css";
 import { useApiData } from "../hooks/useApiData";
@@ -6,7 +6,30 @@ import { formatCurrency } from "../lib/format";
 import { GoogleChart } from "../components/GoogleChart";
 
 export default function Reportes() {
-  const { data, loading, error } = useApiData("/reportes", {
+  const [fechaInicio, setFechaInicio] = useState("");
+  const [fechaFin, setFechaFin] = useState("");
+  const [filtroAplicado, setFiltroAplicado] = useState<{ inicio: string; fin: string }>({
+    inicio: "",
+    fin: "",
+  });
+  const [filtroError, setFiltroError] = useState<string | null>(null);
+
+  const reportesPath = useMemo(() => {
+    const params = new URLSearchParams();
+
+    if (filtroAplicado.inicio) {
+      params.set("inicio", filtroAplicado.inicio);
+    }
+
+    if (filtroAplicado.fin) {
+      params.set("fin", filtroAplicado.fin);
+    }
+
+    const query = params.toString();
+    return query ? `/reportes?${query}` : "/reportes";
+  }, [filtroAplicado]);
+
+  const { data, loading, error } = useApiData(reportesPath, {
     periodo_referencia: { inicio: "", fin: "", mes: "" },
     metricas: {
       ventas_totales: 0,
@@ -22,6 +45,35 @@ export default function Reportes() {
       utilidad: [] as number[],
     },
   });
+  const { data: ingresosVsGastosData, loading: loadingIngresosVsGastos } = useApiData(`/v1/graficas/ingresos-vs-gastos${reportesPath.replace("/reportes", "")}`, {
+    periodo_referencia: { inicio: "", fin: "", mes: "" },
+    series: {
+      labels: [] as string[],
+      ingresos: [] as number[],
+      gastos: [] as number[],
+    },
+    totales: {
+      ingresos: 0,
+      gastos: 0,
+    },
+  });
+  const { data: productosMasVendidosData, loading: loadingProductosMasVendidos } = useApiData(`/v1/graficas/productos-mas-vendidos${reportesPath.replace("/reportes", "")}`, {
+    periodo_referencia: { inicio: "", fin: "", mes: "" },
+    series: {
+      labels: [] as string[],
+      cantidad: [] as number[],
+    },
+    top_productos: [] as Array<{
+      producto_id: number;
+      nombre: string;
+      cantidad: number;
+    }>,
+  });
+
+  useEffect(() => {
+    setFechaInicio((actual) => actual || data.periodo_referencia.inicio);
+    setFechaFin((actual) => actual || data.periodo_referencia.fin);
+  }, [data.periodo_referencia.inicio, data.periodo_referencia.fin]);
 
   const reportFlowChartData = useMemo(
     () => [
@@ -35,6 +87,54 @@ export default function Reportes() {
     ],
     [data.flujo_periodo],
   );
+  const ingresosChartData = useMemo(
+    () => [
+      ["Dia", "Ingresos"],
+      ...ingresosVsGastosData.series.labels.map((label, index) => [
+        label,
+        ingresosVsGastosData.series.ingresos[index] ?? 0,
+      ]),
+    ],
+    [ingresosVsGastosData.series],
+  );
+  const gastosChartData = useMemo(
+    () => [
+      ["Dia", "Gastos"],
+      ...ingresosVsGastosData.series.labels.map((label, index) => [
+        label,
+        ingresosVsGastosData.series.gastos[index] ?? 0,
+      ]),
+    ],
+    [ingresosVsGastosData.series],
+  );
+  const productosMasVendidosChartData = useMemo(
+    () => [
+      ["Producto", "Cantidad"],
+      ...productosMasVendidosData.series.labels.map((label, index) => [
+        label,
+        productosMasVendidosData.series.cantidad[index] ?? 0,
+      ]),
+    ],
+    [productosMasVendidosData.series],
+  );
+
+  const aplicarFiltro = () => {
+    if (!fechaInicio || !fechaFin) {
+      setFiltroError("Selecciona la fecha inicial y final.");
+      return;
+    }
+
+    if (fechaInicio > fechaFin) {
+      setFiltroError("La fecha inicial no puede ser mayor que la fecha final.");
+      return;
+    }
+
+    setFiltroError(null);
+    setFiltroAplicado({
+      inicio: fechaInicio,
+      fin: fechaFin,
+    });
+  };
 
   return (
     <Layout>
@@ -48,13 +148,14 @@ export default function Reportes() {
       <section className="panel reports-filter-panel">
         <div className="reports-filters">
           <label htmlFor="fecha-inicio">Rango de fechas:</label>
-          <input id="fecha-inicio" type="date" value={data.periodo_referencia.inicio || "2026-02-01"} readOnly />
+          <input id="fecha-inicio" type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
           <span>a</span>
-          <input id="fecha-fin" type="date" value={data.periodo_referencia.fin || "2026-02-28"} readOnly />
-          <button type="button" className="inventory-primary-button">
+          <input id="fecha-fin" type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} />
+          <button type="button" className="inventory-primary-button" onClick={aplicarFiltro}>
             Aplicar
           </button>
         </div>
+        {filtroError ? <p className="form-message form-message-error">{filtroError}</p> : null}
       </section>
 
       <section className="stats-grid reports-stats-grid">
@@ -107,9 +208,6 @@ export default function Reportes() {
       <section className="panel reports-chart-panel">
         <div className="reports-chart-header">
           <h4>Utilidad a lo largo del tiempo</h4>
-          <button type="button" className="inventory-secondary-button">
-            Exportar
-          </button>
         </div>
         <GoogleChart
           type="LineChart"
@@ -130,6 +228,88 @@ export default function Reportes() {
             lineWidth: 3,
             pointSize: 5,
           }}
+        />
+      </section>
+
+      <section className="panel reports-chart-panel">
+        <div className="reports-chart-header">
+          <h4>Ingresos</h4>
+          <small>{ingresosVsGastosData.periodo_referencia.mes || data.periodo_referencia.mes}</small>
+        </div>
+        <GoogleChart
+          type="LineChart"
+          data={ingresosChartData}
+          className="google-chart google-chart-large"
+          options={{
+            backgroundColor: "transparent",
+            chartArea: { left: 60, right: 24, top: 24, bottom: 42, width: "100%", height: "72%" },
+            colors: ["#0f766e"],
+            curveType: "function",
+            legend: { position: "none" },
+            hAxis: { textStyle: { color: "#64748b", fontSize: 11 } },
+            vAxis: {
+              minValue: 0,
+              textStyle: { color: "#64748b", fontSize: 11 },
+              gridlines: { color: "#e2e8f0" },
+            },
+            lineWidth: 3,
+            pointSize: 5,
+          }}
+          emptyMessage={loadingIngresosVsGastos ? "Cargando grafica..." : "No hay datos de ingresos para este periodo."}
+        />
+      </section>
+
+      <section className="panel reports-chart-panel">
+        <div className="reports-chart-header">
+          <h4>Gastos</h4>
+          <small>{ingresosVsGastosData.periodo_referencia.mes || data.periodo_referencia.mes}</small>
+        </div>
+        <GoogleChart
+          type="LineChart"
+          data={gastosChartData}
+          className="google-chart google-chart-large"
+          options={{
+            backgroundColor: "transparent",
+            chartArea: { left: 60, right: 24, top: 24, bottom: 42, width: "100%", height: "72%" },
+            colors: ["#dc2626"],
+            curveType: "function",
+            legend: { position: "none" },
+            hAxis: { textStyle: { color: "#64748b", fontSize: 11 } },
+            vAxis: {
+              minValue: 0,
+              textStyle: { color: "#64748b", fontSize: 11 },
+              gridlines: { color: "#e2e8f0" },
+            },
+            lineWidth: 3,
+            pointSize: 5,
+          }}
+          emptyMessage={loadingIngresosVsGastos ? "Cargando grafica..." : "No hay datos de gastos para este periodo."}
+        />
+      </section>
+
+      <section className="panel reports-chart-panel">
+        <div className="reports-chart-header">
+          <h4>Productos mas vendidos</h4>
+          <small>{productosMasVendidosData.periodo_referencia.mes || data.periodo_referencia.mes}</small>
+        </div>
+        <GoogleChart
+          type="BarChart"
+          data={productosMasVendidosChartData}
+          className="google-chart google-chart-large"
+          options={{
+            backgroundColor: "transparent",
+            chartArea: { left: 150, right: 24, top: 24, bottom: 42, width: "100%", height: "72%" },
+            colors: ["#1f4b99"],
+            legend: { position: "none" },
+            hAxis: {
+              minValue: 0,
+              textStyle: { color: "#64748b", fontSize: 11 },
+              gridlines: { color: "#e2e8f0" },
+            },
+            vAxis: { textStyle: { color: "#475569", fontSize: 11 } },
+            bars: "horizontal",
+          }}
+          emptyMessage={loadingProductosMasVendidos ? "Cargando grafica..." : "No hay ventas suficientes para mostrar productos mas vendidos."}
         />
       </section>
 

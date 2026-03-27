@@ -325,6 +325,12 @@ export default function Compras() {
     busqueda.trim() !== "" ||
     proveedorSeleccionado !== "Todos" ||
     estadoSeleccionado !== "Todos";
+  const totalOrdenNueva = ordenNueva.detalles.reduce((total, detalle) => {
+    const cantidad = Number(detalle.cantidad) || 0;
+    const precio = Number(detalle.precio_compra) || 0;
+
+    return total + (cantidad * precio);
+  }, 0);
 
   return (
     <Layout>
@@ -338,8 +344,25 @@ export default function Compras() {
         </button>
       </section>
 
+      <section className="panel sales-store-panel purchases-command-panel">
+        <div className="sales-store-panel-copy">
+          <h3>1. Prepara la orden</h3>
+          <p>Selecciona proveedor, tienda y agrega productos para registrar la compra con el mismo flujo visual del punto de venta.</p>
+        </div>
+        <div className="purchases-command-summary">
+          <div className="purchases-command-stat">
+            <span>Productos en borrador</span>
+            <strong>{ordenNueva.detalles.filter((detalle) => detalle.producto_id).length}</strong>
+          </div>
+          <div className="purchases-command-stat">
+            <span>Total estimado</span>
+            <strong>{formatCurrency(totalOrdenNueva)}</strong>
+          </div>
+        </div>
+      </section>
+
       {mostrarFormulario ? (
-        <section className="panel form-panel">
+        <section className="panel form-panel purchases-form-panel">
           <div className="form-panel-header">
             <h3>Nueva orden de compra</h3>
             <p>Selecciona proveedor, tienda y los productos que formarán parte de la orden.</p>
@@ -469,7 +492,11 @@ export default function Compras() {
           {formError ? <p className="form-message form-message-error">{formError}</p> : null}
           {formSuccess ? <p className="form-message form-message-success">{formSuccess}</p> : null}
 
-          <div className="form-actions">
+          <div className="form-actions purchases-form-actions">
+            <div className="purchases-form-total">
+              <span>Total estimado</span>
+              <strong>{formatCurrency(totalOrdenNueva)}</strong>
+            </div>
             <button className="inventory-primary-button" type="button" onClick={registrarCompra} disabled={guardando}>
               {guardando ? "Guardando..." : "Guardar orden"}
             </button>
@@ -477,7 +504,7 @@ export default function Compras() {
         </section>
       ) : null}
 
-      <section className="stats-grid">
+      <section className="stats-grid purchases-stats-grid">
         <div className="stat-card">
           <div className="stat-title-row">
             <span>Órdenes ({data.periodo_referencia.mes || "Mes"})</span>
@@ -508,7 +535,7 @@ export default function Compras() {
         </div>
       </section>
 
-      <section className="panel inventory-panel">
+      <section className="panel inventory-panel purchases-main-panel">
         {accionError ? <p className="form-message form-message-error">{accionError}</p> : null}
         {accionSuccess ? <p className="form-message form-message-success">{accionSuccess}</p> : null}
 
@@ -663,7 +690,7 @@ export default function Compras() {
           </div>
         ) : null}
 
-        <div className="inventory-filters">
+        <div className="inventory-filters purchases-filters">
           <input type="text" placeholder="Buscar órdenes de compra..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
           <select value={proveedorSeleccionado} onChange={(e) => setProveedorSeleccionado(e.target.value)}>
             <option value="Todos">Todos los proveedores</option>

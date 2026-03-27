@@ -59,4 +59,5 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/facturacion', [DashboardDataController::class, 'facturacion']);
     Route::get('/reportes', [DashboardDataController::class, 'reportes']);
     Route::get('/configuracion', [DashboardDataController::class, 'configuracion']);
+    Route::put('/configuracion', [DashboardDataController::class, 'actualizarConfiguracion']);
 });

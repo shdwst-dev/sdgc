@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Carbon\Carbon;
 use Carbon\CarbonPeriod;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class DashboardDataController extends Controller
@@ -558,11 +559,9 @@ class DashboardDataController extends Controller
         ]);
     }
 
-    public function reportes(): JsonResponse
+    public function reportes(Request $request): JsonResponse
     {
-        $referenceDate = $this->referenceDate('ventas', 'fecha_hora') ?? Carbon::now();
-        $monthStart = $referenceDate->copy()->startOfMonth();
-        $monthEnd = $referenceDate->copy()->endOfMonth();
+        [$monthStart, $monthEnd] = $this->resolveReportRange($request);
 
         $ventasTotales = $this->salesTotalForRange($monthStart, $monthEnd);
         $costosTotales = $this->purchaseTotalForRange($monthStart, $monthEnd);
@@ -570,14 +569,19 @@ class DashboardDataController extends Controller
             ->join('estatus as e', 'e.id_estatus', '=', 'c.id_estatus')
             ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'c.id_venta')
             ->whereIn('e.nombre', ['Pendiente', 'En Proceso'])
+            ->whereBetween('c.fecha_emision', [$monthStart->toDateTimeString(), $monthEnd->toDateTimeString()])
             ->sum(DB::raw('COALESCE(dv.cantidad * dv.precio_unitario, 0)'));
         $flujoPeriodo = $this->buildMonthlyFlow($monthStart, $monthEnd);
+
+        $periodLabel = $monthStart->isSameMonth($monthEnd)
+            ? $monthStart->translatedFormat('F Y')
+            : sprintf('%s - %s', $monthStart->format('d/m/Y'), $monthEnd->format('d/m/Y'));
 
         return response()->json([
             'periodo_referencia' => [
                 'inicio' => $monthStart->toDateString(),
                 'fin' => $monthEnd->toDateString(),
-                'mes' => $referenceDate->translatedFormat('F Y'),
+                'mes' => $periodLabel,
             ],
             'metricas' => [
                 'ventas_totales' => $ventasTotales,
@@ -590,18 +594,16 @@ class DashboardDataController extends Controller
         ]);
     }
 
-    public function graficaIngresosVsGastos(): JsonResponse
+    public function graficaIngresosVsGastos(Request $request): JsonResponse
     {
-        $referenceDate = $this->referenceDate('ventas', 'fecha_hora') ?? Carbon::now();
-        $monthStart = $referenceDate->copy()->startOfMonth();
-        $monthEnd = $referenceDate->copy()->endOfMonth();
+        [$monthStart, $monthEnd] = $this->resolveReportRange($request);
         $flujo = $this->buildMonthlyFlow($monthStart, $monthEnd);
 
         return response()->json([
             'periodo_referencia' => [
                 'inicio' => $monthStart->toDateString(),
                 'fin' => $monthEnd->toDateString(),
-                'mes' => $referenceDate->translatedFormat('F Y'),
+                'mes' => $this->buildPeriodLabel($monthStart, $monthEnd),
             ],
             'series' => [
                 'labels' => $flujo['labels'],
@@ -615,18 +617,16 @@ class DashboardDataController extends Controller
         ]);
     }
 
-    public function graficaProductosMasVendidos(): JsonResponse
+    public function graficaProductosMasVendidos(Request $request): JsonResponse
     {
-        $referenceDate = $this->referenceDate('ventas', 'fecha_hora') ?? Carbon::now();
-        $monthStart = $referenceDate->copy()->startOfMonth();
-        $monthEnd = $referenceDate->copy()->endOfMonth();
+        [$monthStart, $monthEnd] = $this->resolveReportRange($request);
         $topProductos = $this->topProductosForRange($monthStart, $monthEnd);
 
         return response()->json([
             'periodo_referencia' => [
                 'inicio' => $monthStart->toDateString(),
                 'fin' => $monthEnd->toDateString(),
-                'mes' => $referenceDate->translatedFormat('F Y'),
+                'mes' => $this->buildPeriodLabel($monthStart, $monthEnd),
             ],
             'series' => [
                 'labels' => $topProductos->pluck('nombre')->values(),
@@ -636,18 +636,16 @@ class DashboardDataController extends Controller
         ]);
     }
 
-    public function graficaUtilidad(): JsonResponse
+    public function graficaUtilidad(Request $request): JsonResponse
     {
-        $referenceDate = $this->referenceDate('ventas', 'fecha_hora') ?? Carbon::now();
-        $monthStart = $referenceDate->copy()->startOfMonth();
-        $monthEnd = $referenceDate->copy()->endOfMonth();
+        [$monthStart, $monthEnd] = $this->resolveReportRange($request);
         $flujo = $this->buildMonthlyFlow($monthStart, $monthEnd);
 
         return response()->json([
             'periodo_referencia' => [
                 'inicio' => $monthStart->toDateString(),
                 'fin' => $monthEnd->toDateString(),
-                'mes' => $referenceDate->translatedFormat('F Y'),
+                'mes' => $this->buildPeriodLabel($monthStart, $monthEnd),
             ],
             'series' => [
                 'labels' => $flujo['labels'],
@@ -670,6 +668,7 @@ class DashboardDataController extends Controller
             ->leftJoin('municipios as m', 'm.id_municipio', '=', 'co.id_municipio')
             ->leftJoin('estados as es', 'es.id_estado', '=', 'm.id_estado')
             ->select(
+                't.id_tienda',
                 't.nombre',
                 't.email',
                 't.telefono',
@@ -685,9 +684,13 @@ class DashboardDataController extends Controller
 
         return response()->json([
             'negocio' => [
+                'id_tienda' => $tienda->id_tienda ?? null,
                 'nombre' => $tienda->nombre ?? '',
                 'correo' => $tienda->email ?? '',
                 'telefono' => $tienda->telefono ?? '',
+                'calle' => $tienda->calle ?? '',
+                'numero_exterior' => $tienda->num_ext ?? '',
+                'numero_interior' => $tienda->num_int ?? '',
                 'direccion' => $tienda
                     ? trim(($tienda->calle ?? '') . ' ' . ($tienda->num_ext ?? '') . ($tienda->num_int ? ' Int ' . $tienda->num_int : ''))
                     : '',
@@ -699,11 +702,124 @@ class DashboardDataController extends Controller
         ]);
     }
 
+    public function actualizarConfiguracion(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'nombre' => ['required', 'string', 'max:100'],
+            'correo' => ['nullable', 'email', 'max:100'],
+            'telefono' => ['nullable', 'string', 'max:20'],
+            'calle' => ['required', 'string', 'max:100'],
+            'numero_exterior' => ['required', 'integer', 'min:1'],
+            'numero_interior' => ['nullable', 'integer', 'min:1'],
+            'ciudad' => ['required', 'string', 'max:100'],
+            'estado' => ['required', 'string', 'max:100'],
+            'cp' => ['nullable', 'integer', 'min:0'],
+            'rfc' => ['nullable', 'string', 'max:30'],
+        ]);
+
+        $tienda = DB::table('tiendas as t')
+            ->join('direcciones as d', 'd.id_direccion', '=', 't.id_direccion')
+            ->join('calles as ca', 'ca.id_calle', '=', 'd.id_calle')
+            ->join('colonias as co', 'co.id_colonia', '=', 'ca.id_colonia')
+            ->join('municipios as m', 'm.id_municipio', '=', 'co.id_municipio')
+            ->join('estados as es', 'es.id_estado', '=', 'm.id_estado')
+            ->select(
+                't.id_tienda',
+                't.id_direccion',
+                'd.id_calle',
+                'ca.id_colonia',
+                'co.id_municipio',
+                'm.id_estado'
+            )
+            ->orderBy('t.id_tienda')
+            ->first();
+
+        if (!$tienda) {
+            return response()->json([
+                'message' => 'No existe una tienda configurada para actualizar.',
+            ], 404);
+        }
+
+        DB::transaction(function () use ($data, $tienda) {
+            DB::table('tiendas')
+                ->where('id_tienda', $tienda->id_tienda)
+                ->update([
+                    'nombre' => $data['nombre'],
+                    'email' => $data['correo'] ?: null,
+                    'telefono' => $data['telefono'] ?: null,
+                ]);
+
+            DB::table('direcciones')
+                ->where('id_direccion', $tienda->id_direccion)
+                ->update([
+                    'num_ext' => $data['numero_exterior'],
+                    'num_int' => $data['numero_interior'] ?? null,
+                ]);
+
+            DB::table('calles')
+                ->where('id_calle', $tienda->id_calle)
+                ->update([
+                    'nombre' => $data['calle'],
+                ]);
+
+            DB::table('colonias')
+                ->where('id_colonia', $tienda->id_colonia)
+                ->update([
+                    'cp' => $data['cp'] ?? null,
+                ]);
+
+            DB::table('municipios')
+                ->where('id_municipio', $tienda->id_municipio)
+                ->update([
+                    'nombre' => $data['ciudad'],
+                ]);
+
+            DB::table('estados')
+                ->where('id_estado', $tienda->id_estado)
+                ->update([
+                    'nombre' => $data['estado'],
+                ]);
+        });
+
+        return response()->json([
+            'message' => 'Configuracion actualizada correctamente.',
+        ]);
+    }
+
     protected function referenceDate(string $table, string $column): ?Carbon
     {
         $date = DB::table($table)->max($column);
 
         return $date ? Carbon::parse($date) : null;
+    }
+
+    protected function resolveReportRange(Request $request): array
+    {
+        $referenceDate = $this->referenceDate('ventas', 'fecha_hora') ?? Carbon::now();
+        $validated = $request->validate([
+            'inicio' => ['nullable', 'date'],
+            'fin' => ['nullable', 'date'],
+        ]);
+
+        $start = array_key_exists('inicio', $validated) && $validated['inicio']
+            ? Carbon::parse($validated['inicio'])->startOfDay()
+            : $referenceDate->copy()->startOfMonth();
+        $end = array_key_exists('fin', $validated) && $validated['fin']
+            ? Carbon::parse($validated['fin'])->endOfDay()
+            : $referenceDate->copy()->endOfMonth();
+
+        if ($start->greaterThan($end)) {
+            return [$end->copy()->startOfDay(), $start->copy()->endOfDay()];
+        }
+
+        return [$start, $end];
+    }
+
+    protected function buildPeriodLabel(Carbon $start, Carbon $end): string
+    {
+        return $start->isSameMonth($end)
+            ? $start->translatedFormat('F Y')
+            : sprintf('%s - %s', $start->format('d/m/Y'), $end->format('d/m/Y'));
     }
 
     protected function salesTotalForRange(Carbon $start, Carbon $end): float

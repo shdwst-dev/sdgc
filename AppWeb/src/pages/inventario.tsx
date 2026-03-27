@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Layout from "./layout";
 import "../styles/dashboard.css";
 import { useApiData } from "../hooks/useApiData";
@@ -83,6 +83,26 @@ export default function Inventario() {
   });
 
   const productosActivos = data.productos.filter((producto) => producto.estatus !== "Inactivo");
+
+  useEffect(() => {
+    const recargarInventario = () => {
+      setReloadKey((current) => current + 1);
+    };
+
+    const manejarStorage = (event: StorageEvent) => {
+      if (event.key === "sdgc_inventory_refresh") {
+        recargarInventario();
+      }
+    };
+
+    window.addEventListener("storage", manejarStorage);
+    window.addEventListener("sdgc:inventory-refresh", recargarInventario);
+
+    return () => {
+      window.removeEventListener("storage", manejarStorage);
+      window.removeEventListener("sdgc:inventory-refresh", recargarInventario);
+    };
+  }, []);
 
   const productosFiltrados = productosActivos.filter((producto) => {
     const coincideBusqueda =

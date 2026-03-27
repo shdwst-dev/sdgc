@@ -95,7 +95,6 @@ export type InvoicePdfData = {
   cliente: string;
   estado: string;
   total: number;
-  codigo_hash: string;
   detalles: InvoicePdfDetail[];
 };
 

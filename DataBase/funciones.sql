@@ -112,10 +112,12 @@ BEGIN
 
     INSERT INTO compras(
         id_proveedor,
+        id_tienda,
         id_estatus
     )
     VALUES(
         p_id_proveedor,
+        p_id_tienda,
         p_id_estatus
     )
     RETURNING id_compra INTO id_compra;
@@ -170,12 +172,14 @@ BEGIN
         id_usuario,
         id_sesion,
         id_metodo_pago,
+        id_tienda,
         id_estatus
     )
     VALUES(
         p_id_usuario,
         p_id_sesion,
         p_id_metodo_pago,
+        p_id_tienda,
         p_id_estatus
     )
     RETURNING id_venta INTO id_venta;

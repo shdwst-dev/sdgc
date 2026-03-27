@@ -23,7 +23,8 @@ class AuthController extends Controller
             ->with([
                 'persona.direccion.calle.colonia.municipio.estado.pais',
                 'rol',
-                'estatus'
+                'estatus',
+                'tiendaEmpleado.tienda',
             ])
             ->first();
 
@@ -39,57 +40,20 @@ class AuthController extends Controller
         return response()->json([
             'token' => $token,
             'hash' => $hash,
-            'usuario' => [
-                'id_usuario' => $user->id_usuario,
-                'email' => $user->email,
-                'rol' => $user->rol?->nombre,
-                'estatus' => $user->estatus?->nombre,
-                'persona' => $user->persona ? [
-                    'id_persona' => $user->persona->id_persona,
-                    'nombre' => $user->persona->nombre,
-                    'ap' => $user->persona->apellido_paterno,
-                    'am' => $user->persona->apellido_materno,
-                    'telefono' => $user->persona->telefono,
-                    'direccion' => $user->persona->direccion ? [
-                        'id_direccion' => $user->persona->direccion->id_direccion,
-                        'numero_int' => $user->persona->direccion->numero_int,
-                        'numero_ext' => $user->persona->direccion->numero_ext,
-                        'calle' => $user->persona->direccion->calle ? [
-                            'id_calle' => $user->persona->direccion->calle->id_calle,
-                            'nombre' => $user->persona->direccion->calle->nombre,
-                            'colonia' => $user->persona->direccion->calle->colonia ? [
-                                'id_colonia' => $user->persona->direccion->calle->colonia->id_colonia,
-                                'nombre' => $user->persona->direccion->calle->colonia->nombre,
-                                'cp' => $user->persona->direccion->calle->colonia->cp,
-                                'municipio' => $user->persona->direccion->calle->colonia->municipio ? [
-                                    'id_municipio' => $user->persona->direccion->calle->colonia->municipio->id_municipio,
-                                    'nombre' => $user->persona->direccion->calle->colonia->municipio->nombre,
-                                    'estado' => $user->persona->direccion->calle->colonia->municipio->estado ? [
-                                        'id_estado' => $user->persona->direccion->calle->colonia->municipio->estado->id_estado,
-                                        'nombre' => $user->persona->direccion->calle->colonia->municipio->estado->nombre,
-                                        'pais' => $user->persona->direccion->calle->colonia->municipio->estado->pais ? [
-                                            'id_pais' => $user->persona->direccion->calle->colonia->municipio->estado->pais->id_pais,
-                                            'nombre' => $user->persona->direccion->calle->colonia->municipio->estado->pais->nombre,
-                                        ] : null,
-                                    ] : null,
-                                ] : null,
-                            ] : null,
-                        ] : null,
-                    ] : null,
-                ] : null,
-            ]
+            'usuario' => $this->formatUser($user),
         ]);
     }
 
     public function me(Request $request){
         $user = $request->user();
         $user -> load([
-            'persona',
+            'persona.direccion.calle.colonia.municipio.estado.pais',
             'rol',
             'estatus',
+            'tiendaEmpleado.tienda',
         ]);
 
-        return response()->json($user);
+        return response()->json($this->formatUser($user));
     }
 
     public function logout(Request $request)
@@ -118,5 +82,54 @@ class AuthController extends Controller
         }
 
         return false;
+    }
+
+    private function formatUser(usuarios $user): array
+    {
+        return [
+            'id_usuario' => $user->id_usuario,
+            'email' => $user->email,
+            'rol' => $user->rol?->nombre,
+            'estatus' => $user->estatus?->nombre,
+            'tienda' => $user->tiendaEmpleado?->tienda ? [
+                'id_tienda' => $user->tiendaEmpleado->tienda->id_tienda,
+                'nombre' => $user->tiendaEmpleado->tienda->nombre,
+            ] : null,
+            'persona' => $user->persona ? [
+                'id_persona' => $user->persona->id_persona,
+                'nombre' => $user->persona->nombre,
+                'ap' => $user->persona->apellido_paterno,
+                'am' => $user->persona->apellido_materno,
+                'apellido_paterno' => $user->persona->apellido_paterno,
+                'apellido_materno' => $user->persona->apellido_materno,
+                'telefono' => $user->persona->telefono,
+                'direccion' => $user->persona->direccion ? [
+                    'id_direccion' => $user->persona->direccion->id_direccion,
+                    'numero_int' => $user->persona->direccion->numero_int,
+                    'numero_ext' => $user->persona->direccion->numero_ext,
+                    'calle' => $user->persona->direccion->calle ? [
+                        'id_calle' => $user->persona->direccion->calle->id_calle,
+                        'nombre' => $user->persona->direccion->calle->nombre,
+                        'colonia' => $user->persona->direccion->calle->colonia ? [
+                            'id_colonia' => $user->persona->direccion->calle->colonia->id_colonia,
+                            'nombre' => $user->persona->direccion->calle->colonia->nombre,
+                            'cp' => $user->persona->direccion->calle->colonia->cp,
+                            'municipio' => $user->persona->direccion->calle->colonia->municipio ? [
+                                'id_municipio' => $user->persona->direccion->calle->colonia->municipio->id_municipio,
+                                'nombre' => $user->persona->direccion->calle->colonia->municipio->nombre,
+                                'estado' => $user->persona->direccion->calle->colonia->municipio->estado ? [
+                                    'id_estado' => $user->persona->direccion->calle->colonia->municipio->estado->id_estado,
+                                    'nombre' => $user->persona->direccion->calle->colonia->municipio->estado->nombre,
+                                    'pais' => $user->persona->direccion->calle->colonia->municipio->estado->pais ? [
+                                        'id_pais' => $user->persona->direccion->calle->colonia->municipio->estado->pais->id_pais,
+                                        'nombre' => $user->persona->direccion->calle->colonia->municipio->estado->pais->nombre,
+                                    ] : null,
+                                ] : null,
+                            ] : null,
+                        ] : null,
+                    ] : null,
+                ] : null,
+            ] : null,
+        ];
     }
 }

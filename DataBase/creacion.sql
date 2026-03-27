@@ -238,10 +238,12 @@ CREATE TABLE ventas
     id_sesion      INTEGER,
     fecha_hora     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     id_metodo_pago INTEGER NOT NULL,
+    id_tienda      INTEGER NOT NULL,
     id_estatus     INTEGER NOT NULL,
     FOREIGN KEY (id_usuario) REFERENCES usuarios (id_usuario),
     FOREIGN KEY (id_sesion) REFERENCES sesiones (id_sesion),
     FOREIGN KEY (id_metodo_pago) REFERENCES metodos_pago (id_metodo_pago),
+    FOREIGN KEY (id_tienda) REFERENCES tiendas (id_tienda),
     FOREIGN KEY (id_estatus) REFERENCES estatus (id_estatus)
 );
 
@@ -276,8 +278,10 @@ CREATE TABLE compras
     id_compra    SERIAL PRIMARY KEY,
     fecha_hora   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     id_proveedor INTEGER NOT NULL,
+    id_tienda    INTEGER NOT NULL,
     id_estatus   INTEGER NOT NULL,
     FOREIGN KEY (id_proveedor) REFERENCES proveedores (id_proveedor),
+    FOREIGN KEY (id_tienda) REFERENCES tiendas (id_tienda),
     FOREIGN KEY (id_estatus) REFERENCES estatus (id_estatus)
 );
 

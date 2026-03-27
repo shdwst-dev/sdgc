@@ -7,6 +7,8 @@ use Throwable;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class VentasController extends Controller
 {
@@ -24,7 +26,7 @@ class VentasController extends Controller
         ]);
 
         $userId = $request->user()?->id_usuario ?? $data['id_usuario'] ?? null;
-        $storeId = $data['id_tienda'] ?? DB::table('tiendas')->orderBy('id_tienda')->value('id_tienda');
+        $storeId = $this->resolveSaleStoreId($request, $data['detalles'], $userId, $data['id_tienda'] ?? null);
         $statusId = $data['id_estatus'] ?? DB::table('estatus')->where('nombre', 'Completado')->value('id_estatus') ?? 1;
 
         if (!$userId) {
@@ -35,7 +37,7 @@ class VentasController extends Controller
 
         if (!$storeId) {
             return response()->json([
-                'message' => 'No existe una tienda disponible para registrar la venta.',
+                'message' => 'No existe una tienda con stock suficiente para registrar la venta.',
             ], 422);
         }
 
@@ -46,12 +48,18 @@ class VentasController extends Controller
                     (string) $storeId,
                 ]);
 
-                $ventaId = DB::table('ventas')->insertGetId([
+                $ventaData = [
                     'id_usuario' => $userId,
                     'id_sesion' => $data['id_sesion'] ?? null,
                     'id_metodo_pago' => $data['id_metodo_pago'],
                     'id_estatus' => $statusId,
-                ], 'id_venta');
+                ];
+
+                if (Schema::hasColumn('ventas', 'id_tienda')) {
+                    $ventaData['id_tienda'] = $storeId;
+                }
+
+                $ventaId = DB::table('ventas')->insertGetId($ventaData, 'id_venta');
 
                 foreach ($data['detalles'] as $detalle) {
                     $producto = DB::table('productos')
@@ -84,6 +92,24 @@ class VentasController extends Controller
                         'precio_unitario' => $producto->precio_unitario,
                     ]);
                 }
+
+                $estatusComprobante = DB::table('estatus')
+                    ->where('nombre', 'Activo')
+                    ->value('id_estatus') ?? 1;
+
+                $siguienteCorrelativo = ((int) DB::table('comprobantes')->max('numero_correlativo')) + 1;
+
+                if ($siguienteCorrelativo <= 0) {
+                    $siguienteCorrelativo = 1000;
+                }
+
+                DB::table('comprobantes')->insert([
+                    'id_venta' => $ventaId,
+                    'id_estatus' => $estatusComprobante,
+                    'codigo_hash' => hash('sha256', $ventaId . '|' . Str::uuid()->toString() . '|' . now()->timestamp),
+                    'numero_correlativo' => $siguienteCorrelativo,
+                    'fecha_emision' => now(),
+                ]);
             });
 
             return response()->json([
@@ -100,5 +126,90 @@ class VentasController extends Controller
                 'error' => $e->getMessage(),
             ], 422);
         }
+    }
+
+    private function resolveSaleStoreId(Request $request, array $detalles, ?int $userId = null, ?int $requestedStoreId = null): ?int
+    {
+        if ($requestedStoreId && $this->storeCanFulfillDetails($requestedStoreId, $detalles)) {
+            return $requestedStoreId;
+        }
+
+        $assignedStoreId = $this->resolveUserStoreId($request, $userId);
+
+        if ($assignedStoreId && $this->storeCanFulfillDetails($assignedStoreId, $detalles)) {
+            return $assignedStoreId;
+        }
+
+        $candidateStoreId = DB::table('stock')
+            ->select('id_tienda')
+            ->distinct()
+            ->orderBy('id_tienda')
+            ->pluck('id_tienda');
+
+        foreach ($candidateStoreId as $storeId) {
+            if ($this->storeCanFulfillDetails((int) $storeId, $detalles)) {
+                return (int) $storeId;
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveUserStoreId(Request $request, ?int $userId = null): ?int
+    {
+        $resolvedUserId = $request->user()?->id_usuario ?? $userId;
+
+        if (!$resolvedUserId) {
+            return null;
+        }
+
+        if ($this->isSuperAdmin($request)) {
+            return null;
+        }
+
+        $storeId = DB::table('tiendas_empleados')
+            ->where('id_empleado', $resolvedUserId)
+            ->value('id_tienda');
+
+        return $storeId ? (int) $storeId : null;
+    }
+
+    private function storeCanFulfillDetails(int $storeId, array $detalles): bool
+    {
+        $requiredByProduct = collect($detalles)
+            ->groupBy('producto_id')
+            ->map(fn ($items) => $items->sum(fn ($item) => (int) $item['cantidad']));
+
+        foreach ($requiredByProduct as $productId => $requiredQuantity) {
+            $availableQuantity = (int) DB::table('stock')
+                ->where('id_tienda', $storeId)
+                ->where('id_producto', $productId)
+                ->value('stock_actual');
+
+            if ($availableQuantity < $requiredQuantity) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function isSuperAdmin(Request $request): bool
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return false;
+        }
+
+        $roleName = $user->rol?->nombre;
+
+        if (!$roleName && $user->id_rol) {
+            $roleName = DB::table('roles')
+                ->where('id_rol', $user->id_rol)
+                ->value('nombre');
+        }
+
+        return $roleName === 'Super Admin';
     }
 }

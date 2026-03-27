@@ -1,13 +1,11 @@
 import { formatCurrency } from "../../lib/format";
-import type { CarritoItem, ClienteVenta, MetodoPago, TiendaVenta } from "./types";
+import type { CarritoItem, MetodoPago, TiendaVenta } from "./types";
 
 type SaleCheckoutProps = {
   mostrarCheckout: boolean;
   carrito: CarritoItem[];
-  clienteSeleccionado: string;
   metodoPagoSeleccionado: string;
   tiendaSeleccionada: string;
-  clientes: ClienteVenta[];
   metodosPago: MetodoPago[];
   tiendas: TiendaVenta[];
   resumen: {
@@ -18,9 +16,7 @@ type SaleCheckoutProps = {
   ventaError: string | null;
   ventaSuccess: string | null;
   guardandoVenta: boolean;
-  onClienteChange: (value: string) => void;
   onMetodoPagoChange: (value: string) => void;
-  onTiendaChange: (value: string) => void;
   onActualizarCantidad: (productoId: number, delta: number) => void;
   onEliminarProducto: (productoId: number) => void;
   onCompletarVenta: () => void;
@@ -30,19 +26,15 @@ type SaleCheckoutProps = {
 export function SaleCheckout({
   mostrarCheckout,
   carrito,
-  clienteSeleccionado,
   metodoPagoSeleccionado,
   tiendaSeleccionada,
-  clientes,
   metodosPago,
   tiendas,
   resumen,
   ventaError,
   ventaSuccess,
   guardandoVenta,
-  onClienteChange,
   onMetodoPagoChange,
-  onTiendaChange,
   onActualizarCantidad,
   onEliminarProducto,
   onCompletarVenta,
@@ -70,26 +62,16 @@ export function SaleCheckout({
 
       <div className="sales-customer-block">
         <label htmlFor="cliente">Cliente / referencia</label>
-        <select id="cliente" value={clienteSeleccionado} onChange={(e) => onClienteChange(e.target.value)}>
-          <option value="mostrador">Venta mostrador</option>
-          {clientes.map((cliente) => (
-            <option key={cliente.id_usuario} value={cliente.id_usuario}>
-              {cliente.nombre} ({cliente.email})
-            </option>
-          ))}
-        </select>
+        <div className="sales-static-field" id="cliente">
+          <strong>Venta mostrador</strong>
+        </div>
       </div>
 
       <div className="sales-payment-block">
         <label htmlFor="tienda-venta">Tienda</label>
-        <select id="tienda-venta" value={tiendaSeleccionada} onChange={(e) => onTiendaChange(e.target.value)}>
-          <option value="">Selecciona una tienda</option>
-          {tiendas.map((tienda) => (
-            <option key={tienda.id_tienda} value={tienda.id_tienda}>
-              {tienda.nombre}
-            </option>
-          ))}
-        </select>
+        <div className="sales-static-field" id="tienda-venta">
+          <strong>{tiendas.find((tienda) => String(tienda.id_tienda) === tiendaSeleccionada)?.nombre ?? "Sin tienda asignada"}</strong>
+        </div>
       </div>
 
       <div className="sales-cart-header">

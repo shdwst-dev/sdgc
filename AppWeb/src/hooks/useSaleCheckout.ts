@@ -4,9 +4,14 @@ import type { CarritoItem, ProductoVenta } from "../components/sales/types";
 type UseSaleCheckoutOptions = {
   productos: ProductoVenta[];
   tiendaSeleccionada: string;
+  requireStoreSelection?: boolean;
 };
 
-export function useSaleCheckout({ productos, tiendaSeleccionada }: UseSaleCheckoutOptions) {
+export function useSaleCheckout({
+  productos,
+  tiendaSeleccionada,
+  requireStoreSelection = true,
+}: UseSaleCheckoutOptions) {
   const [mostrarCheckout, setMostrarCheckout] = useState(false);
   const [carrito, setCarrito] = useState<CarritoItem[]>([]);
   const [ventaError, setVentaError] = useState<string | null>(null);
@@ -48,7 +53,7 @@ export function useSaleCheckout({ productos, tiendaSeleccionada }: UseSaleChecko
   };
 
   const agregarProducto = (producto: ProductoVenta) => {
-    if (!tiendaSeleccionada) {
+    if (requireStoreSelection && !tiendaSeleccionada) {
       setVentaError("Selecciona una tienda antes de iniciar la venta.");
       setVentaSuccess(null);
       return;

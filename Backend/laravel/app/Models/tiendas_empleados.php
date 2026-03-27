@@ -19,6 +19,6 @@ class tiendas_empleados extends Model
     }
 
     public function empleado () {
-        return $this->belongsTo(usuarios::class, 'id_usuario');
+        return $this->belongsTo(usuarios::class, 'id_empleado', 'id_usuario');
     }
 }

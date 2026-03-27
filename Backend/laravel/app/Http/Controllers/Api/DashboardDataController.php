@@ -8,22 +8,26 @@ use Carbon\CarbonPeriod;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\Rule;
 
 class DashboardDataController extends Controller
 {
-    public function dashboard(): JsonResponse
+    public function dashboard(Request $request): JsonResponse
     {
-        $referenceDate = $this->referenceDate('ventas', 'fecha_hora') ?? Carbon::now();
+        $assignedStoreId = $this->resolveUserStoreId($request);
+        $referenceDate = $this->referenceDate('ventas', 'fecha_hora', $assignedStoreId) ?? Carbon::now();
         $monthStart = $referenceDate->copy()->startOfMonth();
         $monthEnd = $referenceDate->copy()->endOfMonth();
 
         $ingresosHoy = $this->salesTotalForRange(
             $referenceDate->copy()->startOfDay(),
-            $referenceDate->copy()->endOfDay()
+            $referenceDate->copy()->endOfDay(),
+            $assignedStoreId
         );
-        $ingresosMes = $this->salesTotalForRange($monthStart, $monthEnd);
-        $gastosMes = $this->purchaseTotalForRange($monthStart, $monthEnd);
-        $flujoMensual = $this->buildMonthlyFlow($monthStart, $monthEnd);
+        $ingresosMes = $this->salesTotalForRange($monthStart, $monthEnd, $assignedStoreId);
+        $gastosMes = $this->purchaseTotalForRange($monthStart, $monthEnd, $assignedStoreId);
+        $flujoMensual = $this->buildMonthlyFlow($monthStart, $monthEnd, $assignedStoreId);
 
         return response()->json([
             'periodo_referencia' => [
@@ -40,23 +44,28 @@ class DashboardDataController extends Controller
         ]);
     }
 
-    public function ventasRecientes(): JsonResponse
+    public function ventasRecientes(Request $request): JsonResponse
     {
+        $assignedStoreId = $this->resolveUserStoreId($request);
+
         return response()->json([
-            'ventas_recientes' => $this->recentSales(5)->values(),
+            'ventas_recientes' => $this->recentSales(5, $assignedStoreId)->values(),
         ]);
     }
 
-    public function alertasStock(): JsonResponse
+    public function alertasStock(Request $request): JsonResponse
     {
+        $assignedStoreId = $this->resolveUserStoreId($request);
+
         return response()->json([
-            'alertas_stock' => $this->stockAlerts(5)->values(),
+            'alertas_stock' => $this->stockAlerts(5, $assignedStoreId)->values(),
         ]);
     }
 
-    public function topProductos(): JsonResponse
+    public function topProductos(Request $request): JsonResponse
     {
-        $referenceDate = $this->referenceDate('ventas', 'fecha_hora') ?? Carbon::now();
+        $assignedStoreId = $this->resolveUserStoreId($request);
+        $referenceDate = $this->referenceDate('ventas', 'fecha_hora', $assignedStoreId) ?? Carbon::now();
         $monthStart = $referenceDate->copy()->startOfMonth();
         $monthEnd = $referenceDate->copy()->endOfMonth();
 
@@ -66,15 +75,20 @@ class DashboardDataController extends Controller
                 'fin' => $monthEnd->toDateString(),
                 'mes' => $referenceDate->translatedFormat('F Y'),
             ],
-            'top_productos' => $this->topProductosForRange($monthStart, $monthEnd, 5)->values(),
+            'top_productos' => $this->topProductosForRange($monthStart, $monthEnd, 5, $assignedStoreId)->values(),
         ]);
     }
 
-    public function inventario(): JsonResponse
+    public function inventario(Request $request): JsonResponse
     {
+        $catalogoGlobal = $request->boolean('catalogo_global');
+        $incluirInactivos = $request->boolean('incluir_inactivos');
+        $assignedStoreId = $catalogoGlobal ? null : $this->resolveUserStoreId($request);
+
         $stockPorProducto = DB::table('stock as st')
             ->select('st.id_producto', 'st.id_tienda', 't.nombre as tienda', 'st.stock_actual', 'st.stock_minimo')
             ->join('tiendas as t', 't.id_tienda', '=', 'st.id_tienda')
+            ->when($assignedStoreId, fn ($query) => $query->where('st.id_tienda', $assignedStoreId))
             ->orderBy('t.nombre')
             ->get()
             ->groupBy('id_producto');
@@ -84,7 +98,8 @@ class DashboardDataController extends Controller
             ->leftJoin('categorias as c', 'c.id_categoria', '=', 's.id_categoria')
             ->leftJoin('stock as st', 'st.id_producto', '=', 'p.id_producto')
             ->leftJoin('estatus as e', 'e.id_estatus', '=', 'p.id_estatus')
-            ->where('e.nombre', '!=', 'Inactivo')
+            ->when($assignedStoreId, fn ($query) => $query->where('st.id_tienda', $assignedStoreId))
+            ->when(!$incluirInactivos, fn ($query) => $query->where('e.nombre', '!=', 'Inactivo'))
             ->select(
                 'p.id_producto',
                 'p.codigo_barras as sku',
@@ -164,25 +179,30 @@ class DashboardDataController extends Controller
                     ->select('id_estatus', 'nombre')
                     ->orderBy('id_estatus')
                     ->get(),
-                'tiendas' => DB::table('tiendas')
-                    ->select('id_tienda', 'nombre')
-                    ->orderBy('nombre')
-                    ->get(),
+                'tiendas' => $this->storesCatalog($assignedStoreId),
             ],
             'productos' => $productos->values(),
         ]);
     }
 
-    public function compras(): JsonResponse
+    public function compras(Request $request): JsonResponse
     {
-        $referenceDate = $this->referenceDate('compras', 'fecha_hora') ?? Carbon::now();
+        $assignedStoreId = $this->resolveUserStoreId($request);
+        $referenceDate = $this->referenceDate('compras', 'fecha_hora', $assignedStoreId) ?? Carbon::now();
         $monthStart = $referenceDate->copy()->startOfMonth();
         $monthEnd = $referenceDate->copy()->endOfMonth();
+
+        $tiendas = DB::table('tiendas')
+            ->select('id_tienda', 'nombre')
+            ->when($assignedStoreId, fn ($query) => $query->where('id_tienda', $assignedStoreId))
+            ->orderBy('nombre')
+            ->get();
 
         $ordenes = DB::table('compras as c')
             ->join('proveedores as pr', 'pr.id_proveedor', '=', 'c.id_proveedor')
             ->join('estatus as e', 'e.id_estatus', '=', 'c.id_estatus')
             ->leftJoin('detalle_compras as dc', 'dc.id_compra', '=', 'c.id_compra')
+            ->when($assignedStoreId && $this->tableHasStoreColumn('compras'), fn ($query) => $query->where('c.id_tienda', $assignedStoreId))
             ->select(
                 'c.id_compra',
                 'c.id_proveedor',
@@ -206,7 +226,7 @@ class DashboardDataController extends Controller
                 'estado' => $orden->estado,
             ]);
 
-        $gastoMes = $this->purchaseTotalForRange($monthStart, $monthEnd);
+        $gastoMes = $this->purchaseTotalForRange($monthStart, $monthEnd, $assignedStoreId);
 
         return response()->json([
             'periodo_referencia' => [
@@ -216,7 +236,16 @@ class DashboardDataController extends Controller
                 'ordenes_mes' => $ordenes->filter(fn ($orden) => str_starts_with($orden['fecha'], $referenceDate->format('Y-m')))->count(),
                 'por_recibir' => $ordenes->whereIn('estado', ['Pendiente', 'En Proceso'])->count(),
                 'gasto_acumulado' => $gastoMes,
-                'proveedores_activos' => DB::table('proveedores')->count(),
+                'proveedores_activos' => DB::table('proveedores as pr')
+                    ->leftJoin('compras as c', function ($join) use ($assignedStoreId) {
+                        $join->on('c.id_proveedor', '=', 'pr.id_proveedor');
+
+                        if ($assignedStoreId && $this->tableHasStoreColumn('compras')) {
+                            $join->where('c.id_tienda', '=', $assignedStoreId);
+                        }
+                    })
+                    ->when($assignedStoreId && $this->tableHasStoreColumn('compras'), fn ($query) => $query->whereNotNull('c.id_compra'))
+                    ->count(DB::raw('DISTINCT pr.id_proveedor')),
             ],
             'proveedores' => $ordenes->pluck('proveedor')->unique()->values(),
             'catalogos' => [
@@ -233,10 +262,7 @@ class DashboardDataController extends Controller
                         'nombre' => $producto->nombre,
                         'precio_base' => (float) $producto->precio_base,
                     ]),
-                'tiendas' => DB::table('tiendas')
-                    ->select('id_tienda', 'nombre')
-                    ->orderBy('nombre')
-                    ->get(),
+                'tiendas' => $tiendas,
                 'estatus' => DB::table('estatus')
                     ->select('id_estatus', 'nombre')
                     ->whereIn('nombre', ['Pendiente', 'Completado', 'Cancelado', 'En Proceso', 'Activo'])
@@ -247,8 +273,9 @@ class DashboardDataController extends Controller
         ]);
     }
 
-    public function ventas(): JsonResponse
+    public function ventas(Request $request): JsonResponse
     {
+        $assignedStoreId = $this->resolveUserStoreId($request);
         $metodosPago = DB::table('metodos_pago')
             ->select('id_metodo_pago', 'nombre')
             ->orderBy('nombre')
@@ -256,6 +283,7 @@ class DashboardDataController extends Controller
 
         $tiendas = DB::table('tiendas')
             ->select('id_tienda', 'nombre')
+            ->when($assignedStoreId, fn ($query) => $query->where('id_tienda', $assignedStoreId))
             ->orderBy('nombre')
             ->get();
 
@@ -274,6 +302,7 @@ class DashboardDataController extends Controller
 
         $stockRows = DB::table('stock as s')
             ->join('tiendas as t', 't.id_tienda', '=', 's.id_tienda')
+            ->when($assignedStoreId, fn ($query) => $query->where('s.id_tienda', $assignedStoreId))
             ->select('s.id_producto', 's.id_tienda', 't.nombre as tienda', 's.stock_actual')
             ->get()
             ->groupBy('id_producto');
@@ -301,6 +330,7 @@ class DashboardDataController extends Controller
         $ventaPendiente = DB::table('ventas as v')
             ->join('estatus as e', 'e.id_estatus', '=', 'v.id_estatus')
             ->where('e.nombre', 'Pendiente')
+            ->when($assignedStoreId && $this->tableHasStoreColumn('ventas'), fn ($query) => $query->where('v.id_tienda', $assignedStoreId))
             ->orderByDesc('v.fecha_hora')
             ->select('v.id_venta', 'v.id_metodo_pago')
             ->first();
@@ -369,12 +399,58 @@ class DashboardDataController extends Controller
         ]);
     }
 
-    public function proveedores(): JsonResponse
+    private function resolveUserStoreId(Request $request): ?int
     {
+        $userId = $request->user()?->id_usuario;
+
+        if (!$userId) {
+            return null;
+        }
+
+        if ($this->isSuperAdmin($request)) {
+            return null;
+        }
+
+        $storeId = DB::table('tiendas_empleados')
+            ->where('id_empleado', $userId)
+            ->value('id_tienda');
+
+        return $storeId ? (int) $storeId : null;
+    }
+
+    private function isSuperAdmin(Request $request): bool
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return false;
+        }
+
+        $roleName = $user->rol?->nombre;
+
+        if (!$roleName && $user->id_rol) {
+            $roleName = DB::table('roles')
+                ->where('id_rol', $user->id_rol)
+                ->value('nombre');
+        }
+
+        return $roleName === 'Super Admin';
+    }
+
+    public function proveedores(Request $request): JsonResponse
+    {
+        $assignedStoreId = $this->resolveUserStoreId($request);
+
         $proveedores = DB::table('proveedores as pr')
             ->join('personas as pe', 'pe.id_persona', '=', 'pr.id_persona')
             ->leftJoin('metodos_pago as mp', 'mp.id_metodo_pago', '=', 'pr.id_metodo_pago')
-            ->leftJoin('compras as c', 'c.id_proveedor', '=', 'pr.id_proveedor')
+            ->leftJoin('compras as c', function ($join) use ($assignedStoreId) {
+                $join->on('c.id_proveedor', '=', 'pr.id_proveedor');
+
+                if ($assignedStoreId && $this->tableHasStoreColumn('compras')) {
+                    $join->where('c.id_tienda', '=', $assignedStoreId);
+                }
+            })
             ->leftJoin('detalle_compras as dc', 'dc.id_compra', '=', 'c.id_compra')
             ->select(
                 'pr.id_proveedor',
@@ -469,29 +545,31 @@ class DashboardDataController extends Controller
         ]);
     }
 
-    public function facturacion(): JsonResponse
+    public function facturacion(Request $request): JsonResponse
     {
+        $assignedStoreId = $this->resolveUserStoreId($request);
+
         $facturas = DB::table('comprobantes as c')
             ->join('ventas as v', 'v.id_venta', '=', 'c.id_venta')
             ->join('estatus as e', 'e.id_estatus', '=', 'c.id_estatus')
             ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'v.id_venta')
+            ->when($assignedStoreId && $this->tableHasStoreColumn('ventas'), fn ($query) => $query->where('v.id_tienda', $assignedStoreId))
             ->select(
                 'c.id_comprobante',
                 'c.id_venta',
-                'c.codigo_hash',
                 'c.numero_correlativo',
                 'c.fecha_emision',
                 'e.nombre as estado',
                 DB::raw('COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) as total')
             )
-            ->groupBy('c.id_comprobante', 'c.id_venta', 'c.codigo_hash', 'c.numero_correlativo', 'c.fecha_emision', 'e.nombre')
+            ->groupBy('c.id_comprobante', 'c.id_venta', 'c.numero_correlativo', 'c.fecha_emision', 'e.nombre')
             ->orderByDesc('c.fecha_emision')
             ->get()
             ->map(fn ($factura) => [
                 'id_comprobante' => $factura->id_comprobante,
                 'id_venta' => $factura->id_venta,
+                'registro_venta' => 'VTA-' . str_pad((string) $factura->id_venta, 4, '0', STR_PAD_LEFT),
                 'folio' => 'FAC-' . str_pad((string) $factura->numero_correlativo, 4, '0', STR_PAD_LEFT),
-                'codigo_hash' => $factura->codigo_hash,
                 'cliente' => 'Venta mostrador',
                 'fecha' => Carbon::parse($factura->fecha_emision)->toDateString(),
                 'total' => (float) $factura->total,
@@ -503,18 +581,20 @@ class DashboardDataController extends Controller
         ]);
     }
 
-    public function verFactura(int $idComprobante): JsonResponse
+    public function verFactura(Request $request, int $idComprobante): JsonResponse
     {
+        $assignedStoreId = $this->resolveUserStoreId($request);
+
         $factura = DB::table('comprobantes as c')
             ->join('ventas as v', 'v.id_venta', '=', 'c.id_venta')
             ->join('estatus as e', 'e.id_estatus', '=', 'c.id_estatus')
             ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'v.id_venta')
             ->leftJoin('productos as p', 'p.id_producto', '=', 'dv.producto_id')
             ->where('c.id_comprobante', $idComprobante)
+            ->when($assignedStoreId && $this->tableHasStoreColumn('ventas'), fn ($query) => $query->where('v.id_tienda', $assignedStoreId))
             ->select(
                 'c.id_comprobante',
                 'c.id_venta',
-                'c.codigo_hash',
                 'c.numero_correlativo',
                 'c.fecha_emision',
                 'e.nombre as estado',
@@ -548,8 +628,8 @@ class DashboardDataController extends Controller
             'factura' => [
                 'id_comprobante' => $primeraFila->id_comprobante,
                 'id_venta' => $primeraFila->id_venta,
+                'registro_venta' => 'VTA-' . str_pad((string) $primeraFila->id_venta, 4, '0', STR_PAD_LEFT),
                 'folio' => 'FAC-' . str_pad((string) $primeraFila->numero_correlativo, 4, '0', STR_PAD_LEFT),
-                'codigo_hash' => $primeraFila->codigo_hash,
                 'cliente' => 'Venta mostrador',
                 'fecha' => Carbon::parse($primeraFila->fecha_emision)->toDateString(),
                 'estado' => $primeraFila->estado,
@@ -559,19 +639,61 @@ class DashboardDataController extends Controller
         ]);
     }
 
+    public function eliminarFactura(Request $request, int $idComprobante): JsonResponse
+    {
+        $assignedStoreId = $this->resolveUserStoreId($request);
+
+        $comprobante = DB::table('comprobantes as c')
+            ->join('ventas as v', 'v.id_venta', '=', 'c.id_venta')
+            ->where('c.id_comprobante', $idComprobante)
+            ->when($assignedStoreId && $this->tableHasStoreColumn('ventas'), fn ($query) => $query->where('v.id_tienda', $assignedStoreId))
+            ->select('c.id_comprobante', 'c.id_estatus')
+            ->first();
+
+        if (!$comprobante) {
+            return response()->json([
+                'message' => 'La factura no existe.',
+            ], 404);
+        }
+
+        $estatusEliminado = DB::table('estatus')
+            ->whereIn('nombre', ['Inactivo', 'Cancelado'])
+            ->orderByRaw("CASE WHEN nombre = 'Inactivo' THEN 0 ELSE 1 END")
+            ->value('id_estatus');
+
+        if (!$estatusEliminado) {
+            return response()->json([
+                'message' => 'No existe un estatus valido para eliminar la factura.',
+            ], 422);
+        }
+
+        DB::table('comprobantes')
+            ->where('id_comprobante', $idComprobante)
+            ->update([
+                'id_estatus' => $estatusEliminado,
+            ]);
+
+        return response()->json([
+            'message' => 'Factura eliminada correctamente.',
+        ]);
+    }
+
     public function reportes(Request $request): JsonResponse
     {
-        [$monthStart, $monthEnd] = $this->resolveReportRange($request);
+        $assignedStoreId = $this->resolveUserStoreId($request);
+        [$monthStart, $monthEnd] = $this->resolveReportRange($request, $assignedStoreId);
 
-        $ventasTotales = $this->salesTotalForRange($monthStart, $monthEnd);
-        $costosTotales = $this->purchaseTotalForRange($monthStart, $monthEnd);
+        $ventasTotales = $this->salesTotalForRange($monthStart, $monthEnd, $assignedStoreId);
+        $costosTotales = $this->purchaseTotalForRange($monthStart, $monthEnd, $assignedStoreId);
         $facturasPendientes = DB::table('comprobantes as c')
             ->join('estatus as e', 'e.id_estatus', '=', 'c.id_estatus')
+            ->join('ventas as v', 'v.id_venta', '=', 'c.id_venta')
             ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'c.id_venta')
             ->whereIn('e.nombre', ['Pendiente', 'En Proceso'])
             ->whereBetween('c.fecha_emision', [$monthStart->toDateTimeString(), $monthEnd->toDateTimeString()])
+            ->when($assignedStoreId && $this->tableHasStoreColumn('ventas'), fn ($query) => $query->where('v.id_tienda', $assignedStoreId))
             ->sum(DB::raw('COALESCE(dv.cantidad * dv.precio_unitario, 0)'));
-        $flujoPeriodo = $this->buildMonthlyFlow($monthStart, $monthEnd);
+        $flujoPeriodo = $this->buildMonthlyFlow($monthStart, $monthEnd, $assignedStoreId);
 
         $periodLabel = $monthStart->isSameMonth($monthEnd)
             ? $monthStart->translatedFormat('F Y')
@@ -596,8 +718,9 @@ class DashboardDataController extends Controller
 
     public function graficaIngresosVsGastos(Request $request): JsonResponse
     {
-        [$monthStart, $monthEnd] = $this->resolveReportRange($request);
-        $flujo = $this->buildMonthlyFlow($monthStart, $monthEnd);
+        $assignedStoreId = $this->resolveUserStoreId($request);
+        [$monthStart, $monthEnd] = $this->resolveReportRange($request, $assignedStoreId);
+        $flujo = $this->buildMonthlyFlow($monthStart, $monthEnd, $assignedStoreId);
 
         return response()->json([
             'periodo_referencia' => [
@@ -619,8 +742,9 @@ class DashboardDataController extends Controller
 
     public function graficaProductosMasVendidos(Request $request): JsonResponse
     {
-        [$monthStart, $monthEnd] = $this->resolveReportRange($request);
-        $topProductos = $this->topProductosForRange($monthStart, $monthEnd);
+        $assignedStoreId = $this->resolveUserStoreId($request);
+        [$monthStart, $monthEnd] = $this->resolveReportRange($request, $assignedStoreId);
+        $topProductos = $this->topProductosForRange($monthStart, $monthEnd, 10, $assignedStoreId);
 
         return response()->json([
             'periodo_referencia' => [
@@ -638,8 +762,9 @@ class DashboardDataController extends Controller
 
     public function graficaUtilidad(Request $request): JsonResponse
     {
-        [$monthStart, $monthEnd] = $this->resolveReportRange($request);
-        $flujo = $this->buildMonthlyFlow($monthStart, $monthEnd);
+        $assignedStoreId = $this->resolveUserStoreId($request);
+        [$monthStart, $monthEnd] = $this->resolveReportRange($request, $assignedStoreId);
+        $flujo = $this->buildMonthlyFlow($monthStart, $monthEnd, $assignedStoreId);
 
         return response()->json([
             'periodo_referencia' => [
@@ -659,51 +784,173 @@ class DashboardDataController extends Controller
         ]);
     }
 
-    public function configuracion(): JsonResponse
+    public function configuracion(Request $request): JsonResponse
     {
-        $tienda = DB::table('tiendas as t')
-            ->leftJoin('direcciones as d', 'd.id_direccion', '=', 't.id_direccion')
-            ->leftJoin('calles as ca', 'ca.id_calle', '=', 'd.id_calle')
-            ->leftJoin('colonias as co', 'co.id_colonia', '=', 'ca.id_colonia')
-            ->leftJoin('municipios as m', 'm.id_municipio', '=', 'co.id_municipio')
-            ->leftJoin('estados as es', 'es.id_estado', '=', 'm.id_estado')
+        $assignedStoreId = $this->resolveUserStoreId($request);
+        $isSuperAdmin = $this->isSuperAdmin($request);
+        $tienda = $assignedStoreId
+            ? DB::table('tiendas as t')
+                ->where('t.id_tienda', $assignedStoreId)
+                ->select(
+                    't.id_tienda',
+                    't.nombre'
+                )
+                ->first()
+            : ($isSuperAdmin ? (object) [
+                'id_tienda' => null,
+                'nombre' => 'Todas las tiendas',
+            ] : null);
+
+        $empleados = DB::table('tiendas_empleados as te')
+            ->join('usuarios as u', 'u.id_usuario', '=', 'te.id_empleado')
+            ->join('personas as p', 'p.id_persona', '=', 'u.id_persona')
+            ->leftJoin('roles as r', 'r.id_rol', '=', 'u.id_rol')
+            ->leftJoin('estatus as e', 'e.id_estatus', '=', 'u.id_estatus')
+            ->when($assignedStoreId, fn ($query) => $query->where('te.id_tienda', $assignedStoreId))
             ->select(
-                't.id_tienda',
-                't.nombre',
-                't.email',
-                't.telefono',
-                'd.num_ext',
-                'd.num_int',
-                'ca.nombre as calle',
-                'co.cp',
-                'm.nombre as ciudad',
-                'es.nombre as estado'
+                'u.id_usuario',
+                'u.email',
+                'p.nombre',
+                'p.apellido_paterno',
+                'p.apellido_materno',
+                'p.telefono',
+                'r.nombre as rol',
+                'e.nombre as estatus'
             )
-            ->orderBy('t.id_tienda')
-            ->first();
+            ->orderBy('p.nombre')
+            ->orderBy('p.apellido_paterno')
+            ->get()
+            ->map(fn ($empleado) => [
+                'id_usuario' => (int) $empleado->id_usuario,
+                'nombre' => trim(($empleado->nombre ?? '') . ' ' . ($empleado->apellido_paterno ?? '') . ' ' . ($empleado->apellido_materno ?? '')),
+                'email' => $empleado->email,
+                'telefono' => $empleado->telefono,
+                'rol' => $empleado->rol ?? 'Sin rol',
+                'estatus' => $empleado->estatus ?? 'Sin estatus',
+            ]);
 
         return response()->json([
-            'negocio' => [
+            'tienda' => [
                 'id_tienda' => $tienda->id_tienda ?? null,
                 'nombre' => $tienda->nombre ?? '',
-                'correo' => $tienda->email ?? '',
-                'telefono' => $tienda->telefono ?? '',
-                'calle' => $tienda->calle ?? '',
-                'numero_exterior' => $tienda->num_ext ?? '',
-                'numero_interior' => $tienda->num_int ?? '',
-                'direccion' => $tienda
-                    ? trim(($tienda->calle ?? '') . ' ' . ($tienda->num_ext ?? '') . ($tienda->num_int ? ' Int ' . $tienda->num_int : ''))
-                    : '',
-                'ciudad' => $tienda->ciudad ?? '',
-                'estado' => $tienda->estado ?? '',
-                'cp' => $tienda->cp ?? '',
-                'rfc' => '',
             ],
+            'empleados' => $empleados->values(),
+        ]);
+    }
+
+    public function verEmpleadoConfiguracion(Request $request, int $idEmpleado): JsonResponse
+    {
+        $empleado = $this->resolveStoreEmployee($request, $idEmpleado);
+
+        if (!$empleado) {
+            return response()->json([
+                'message' => 'El empleado no existe en la tienda asignada.',
+            ], 404);
+        }
+
+        return response()->json([
+            'empleado' => $empleado,
+            'catalogos' => [
+                'roles' => DB::table('roles')
+                    ->select('id_rol', 'nombre')
+                    ->orderBy('nombre')
+                    ->get(),
+                'estatus' => DB::table('estatus')
+                    ->select('id_estatus', 'nombre')
+                    ->orderBy('id_estatus')
+                    ->get(),
+            ],
+        ]);
+    }
+
+    public function actualizarEmpleadoConfiguracion(Request $request, int $idEmpleado): JsonResponse
+    {
+        $empleado = $this->resolveStoreEmployee($request, $idEmpleado, true);
+
+        if (!$empleado) {
+            return response()->json([
+                'message' => 'El empleado no existe en la tienda asignada.',
+            ], 404);
+        }
+
+        $data = $request->validate([
+            'nombre' => ['required', 'string', 'max:100'],
+            'apellido_paterno' => ['required', 'string', 'max:100'],
+            'apellido_materno' => ['nullable', 'string', 'max:100'],
+            'telefono' => [
+                'required',
+                'string',
+                'max:20',
+                Rule::unique('personas', 'telefono')->ignore($empleado->id_persona, 'id_persona'),
+            ],
+            'email' => [
+                'required',
+                'email',
+                'max:100',
+                Rule::unique('usuarios', 'email')->ignore($empleado->id_usuario, 'id_usuario'),
+            ],
+            'id_rol' => ['required', 'integer', 'exists:roles,id_rol'],
+            'id_estatus' => ['required', 'integer', 'exists:estatus,id_estatus'],
+        ]);
+
+        DB::transaction(function () use ($empleado, $data) {
+            DB::table('personas')
+                ->where('id_persona', $empleado->id_persona)
+                ->update([
+                    'nombre' => $data['nombre'],
+                    'apellido_paterno' => $data['apellido_paterno'],
+                    'apellido_materno' => $data['apellido_materno'] ?? null,
+                    'telefono' => $data['telefono'],
+                ]);
+
+            DB::table('usuarios')
+                ->where('id_usuario', $empleado->id_usuario)
+                ->update([
+                    'email' => $data['email'],
+                    'id_rol' => $data['id_rol'],
+                    'id_estatus' => $data['id_estatus'],
+                ]);
+        });
+
+        return response()->json([
+            'message' => 'Empleado actualizado correctamente.',
+        ]);
+    }
+
+    public function eliminarEmpleadoConfiguracion(Request $request, int $idEmpleado): JsonResponse
+    {
+        $empleado = $this->resolveStoreEmployee($request, $idEmpleado, true);
+
+        if (!$empleado) {
+            return response()->json([
+                'message' => 'El empleado no existe en la tienda asignada.',
+            ], 404);
+        }
+
+        $estatusInactivo = DB::table('estatus')
+            ->where('nombre', 'Inactivo')
+            ->value('id_estatus');
+
+        if (!$estatusInactivo) {
+            return response()->json([
+                'message' => 'No existe el estatus Inactivo en el sistema.',
+            ], 422);
+        }
+
+        DB::table('usuarios')
+            ->where('id_usuario', $idEmpleado)
+            ->update([
+                'id_estatus' => $estatusInactivo,
+            ]);
+
+        return response()->json([
+            'message' => 'Empleado eliminado correctamente.',
         ]);
     }
 
     public function actualizarConfiguracion(Request $request): JsonResponse
     {
+        $assignedStoreId = $this->resolveUserStoreId($request);
         $data = $request->validate([
             'nombre' => ['required', 'string', 'max:100'],
             'correo' => ['nullable', 'email', 'max:100'],
@@ -723,6 +970,7 @@ class DashboardDataController extends Controller
             ->join('colonias as co', 'co.id_colonia', '=', 'ca.id_colonia')
             ->join('municipios as m', 'm.id_municipio', '=', 'co.id_municipio')
             ->join('estados as es', 'es.id_estado', '=', 'm.id_estado')
+            ->when($assignedStoreId, fn ($query) => $query->where('t.id_tienda', $assignedStoreId))
             ->select(
                 't.id_tienda',
                 't.id_direccion',
@@ -786,16 +1034,22 @@ class DashboardDataController extends Controller
         ]);
     }
 
-    protected function referenceDate(string $table, string $column): ?Carbon
+    protected function referenceDate(string $table, string $column, ?int $storeId = null): ?Carbon
     {
-        $date = DB::table($table)->max($column);
+        $query = DB::table($table);
+
+        if ($storeId && $this->tableHasStoreColumn($table)) {
+            $query->where('id_tienda', $storeId);
+        }
+
+        $date = $query->max($column);
 
         return $date ? Carbon::parse($date) : null;
     }
 
-    protected function resolveReportRange(Request $request): array
+    protected function resolveReportRange(Request $request, ?int $storeId = null): array
     {
-        $referenceDate = $this->referenceDate('ventas', 'fecha_hora') ?? Carbon::now();
+        $referenceDate = $this->referenceDate('ventas', 'fecha_hora', $storeId) ?? Carbon::now();
         $validated = $request->validate([
             'inicio' => ['nullable', 'date'],
             'fin' => ['nullable', 'date'],
@@ -822,27 +1076,30 @@ class DashboardDataController extends Controller
             : sprintf('%s - %s', $start->format('d/m/Y'), $end->format('d/m/Y'));
     }
 
-    protected function salesTotalForRange(Carbon $start, Carbon $end): float
+    protected function salesTotalForRange(Carbon $start, Carbon $end, ?int $storeId = null): float
     {
         return (float) DB::table('ventas as v')
             ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'v.id_venta')
             ->whereBetween('v.fecha_hora', [$start->toDateTimeString(), $end->toDateTimeString()])
+            ->when($storeId && $this->tableHasStoreColumn('ventas'), fn ($query) => $query->where('v.id_tienda', $storeId))
             ->sum(DB::raw('COALESCE(dv.cantidad * dv.precio_unitario, 0)'));
     }
 
-    protected function purchaseTotalForRange(Carbon $start, Carbon $end): float
+    protected function purchaseTotalForRange(Carbon $start, Carbon $end, ?int $storeId = null): float
     {
         return (float) DB::table('compras as c')
             ->leftJoin('detalle_compras as dc', 'dc.id_compra', '=', 'c.id_compra')
             ->whereBetween('c.fecha_hora', [$start->toDateTimeString(), $end->toDateTimeString()])
+            ->when($storeId && $this->tableHasStoreColumn('compras'), fn ($query) => $query->where('c.id_tienda', $storeId))
             ->sum(DB::raw('COALESCE(dc.cantidad * dc.precio_compra, 0)'));
     }
 
-    protected function buildMonthlyFlow(Carbon $start, Carbon $end): array
+    protected function buildMonthlyFlow(Carbon $start, Carbon $end, ?int $storeId = null): array
     {
         $salesByDay = DB::table('ventas as v')
             ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'v.id_venta')
             ->whereBetween('v.fecha_hora', [$start->toDateTimeString(), $end->toDateTimeString()])
+            ->when($storeId && $this->tableHasStoreColumn('ventas'), fn ($query) => $query->where('v.id_tienda', $storeId))
             ->select(
                 DB::raw('DATE(v.fecha_hora) as fecha'),
                 DB::raw('COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) as total')
@@ -853,6 +1110,7 @@ class DashboardDataController extends Controller
         $purchasesByDay = DB::table('compras as c')
             ->leftJoin('detalle_compras as dc', 'dc.id_compra', '=', 'c.id_compra')
             ->whereBetween('c.fecha_hora', [$start->toDateTimeString(), $end->toDateTimeString()])
+            ->when($storeId && $this->tableHasStoreColumn('compras'), fn ($query) => $query->where('c.id_tienda', $storeId))
             ->select(
                 DB::raw('DATE(c.fecha_hora) as fecha'),
                 DB::raw('COALESCE(SUM(dc.cantidad * dc.precio_compra), 0) as total')
@@ -884,13 +1142,14 @@ class DashboardDataController extends Controller
         ];
     }
 
-    protected function recentSales(int $limit = 5)
+    protected function recentSales(int $limit = 5, ?int $storeId = null)
     {
         return DB::table('ventas as v')
             ->leftJoin('comprobantes as c', 'c.id_venta', '=', 'v.id_venta')
             ->join('usuarios as u', 'u.id_usuario', '=', 'v.id_usuario')
             ->join('personas as p', 'p.id_persona', '=', 'u.id_persona')
             ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'v.id_venta')
+            ->when($storeId && $this->tableHasStoreColumn('ventas'), fn ($query) => $query->where('v.id_tienda', $storeId))
             ->select(
                 DB::raw("COALESCE(c.numero_correlativo, v.id_venta) as factura"),
                 DB::raw("CONCAT(p.nombre, ' ', p.apellido_paterno) as responsable"),
@@ -910,10 +1169,11 @@ class DashboardDataController extends Controller
             ]);
     }
 
-    protected function stockAlerts(int $limit = 5)
+    protected function stockAlerts(int $limit = 5, ?int $storeId = null)
     {
         return DB::table('stock as s')
             ->join('productos as pr', 'pr.id_producto', '=', 's.id_producto')
+            ->when($storeId, fn ($query) => $query->where('s.id_tienda', $storeId))
             ->select(
                 'pr.id_producto',
                 'pr.codigo_barras as sku',
@@ -934,12 +1194,13 @@ class DashboardDataController extends Controller
             ]);
     }
 
-    protected function topProductosForRange(Carbon $start, Carbon $end, int $limit = 10)
+    protected function topProductosForRange(Carbon $start, Carbon $end, int $limit = 10, ?int $storeId = null)
     {
         return DB::table('detalle_ventas as dv')
             ->join('ventas as v', 'v.id_venta', '=', 'dv.venta_id')
             ->join('productos as p', 'p.id_producto', '=', 'dv.producto_id')
             ->whereBetween('v.fecha_hora', [$start->toDateTimeString(), $end->toDateTimeString()])
+            ->when($storeId && $this->tableHasStoreColumn('ventas'), fn ($query) => $query->where('v.id_tienda', $storeId))
             ->select(
                 'p.nombre',
                 DB::raw('SUM(dv.cantidad) as cantidad')
@@ -952,5 +1213,46 @@ class DashboardDataController extends Controller
                 'nombre' => $producto->nombre,
                 'cantidad' => (int) $producto->cantidad,
             ]);
+    }
+
+    protected function resolveStoreEmployee(Request $request, int $idEmpleado, bool $includeIds = false)
+    {
+        $assignedStoreId = $this->resolveUserStoreId($request);
+
+        return DB::table('tiendas_empleados as te')
+            ->join('usuarios as u', 'u.id_usuario', '=', 'te.id_empleado')
+            ->join('personas as p', 'p.id_persona', '=', 'u.id_persona')
+            ->leftJoin('roles as r', 'r.id_rol', '=', 'u.id_rol')
+            ->leftJoin('estatus as e', 'e.id_estatus', '=', 'u.id_estatus')
+            ->when($assignedStoreId, fn ($query) => $query->where('te.id_tienda', $assignedStoreId))
+            ->where('u.id_usuario', $idEmpleado)
+            ->select(
+                'u.id_usuario',
+                'u.id_persona',
+                'u.email',
+                'u.id_rol',
+                'u.id_estatus',
+                'p.nombre',
+                'p.apellido_paterno',
+                'p.apellido_materno',
+                'p.telefono',
+                'r.nombre as rol',
+                'e.nombre as estatus'
+            )
+            ->first();
+    }
+
+    protected function tableHasStoreColumn(string $table): bool
+    {
+        return Schema::hasColumn($table, 'id_tienda');
+    }
+
+    protected function storesCatalog(?int $storeId = null)
+    {
+        return DB::table('tiendas')
+            ->select('id_tienda', 'nombre')
+            ->when($storeId, fn ($query) => $query->where('id_tienda', $storeId))
+            ->orderBy('nombre')
+            ->get();
     }
 }

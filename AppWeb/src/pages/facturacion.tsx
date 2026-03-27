@@ -3,14 +3,14 @@ import Layout from "./layout";
 import "../styles/dashboard.css";
 import { useApiData } from "../hooks/useApiData";
 import { formatCurrency, formatDate } from "../lib/format";
-import { fetchApi } from "../lib/api";
+import { deleteApi, fetchApi } from "../lib/api";
 import { downloadInvoicePdf } from "../lib/pdf";
 
 type FacturaListado = {
   id_comprobante: number;
   id_venta: number;
+  registro_venta: string;
   folio: string;
-  codigo_hash: string;
   cliente: string;
   fecha: string;
   total: number;
@@ -34,8 +34,10 @@ export default function Facturacion() {
   const [facturaSeleccionada, setFacturaSeleccionada] = useState<FacturaDetalle | null>(null);
   const [cargandoDetalle, setCargandoDetalle] = useState(false);
   const [descargandoId, setDescargandoId] = useState<number | null>(null);
+  const [eliminandoId, setEliminandoId] = useState<number | null>(null);
   const [accionError, setAccionError] = useState<string | null>(null);
-  const { data, loading, error } = useApiData("/facturacion", {
+  const [reloadKey, setReloadKey] = useState(0);
+  const { data, loading, error } = useApiData(`/facturacion?refresh=${reloadKey}`, {
     facturas: [] as FacturaListado[],
   });
 
@@ -44,7 +46,7 @@ export default function Facturacion() {
     const coincideBusqueda =
       factura.folio.toLowerCase().includes(query) ||
       factura.cliente.toLowerCase().includes(query) ||
-      factura.codigo_hash.toLowerCase().includes(query);
+      factura.registro_venta.toLowerCase().includes(query);
     const coincideCliente = clienteSeleccionado === "Todos" || factura.cliente === clienteSeleccionado;
     const coincideEstado = estadoSeleccionado === "Todos" || factura.estado === estadoSeleccionado;
 
@@ -93,12 +95,37 @@ export default function Facturacion() {
     }
   };
 
+  const eliminarFactura = async (factura: FacturaListado) => {
+    const confirmado = window.confirm(`¿Deseas eliminar la factura ${factura.folio} del registro ${factura.registro_venta}?`);
+
+    if (!confirmado) {
+      return;
+    }
+
+    setEliminandoId(factura.id_comprobante);
+    setAccionError(null);
+
+    try {
+      await deleteApi(`/v1/facturacion/${factura.id_comprobante}`);
+
+      if (facturaSeleccionada?.id_comprobante === factura.id_comprobante) {
+        setFacturaSeleccionada(null);
+      }
+
+      setReloadKey((actual) => actual + 1);
+    } catch (submitError) {
+      setAccionError(submitError instanceof Error ? submitError.message : "No fue posible eliminar la factura.");
+    } finally {
+      setEliminandoId(null);
+    }
+  };
+
   return (
     <Layout>
       <section className="inventory-header">
         <div>
           <h1>Facturacion</h1>
-          <p>Consulta el estado de las facturas, revisa sus conceptos y descarga comprobantes en PDF.</p>
+          <p>Consulta el registro de ventas facturadas, revisa sus conceptos, exporta comprobantes y elimina registros cuando sea necesario.</p>
         </div>
       </section>
 
@@ -121,7 +148,7 @@ export default function Facturacion() {
               <div>
                 <p className="detail-eyebrow">Factura</p>
                 <h4>{facturaSeleccionada.folio}</h4>
-                <p className="detail-subtitle">{facturaSeleccionada.cliente}</p>
+                <p className="detail-subtitle">{facturaSeleccionada.cliente} · {facturaSeleccionada.registro_venta}</p>
               </div>
               <span
                 className={`inventory-status ${
@@ -141,6 +168,10 @@ export default function Facturacion() {
                 <strong>{formatDate(facturaSeleccionada.fecha)}</strong>
               </div>
               <div className="detail-summary-card">
+                <span>Registro de venta</span>
+                <strong>{facturaSeleccionada.registro_venta}</strong>
+              </div>
+              <div className="detail-summary-card">
                 <span>Total</span>
                 <strong>{formatCurrency(facturaSeleccionada.total)}</strong>
               </div>
@@ -148,9 +179,6 @@ export default function Facturacion() {
                 <span>Conceptos</span>
                 <strong>{facturaSeleccionada.detalles.length}</strong>
               </div>
-            </div>
-            <div className="detail-inline-note">
-              Codigo hash: {facturaSeleccionada.codigo_hash}
             </div>
             <div className="inventory-table-wrap">
               <table>
@@ -178,7 +206,7 @@ export default function Facturacion() {
         ) : null}
 
         <div className="inventory-filters">
-          <input type="text" placeholder="Buscar por folio, cliente o codigo hash..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+          <input type="text" placeholder="Buscar por registro, folio o cliente..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
           <select value={clienteSeleccionado} onChange={(e) => setClienteSeleccionado(e.target.value)}>
             <option value="Todos">Todos los clientes</option>
             {[...new Set(data.facturas.map((factura) => factura.cliente))].map((cliente) => (
@@ -208,6 +236,7 @@ export default function Facturacion() {
           <table>
             <thead>
               <tr>
+                <th>Registro</th>
                 <th>Folio</th>
                 <th>Cliente</th>
                 <th>Fecha</th>
@@ -219,6 +248,7 @@ export default function Facturacion() {
             <tbody>
               {facturasFiltradas.map((factura) => (
                 <tr key={factura.id_comprobante}>
+                  <td>{factura.registro_venta}</td>
                   <td>{factura.folio}</td>
                   <td>{factura.cliente}</td>
                   <td>{formatDate(factura.fecha)}</td>
@@ -247,7 +277,15 @@ export default function Facturacion() {
                         onClick={() => descargarFactura(factura)}
                         disabled={descargandoId === factura.id_comprobante}
                       >
-                        {descargandoId === factura.id_comprobante ? "Descargando..." : "Descargar"}
+                        {descargandoId === factura.id_comprobante ? "Exportando..." : "Exportar"}
+                      </button>
+                      <button
+                        type="button"
+                        className="customer-action-button customer-action-button-delete"
+                        onClick={() => eliminarFactura(factura)}
+                        disabled={eliminandoId === factura.id_comprobante}
+                      >
+                        {eliminandoId === factura.id_comprobante ? "Eliminando..." : "Eliminar"}
                       </button>
                     </div>
                   </td>
@@ -255,7 +293,7 @@ export default function Facturacion() {
               ))}
               {!loading && facturasFiltradas.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>No se encontraron facturas con los filtros actuales.</td>
+                  <td colSpan={7}>No se encontraron facturas con los filtros actuales.</td>
                 </tr>
               ) : null}
             </tbody>

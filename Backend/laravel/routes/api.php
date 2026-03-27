@@ -22,6 +22,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/graficas/productos-mas-vendidos', [DashboardDataController::class, 'graficaProductosMasVendidos']);
         Route::get('/graficas/utilidad', [DashboardDataController::class, 'graficaUtilidad']);
         Route::get('/facturacion/{idComprobante}', [DashboardDataController::class, 'verFactura']);
+        Route::delete('/facturacion/{idComprobante}', [DashboardDataController::class, 'eliminarFactura']);
+        Route::get('/configuracion/empleados/{idEmpleado}', [DashboardDataController::class, 'verEmpleadoConfiguracion']);
+        Route::put('/configuracion/empleados/{idEmpleado}', [DashboardDataController::class, 'actualizarEmpleadoConfiguracion']);
+        Route::delete('/configuracion/empleados/{idEmpleado}', [DashboardDataController::class, 'eliminarEmpleadoConfiguracion']);
 
         Route::post('/compras/registrar', [ComprasController::class, 'registrar']);
         Route::get('/compras/{idCompra}', [ComprasController::class, 'ver']);

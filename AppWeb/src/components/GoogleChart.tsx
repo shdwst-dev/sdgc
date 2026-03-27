@@ -18,9 +18,25 @@ declare global {
 
 let googleChartsPromise: Promise<void> | null = null;
 
+function waitForGoogleVisualization() {
+  if (!window.google?.charts) {
+    return Promise.reject(new Error("Google Charts no esta disponible."));
+  }
+
+  return new Promise<void>((resolve) => {
+    window.google!.charts.load("current", { packages: ["corechart"] });
+    window.google!.charts.setOnLoadCallback(() => resolve());
+  });
+}
+
 function loadGoogleCharts() {
-  if (window.google?.charts) {
+  if (window.google?.visualization) {
     return Promise.resolve();
+  }
+
+  if (window.google?.charts) {
+    googleChartsPromise = waitForGoogleVisualization();
+    return googleChartsPromise;
   }
 
   if (googleChartsPromise) {
@@ -37,8 +53,7 @@ function loadGoogleCharts() {
         return;
       }
 
-      window.google.charts.load("current", { packages: ["corechart"] });
-      window.google.charts.setOnLoadCallback(() => resolve());
+      waitForGoogleVisualization().then(resolve).catch(reject);
     };
     script.onerror = () => reject(new Error("No fue posible cargar Google Charts."));
     document.head.appendChild(script);

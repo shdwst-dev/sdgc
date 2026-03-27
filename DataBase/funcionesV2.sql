@@ -161,8 +161,8 @@ BEGIN
         PERFORM set_config('app.id_tienda', p_id_tienda::TEXT, false);
 
         -- Insertar compra (SAVEPOINT automático)
-        INSERT INTO compras(id_proveedor, id_estatus)
-        VALUES(p_id_proveedor, p_id_estatus)
+        INSERT INTO compras(id_proveedor, id_tienda, id_estatus)
+        VALUES(p_id_proveedor, p_id_tienda, p_id_estatus)
         RETURNING id_compra INTO p_id_compra;
 
         -- Procesar detalles
@@ -305,12 +305,14 @@ BEGIN
             id_usuario,
             id_sesion,
             id_metodo_pago,
+            id_tienda,
             id_estatus
         )
         VALUES(
             p_id_usuario,
             p_id_sesion,
             p_id_metodo_pago,
+            p_id_tienda,
             p_id_estatus
         )
         RETURNING id_venta INTO p_id_venta;

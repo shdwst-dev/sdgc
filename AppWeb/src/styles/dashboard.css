@@ -678,14 +678,39 @@ body {
   font-weight: 600;
 }
 
-.sales-store-panel-control select {
-  width: 100%;
-  height: 42px;
-  border: 1px solid #cfd5df;
-  background-color: #ffffff;
-  padding: 0 14px;
-  outline: none;
-  font-size: 14px;
+.sales-static-field {
+  min-height: 72px;
+  padding: 14px 16px;
+  border: 1px solid #d6e0ea;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f3f8fc 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.sales-static-field strong {
+  display: block;
+  color: #1f2937;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.sales-static-field span {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.sales-static-field-highlight {
+  background: linear-gradient(135deg, #f2fbff 0%, #e3f4fb 52%, #f8fdff 100%);
+  border-color: #b8d8e6;
+  box-shadow: 0 10px 24px rgba(28, 90, 122, 0.08);
 }
 
 .purchases-command-panel {
@@ -774,6 +799,7 @@ body {
 
 .sales-search input,
 .sales-customer-row input,
+.sales-payment-block input,
 .sales-payment-block select {
   width: 100%;
   height: 42px;
@@ -1084,6 +1110,11 @@ body {
 
 .sales-payment-block {
   padding-top: 14px;
+}
+
+.sales-customer-block .sales-static-field,
+.sales-payment-block .sales-static-field {
+  min-height: 64px;
 }
 
 .sales-feedback {

@@ -38,6 +38,23 @@ class usuarios extends Authenticatable
         return $this->belongsTo(estatus::class, 'id_estatus');
     }
 
+    public function tiendaEmpleado()
+    {
+        return $this->hasOne(tiendas_empleados::class, 'id_empleado', 'id_usuario');
+    }
+
+    public function tienda()
+    {
+        return $this->hasOneThrough(
+            tiendas::class,
+            tiendas_empleados::class,
+            'id_empleado',
+            'id_tienda',
+            'id_usuario',
+            'id_tienda'
+        );
+    }
+
     public function getAuthPassword()
     {
         return $this->contrasena;

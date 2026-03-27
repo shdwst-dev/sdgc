@@ -9,23 +9,32 @@ import { SaleCheckout } from "../components/sales/SaleCheckout";
 import { SalesStoreStep } from "../components/sales/SalesStoreStep";
 import { useSaleCheckout } from "../hooks/useSaleCheckout";
 import type {
-  ClienteVenta,
   MetodoPago,
   ProductoVenta,
   TiendaVenta,
 } from "../components/sales/types";
 
+function getAssignedStoreId(user: ReturnType<typeof getStoredUser>): string {
+  const tienda = user?.tienda;
+
+  if (!tienda || typeof tienda !== "object" || !("id_tienda" in tienda)) {
+    return "";
+  }
+
+  return String(tienda.id_tienda);
+}
+
 export default function Ventas() {
+  const usuario = getStoredUser();
+  const tiendaUsuarioId = getAssignedStoreId(usuario);
   const [busqueda, setBusqueda] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
-  const [clienteSeleccionado, setClienteSeleccionado] = useState("mostrador");
   const [metodoPagoSeleccionado, setMetodoPagoSeleccionado] = useState("");
   const [tiendaSeleccionada, setTiendaSeleccionada] = useState("");
   const [guardandoVenta, setGuardandoVenta] = useState(false);
   const { data, loading, error } = useApiData(`/ventas?refresh=${reloadKey}`, {
     productos: [] as ProductoVenta[],
     catalogos: {
-      clientes: [] as ClienteVenta[],
       metodos_pago: [] as MetodoPago[],
       tiendas: [] as TiendaVenta[],
     },
@@ -51,6 +60,13 @@ export default function Ventas() {
     },
   });
 
+  const tiendasDisponibles = useMemo(
+    () => (tiendaUsuarioId
+      ? data.catalogos.tiendas.filter((tienda) => String(tienda.id_tienda) === tiendaUsuarioId)
+      : data.catalogos.tiendas),
+    [data.catalogos.tiendas, tiendaUsuarioId],
+  );
+
   const {
     carrito,
     mostrarCheckout,
@@ -72,15 +88,14 @@ export default function Ventas() {
   });
 
   useEffect(() => {
-    setClienteSeleccionado(data.venta_en_curso.cliente_id ? String(data.venta_en_curso.cliente_id) : "mostrador");
     setMetodoPagoSeleccionado(
       data.venta_en_curso.id_metodo_pago
         ? String(data.venta_en_curso.id_metodo_pago)
         : (data.catalogos.metodos_pago[0]?.id_metodo_pago?.toString() ?? ""),
     );
-    setTiendaSeleccionada((actual) => actual || data.venta_en_curso.id_tienda?.toString() || "");
+    setTiendaSeleccionada((actual) => actual || tiendaUsuarioId || data.venta_en_curso.id_tienda?.toString() || "");
     reiniciarVenta();
-  }, [data]);
+  }, [data, tiendaUsuarioId]);
 
   const productosFiltrados = useMemo(() => {
     const query = busqueda.trim().toLowerCase();
@@ -98,24 +113,9 @@ export default function Ventas() {
     );
   }, [busqueda, data.productos, productosOcultos]);
 
-  const manejarCambioTienda = (value: string) => {
-    setVentaError(null);
-    setVentaSuccess(null);
-    setTiendaSeleccionada(value);
-    reiniciarVenta();
-  };
-
   const completarVenta = async () => {
-    const usuario = getStoredUser();
-
     if (!usuario?.id_usuario) {
       setVentaError("No fue posible identificar al usuario actual.");
-      setVentaSuccess(null);
-      return;
-    }
-
-    if (!tiendaSeleccionada) {
-      setVentaError("Selecciona una tienda para registrar la venta.");
       setVentaSuccess(null);
       return;
     }
@@ -140,7 +140,6 @@ export default function Ventas() {
       await postApi("/v1/ventas/registrar", {
         id_usuario: usuario.id_usuario,
         id_metodo_pago: Number(metodoPagoSeleccionado),
-        id_tienda: Number(tiendaSeleccionada),
         detalles: carrito.map((item) => ({
           producto_id: item.producto_id,
           cantidad: item.cantidad,
@@ -148,7 +147,6 @@ export default function Ventas() {
       });
 
       reiniciarVenta();
-      setClienteSeleccionado("mostrador");
       setVentaSuccess("Venta registrada correctamente.");
       localStorage.setItem("sdgc_inventory_refresh", String(Date.now()));
       window.dispatchEvent(new CustomEvent("sdgc:inventory-refresh"));
@@ -166,14 +164,13 @@ export default function Ventas() {
       <section className="inventory-header">
         <div>
           <h1>Ventas / Punto de venta</h1>
-          <p>Primero selecciona una tienda y despues elige productos para completar la venta.</p>
+          <p>Los productos y el stock se muestran segun la tienda asignada a tu usuario.</p>
         </div>
       </section>
 
       <SalesStoreStep
         tiendaSeleccionada={tiendaSeleccionada}
-        tiendas={data.catalogos.tiendas}
-        onChange={manejarCambioTienda}
+        tiendas={tiendasDisponibles}
       />
 
       <section className="sales-layout">
@@ -189,19 +186,15 @@ export default function Ventas() {
         <SaleCheckout
           mostrarCheckout={mostrarCheckout}
           carrito={carrito}
-          clienteSeleccionado={clienteSeleccionado}
           metodoPagoSeleccionado={metodoPagoSeleccionado}
           tiendaSeleccionada={tiendaSeleccionada}
-          clientes={data.catalogos.clientes}
           metodosPago={data.catalogos.metodos_pago}
-          tiendas={data.catalogos.tiendas}
+          tiendas={tiendasDisponibles}
           resumen={resumen}
           ventaError={ventaError}
           ventaSuccess={ventaSuccess}
           guardandoVenta={guardandoVenta}
-          onClienteChange={setClienteSeleccionado}
           onMetodoPagoChange={setMetodoPagoSeleccionado}
-          onTiendaChange={manejarCambioTienda}
           onActualizarCantidad={actualizarCantidad}
           onEliminarProducto={eliminarProducto}
           onCompletarVenta={completarVenta}

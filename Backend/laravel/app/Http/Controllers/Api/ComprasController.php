@@ -7,6 +7,7 @@ use Throwable;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class ComprasController extends Controller
 {
@@ -14,7 +15,7 @@ class ComprasController extends Controller
     {
         $data = $request->validate([
             'id_proveedor' => 'required|integer|exists:proveedores,id_proveedor',
-            'id_tienda' => 'required|integer|exists:tiendas,id_tienda',
+            'id_tienda' => 'nullable|integer|exists:tiendas,id_tienda',
             'id_estatus' => 'nullable|integer|exists:estatus,id_estatus',
             'detalles' => 'required|array|min:1',
             'detalles.*.producto_id' => 'required|integer|exists:productos,id_producto',
@@ -22,17 +23,31 @@ class ComprasController extends Controller
             'detalles.*.precio_compra' => 'required|numeric|min:0.01',
         ]);
 
+        $storeId = $this->resolveUserStoreId($request);
+
+        if (!$storeId) {
+            return response()->json([
+                'message' => 'El usuario no tiene una tienda asignada para registrar la compra.',
+            ], 422);
+        }
+
         try {
-            DB::transaction(function () use ($data) {
+            DB::transaction(function () use ($data, $storeId) {
                 DB::statement('SELECT set_config(?, ?, false)', [
                     'app.id_tienda',
-                    (string) $data['id_tienda'],
+                    (string) $storeId,
                 ]);
 
-                $idCompra = DB::table('compras')->insertGetId([
+                $compraData = [
                     'id_proveedor' => $data['id_proveedor'],
                     'id_estatus' => $data['id_estatus'] ?? 1,
-                ], 'id_compra');
+                ];
+
+                if ($this->tableHasStoreColumn('compras')) {
+                    $compraData['id_tienda'] = $storeId;
+                }
+
+                $idCompra = DB::table('compras')->insertGetId($compraData, 'id_compra');
 
                 foreach ($data['detalles'] as $detalle) {
                     DB::table('detalle_compras')->insert([
@@ -43,7 +58,7 @@ class ComprasController extends Controller
                     ]);
 
                     $stockExistente = DB::table('stock')
-                        ->where('id_tienda', $data['id_tienda'])
+                        ->where('id_tienda', $storeId)
                         ->where('id_producto', $detalle['producto_id'])
                         ->lockForUpdate()
                         ->first();
@@ -56,7 +71,7 @@ class ComprasController extends Controller
                             ]);
                     } else {
                         DB::table('stock')->insert([
-                            'id_tienda' => $data['id_tienda'],
+                            'id_tienda' => $storeId,
                             'id_producto' => $detalle['producto_id'],
                             'stock_minimo' => 0,
                             'stock_actual' => $detalle['cantidad'],
@@ -81,12 +96,53 @@ class ComprasController extends Controller
         }
     }
 
-    public function ver(int $idCompra)
+    private function resolveUserStoreId(Request $request): ?int
     {
+        $userId = $request->user()?->id_usuario;
+
+        if (!$userId) {
+            return null;
+        }
+
+        if ($this->isSuperAdmin($request)) {
+            return null;
+        }
+
+        $storeId = DB::table('tiendas_empleados')
+            ->where('id_empleado', $userId)
+            ->value('id_tienda');
+
+        return $storeId ? (int) $storeId : null;
+    }
+
+    private function isSuperAdmin(Request $request): bool
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return false;
+        }
+
+        $roleName = $user->rol?->nombre;
+
+        if (!$roleName && $user->id_rol) {
+            $roleName = DB::table('roles')
+                ->where('id_rol', $user->id_rol)
+                ->value('nombre');
+        }
+
+        return $roleName === 'Super Admin';
+    }
+
+    public function ver(Request $request, int $idCompra)
+    {
+        $storeId = $this->resolveUserStoreId($request);
+
         $compra = DB::table('compras as c')
             ->join('proveedores as pr', 'pr.id_proveedor', '=', 'c.id_proveedor')
             ->join('estatus as e', 'e.id_estatus', '=', 'c.id_estatus')
             ->where('c.id_compra', $idCompra)
+            ->when($storeId && $this->tableHasStoreColumn('compras'), fn ($query) => $query->where('c.id_tienda', $storeId))
             ->select(
                 'c.id_compra',
                 'c.fecha_hora',
@@ -139,6 +195,7 @@ class ComprasController extends Controller
 
     public function actualizar(Request $request, int $idCompra)
     {
+        $storeId = $this->resolveUserStoreId($request);
         $data = $request->validate([
             'id_proveedor' => 'required|integer|exists:proveedores,id_proveedor',
             'id_estatus' => 'required|integer|exists:estatus,id_estatus',
@@ -146,6 +203,7 @@ class ComprasController extends Controller
 
         $compraExiste = DB::table('compras')
             ->where('id_compra', $idCompra)
+            ->when($storeId && $this->tableHasStoreColumn('compras'), fn ($query) => $query->where('id_tienda', $storeId))
             ->exists();
 
         if (!$compraExiste) {
@@ -166,8 +224,9 @@ class ComprasController extends Controller
         ]);
     }
 
-    public function eliminar(int $idCompra)
+    public function eliminar(Request $request, int $idCompra)
     {
+        $storeId = $this->resolveUserStoreId($request);
         $estatusCancelado = DB::table('estatus')
             ->where('nombre', 'Cancelado')
             ->value('id_estatus');
@@ -180,6 +239,7 @@ class ComprasController extends Controller
 
         $compraExiste = DB::table('compras')
             ->where('id_compra', $idCompra)
+            ->when($storeId && $this->tableHasStoreColumn('compras'), fn ($query) => $query->where('id_tienda', $storeId))
             ->exists();
 
         if (!$compraExiste) {
@@ -197,6 +257,11 @@ class ComprasController extends Controller
         return response()->json([
             'message' => 'Compra cancelada correctamente.',
         ]);
+    }
+
+    private function tableHasStoreColumn(string $table): bool
+    {
+        return Schema::hasColumn($table, 'id_tienda');
     }
 
 }

@@ -9,12 +9,21 @@ use Illuminate\Support\Facades\DB;
 
 class ProductosController extends Controller
 {
-    public function listar()
+    public function listar(Request $request)
     {
         try {
+            $storeId = $this->resolveUserStoreId($request);
+
             $productos = DB::table('productos as p')
                 ->leftJoin('subcategorias as s', 's.id_subcategoria', '=', 'p.id_subcategoria')
-                ->leftJoin('stock as st', 'st.id_producto', '=', 'p.id_producto')
+                ->when(
+                    $storeId,
+                    fn ($query) => $query->join('stock as st', function ($join) use ($storeId) {
+                        $join->on('st.id_producto', '=', 'p.id_producto')
+                            ->where('st.id_tienda', '=', $storeId);
+                    }),
+                    fn ($query) => $query->leftJoin('stock as st', 'st.id_producto', '=', 'p.id_producto')
+                )
                 ->select(
                     'p.id_producto',
                     'p.nombre',
@@ -250,12 +259,21 @@ class ProductosController extends Controller
             'message' => 'Stock por tienda actualizado correctamente.'
         ]);
     }
-    public function leer(int $idProducto)
+    public function leer(Request $request, int $idProducto)
     {
         try {
+            $storeId = $this->resolveUserStoreId($request);
+
             $producto = DB::table('productos as p')
                 ->leftJoin('subcategorias as s', 's.id_subcategoria', '=', 'p.id_subcategoria')
-                ->leftJoin('stock as st', 'st.id_producto', '=', 'p.id_producto')
+                ->when(
+                    $storeId,
+                    fn ($query) => $query->join('stock as st', function ($join) use ($storeId) {
+                        $join->on('st.id_producto', '=', 'p.id_producto')
+                            ->where('st.id_tienda', '=', $storeId);
+                    }),
+                    fn ($query) => $query->leftJoin('stock as st', 'st.id_producto', '=', 'p.id_producto')
+                )
                 ->select(
                     'p.id_producto',
                     'p.nombre',
@@ -295,5 +313,43 @@ class ProductosController extends Controller
                 'error' => $e->errorInfo[2] ?? $e->getMessage(),
             ], 422);
         }
+    }
+
+    private function resolveUserStoreId(Request $request): ?int
+    {
+        $userId = $request->user()?->id_usuario;
+
+        if (!$userId) {
+            return null;
+        }
+
+        if ($this->isSuperAdmin($request)) {
+            return null;
+        }
+
+        $storeId = DB::table('tiendas_empleados')
+            ->where('id_empleado', $userId)
+            ->value('id_tienda');
+
+        return $storeId ? (int) $storeId : null;
+    }
+
+    private function isSuperAdmin(Request $request): bool
+    {
+        $user = $request->user();
+
+        if (!$user) {
+            return false;
+        }
+
+        $roleName = $user->rol?->nombre;
+
+        if (!$roleName && $user->id_rol) {
+            $roleName = DB::table('roles')
+                ->where('id_rol', $user->id_rol)
+                ->value('nombre');
+        }
+
+        return $roleName === 'Super Admin';
     }
 }

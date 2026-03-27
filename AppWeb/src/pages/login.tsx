@@ -39,12 +39,12 @@ export default function Login() {
 
       saveSession(data.token, data.usuario, data.hash);
 
-      if (data.usuario.rol === "Administrador") {
+      if (data.usuario.rol === "Administrador" || data.usuario.rol === "Super Admin") {
         navigate("/dashboard");
       } else if (data.usuario.rol === "Vendedor") {
         navigate("/ventas");
       } else if (data.usuario.rol === "Comprador") {
-        navigate("/compras");
+        navigate("/compras-cliente");
       }
     } catch (submitError: unknown) {
       setError(submitError instanceof Error ? submitError.message : "No fue posible iniciar sesion.");

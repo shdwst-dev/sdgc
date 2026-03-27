@@ -5,7 +5,7 @@ import { clearSession, getToken } from "../lib/auth";
 const menuItems = [
   { to: "/dashboard", label: "Inicio" },
   { to: "/inventario", label: "Inventario / Almacen" },
-  { to: "/compras", label: "Compras" },
+  { to: "/compras-cliente", label: "Compras" },
   { to: "/ventas", label: "Ventas" },
   { to: "/clientes", label: "Clientes" },
   { to: "/proveedores", label: "Proveedores" },
@@ -21,8 +21,8 @@ export default function Sidebar() {
     rolUsuario === "Vendedor"
       ? menuItems.filter((item) => item.to === "/ventas" || item.to === "/reportes")
       : rolUsuario === "Comprador"
-        ? menuItems.filter((item) => item.to === "/compras")
-      : menuItems;
+        ? menuItems.filter((item) => item.to === "/compras-cliente")
+        : menuItems.filter((item) => item.to !== "/compras-cliente");
 
   const cerrarSesion = async () => {
     try {
@@ -67,7 +67,7 @@ export default function Sidebar() {
         <div className="sidebar-footer">
           <div className="sidebar-divider" />
 
-          {rolUsuario === "Administrador" ? (
+          {rolUsuario === "Administrador" || rolUsuario === "Super Admin" ? (
             <NavLink
               to="/configuracion"
               className={({ isActive }) => `sidebar-action${isActive ? " active" : ""}`}

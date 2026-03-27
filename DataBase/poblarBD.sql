@@ -7,6 +7,7 @@
 -- Tabla Roles
 INSERT INTO roles (nombre)
 VALUES ('Administrador'),
+       ('Super Admin'),
        ('Comprador'),
        ('Vendedor');
 
@@ -346,4 +347,3 @@ VALUES (1, 1),
 -- =============================================
 -- FIN DE INSERTS
 -- =============================================
-

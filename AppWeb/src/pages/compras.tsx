@@ -1,9 +1,20 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Layout from "./layout";
 import "../styles/dashboard.css";
 import { useApiData } from "../hooks/useApiData";
 import { formatCurrency, formatDate } from "../lib/format";
 import { deleteApi, fetchApi, postApi, putApi } from "../lib/api";
+import { getStoredUser } from "../lib/auth";
+
+function getAssignedStoreId(user: ReturnType<typeof getStoredUser>): string {
+  const tienda = user?.tienda;
+
+  if (!tienda || typeof tienda !== "object" || !("id_tienda" in tienda)) {
+    return "";
+  }
+
+  return String(tienda.id_tienda);
+}
 
 type CompraListado = {
   id_compra: number;
@@ -35,6 +46,8 @@ type CompraDetalle = {
 };
 
 export default function Compras() {
+  const usuario = getStoredUser();
+  const tiendaUsuarioId = getAssignedStoreId(usuario);
   const editorRef = useRef<HTMLDivElement | null>(null);
   const [busqueda, setBusqueda] = useState("");
   const [proveedorSeleccionado, setProveedorSeleccionado] = useState("Todos");
@@ -78,6 +91,14 @@ export default function Compras() {
     ordenes: [] as CompraListado[],
   });
 
+  const tiendasDisponibles = useMemo(
+    () => (tiendaUsuarioId
+      ? data.catalogos.tiendas.filter((tienda) => String(tienda.id_tienda) === tiendaUsuarioId)
+      : data.catalogos.tiendas),
+    [data.catalogos.tiendas, tiendaUsuarioId],
+  );
+  const nombreTiendaAsignada = tiendasDisponibles[0]?.nombre ?? "Sin tienda asignada";
+
   const resetMensajesFormulario = () => {
     setFormError(null);
     setFormSuccess(null);
@@ -91,7 +112,7 @@ export default function Compras() {
   const limpiarFormularioNuevaOrden = () => {
     setOrdenNueva({
       id_proveedor: "",
-      id_tienda: "",
+      id_tienda: tiendaUsuarioId,
       id_estatus: "1",
       detalles: [{ producto_id: "", cantidad: "1", precio_compra: "" }],
     });
@@ -141,12 +162,6 @@ export default function Compras() {
       return;
     }
 
-    if (!ordenNueva.id_tienda) {
-      setFormError("Selecciona una tienda.");
-      setFormSuccess(null);
-      return;
-    }
-
     const detalleInvalido = ordenNueva.detalles.find((detalle) => (
       !detalle.producto_id ||
       Number(detalle.cantidad) <= 0 ||
@@ -165,7 +180,6 @@ export default function Compras() {
     try {
       await postApi("/v1/compras/registrar", {
         id_proveedor: Number(ordenNueva.id_proveedor),
-        id_tienda: Number(ordenNueva.id_tienda),
         id_estatus: Number(ordenNueva.id_estatus),
         detalles: ordenNueva.detalles.map((detalle) => ({
           producto_id: Number(detalle.producto_id),
@@ -336,7 +350,7 @@ export default function Compras() {
     <Layout>
       <section className="inventory-header">
         <div>
-          <h1>Compras</h1>
+          <h1>Compras a proveedor</h1>
           <p>Da seguimiento a órdenes de compra, proveedores y recepciones de mercancía.</p>
         </div>
         <button className="inventory-primary-button" type="button" onClick={alternarFormulario}>
@@ -348,7 +362,7 @@ export default function Compras() {
         <section className="panel form-panel purchases-form-panel">
           <div className="form-panel-header">
             <h3>Nueva orden de compra</h3>
-            <p>Selecciona proveedor, tienda y los productos que formarán parte de la orden.</p>
+            <p>Selecciona proveedor y los productos que formarán parte de la orden para tu tienda asignada.</p>
           </div>
 
           <div className="form-grid">
@@ -372,21 +386,7 @@ export default function Compras() {
 
             <label className="form-field">
               <span>Tienda</span>
-              <select
-                value={ordenNueva.id_tienda}
-                onChange={(e) => {
-                  resetMensajesFormulario();
-                  setOrdenNueva((actual) => ({ ...actual, id_tienda: e.target.value }));
-                }}
-              >
-                
-                <option value="">Selecciona una tienda</option>
-                {data.catalogos.tiendas.map((tienda) => (
-                  <option key={tienda.id_tienda} value={tienda.id_tienda}>
-                    {tienda.nombre}
-                  </option>
-                ))}
-              </select>
+              <input value={nombreTiendaAsignada} readOnly disabled />
             </label>
 
             <label className="form-field">
@@ -418,6 +418,7 @@ export default function Compras() {
                       resetMensajesFormulario();
                       actualizarDetalle(index, "producto_id", e.target.value);
                       const producto = data.catalogos.productos.find((item) => item.id_producto === Number(e.target.value));
+
                       if (producto) {
                         actualizarDetalle(index, "precio_compra", String(producto.precio_base));
                       }

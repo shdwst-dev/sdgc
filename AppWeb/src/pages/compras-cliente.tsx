@@ -5,7 +5,7 @@ import { useApiData } from "../hooks/useApiData";
 import { formatCurrency } from "../lib/format";
 import { postApi } from "../lib/api";
 import { getStoredUser } from "../lib/auth";
-import { ProductCatalog } from "../components/sales/ProductCatalog";
+import { ProductCatalog } from "../components/sales/CatalogoProductos";
 import { useSaleCheckout } from "../hooks/useSaleCheckout";
 import type { MetodoPago, ProductoVenta } from "../components/sales/types";
 

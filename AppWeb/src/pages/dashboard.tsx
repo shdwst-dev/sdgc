@@ -1,11 +1,53 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "./layout";
 import "../styles/dashboard.css";
 import { useApiData } from "../hooks/useApiData";
 import { formatCurrency, formatDate } from "../lib/format";
 import { GoogleChart } from "../components/GoogleChart";
+import { clearSession, getStoredUser, getToken, updateStoredUser } from "../lib/auth";
+import { putApi } from "../lib/api";
+
+type SessionUser = {
+  id_usuario?: number;
+  email?: string;
+  rol?: string;
+  persona?: {
+    nombre?: string;
+    apellido_paterno?: string;
+    apellido_materno?: string | null;
+    telefono?: string;
+  } | null;
+};
+
+type ProfileForm = {
+  nombre: string;
+  apellido_paterno: string;
+  apellido_materno: string;
+  telefono: string;
+  email: string;
+  contrasena: string;
+};
+
+const emptyProfileForm: ProfileForm = {
+  nombre: "",
+  apellido_paterno: "",
+  apellido_materno: "",
+  telefono: "",
+  email: "",
+  contrasena: "",
+};
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [menuAbierto, setMenuAbierto] = useState(false);
+  const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
+  const [guardandoPerfil, setGuardandoPerfil] = useState(false);
+  const [perfilMensaje, setPerfilMensaje] = useState<string | null>(null);
+  const [perfilError, setPerfilError] = useState<string | null>(null);
+  const [usuarioActual, setUsuarioActual] = useState<SessionUser | null>(getStoredUser() as SessionUser | null);
+  const [perfilEditable, setPerfilEditable] = useState<ProfileForm>(emptyProfileForm);
   const { data, loading, error } = useApiData("/dashboard", {
     periodo_referencia: { fecha: "", mes: "" },
     metricas: {
@@ -52,6 +94,45 @@ export default function Dashboard() {
     }>,
   });
 
+  useEffect(() => {
+    const usuario = getStoredUser() as SessionUser | null;
+    setUsuarioActual(usuario);
+  }, []);
+
+  useEffect(() => {
+    if (!usuarioActual) {
+      setPerfilEditable(emptyProfileForm);
+      return;
+    }
+
+    setPerfilEditable({
+      nombre: usuarioActual.persona?.nombre ?? "",
+      apellido_paterno: usuarioActual.persona?.apellido_paterno ?? "",
+      apellido_materno: usuarioActual.persona?.apellido_materno ?? "",
+      telefono: usuarioActual.persona?.telefono ?? "",
+      email: usuarioActual.email ?? "",
+      contrasena: "",
+    });
+  }, [usuarioActual]);
+
+  useEffect(() => {
+    if (!menuAbierto) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) {
+        setMenuAbierto(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [menuAbierto]);
+
   const subtituloIngresos = data.periodo_referencia.fecha
     ? formatDate(data.periodo_referencia.fecha)
     : "Sin referencia";
@@ -76,8 +157,111 @@ export default function Dashboard() {
     [topProductosData.top_productos],
   );
 
+  const nombreCompletoUsuario = useMemo(() => {
+    const persona = usuarioActual?.persona;
+
+    if (!persona) {
+      return "Usuario";
+    }
+
+    return [persona.nombre, persona.apellido_paterno, persona.apellido_materno]
+      .filter((parte) => typeof parte === "string" && parte.trim().length > 0)
+      .join(" ");
+  }, [usuarioActual]);
+
+  const cerrarSesion = async () => {
+    try {
+      const token = getToken();
+      const currentHost = window.location.hostname;
+      const API_URL = `http://${currentHost}:8000/api/v1/auth/logout`;
+
+      if (token) {
+        await fetch(API_URL, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        });
+      }
+    } catch (submitError) {
+      console.error("Error al cerrar sesión en el servidor:", submitError);
+    } finally {
+      clearSession();
+      navigate("/");
+    }
+  };
+
+  const abrirAjustes = () => {
+    setPerfilMensaje(null);
+    setPerfilError(null);
+    setMenuAbierto(false);
+    setAjustesAbiertos(true);
+  };
+
+  const guardarPerfil = async () => {
+    setGuardandoPerfil(true);
+    setPerfilMensaje(null);
+    setPerfilError(null);
+
+    try {
+      const response = await putApi<{ message: string; usuario: SessionUser }>("/v1/auth/profile", {
+        nombre: perfilEditable.nombre,
+        apellido_paterno: perfilEditable.apellido_paterno,
+        apellido_materno: perfilEditable.apellido_materno || null,
+        telefono: perfilEditable.telefono,
+        email: perfilEditable.email,
+        contrasena: perfilEditable.contrasena || null,
+      });
+
+      updateStoredUser(response.usuario);
+      setUsuarioActual(response.usuario);
+      setPerfilEditable((actual) => ({
+        ...actual,
+        contrasena: "",
+      }));
+      setPerfilMensaje(response.message);
+    } catch (submitError) {
+      setPerfilError(submitError instanceof Error ? submitError.message : "No fue posible actualizar tu perfil.");
+    } finally {
+      setGuardandoPerfil(false);
+    }
+  };
+
   return (
     <Layout>
+      <section className="dashboard-user-bar">
+        <div>
+          <p className="detail-section-label">Sesión activa</p>
+          <h1 className="dashboard-user-title">Dashboard</h1>
+        </div>
+
+        <div className="dashboard-user-menu-wrap" ref={menuRef}>
+          <button
+            type="button"
+            className="dashboard-user-button"
+            onClick={() => setMenuAbierto((actual) => !actual)}
+          >
+            <span className="dashboard-user-avatar">{nombreCompletoUsuario.charAt(0).toUpperCase()}</span>
+            <span className="dashboard-user-copy">
+              <strong>{nombreCompletoUsuario}</strong>
+              <small>{usuarioActual?.rol ?? "Sin rol"}</small>
+            </span>
+          </button>
+
+          {menuAbierto ? (
+            <div className="dashboard-user-dropdown">
+              <button type="button" className="dashboard-user-dropdown-item" onClick={abrirAjustes}>
+                Ajustes
+              </button>
+              <button type="button" className="dashboard-user-dropdown-item dashboard-user-dropdown-item-danger" onClick={cerrarSesion}>
+                Cerrar sesion
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
       <section className="stats-grid">
         <div className="stat-card">
           <div className="stat-title-row">
@@ -214,6 +398,59 @@ export default function Dashboard() {
 
       {loading ? <p className="panel">Cargando informacion del dashboard...</p> : null}
       {error ? <p className="panel">Error al cargar datos: {error}</p> : null}
+
+      {ajustesAbiertos ? (
+        <div className="profile-modal-backdrop" role="presentation" onClick={() => setAjustesAbiertos(false)}>
+          <section className="profile-modal-card" role="dialog" aria-modal="true" aria-labelledby="profile-modal-title" onClick={(event) => event.stopPropagation()}>
+            <div className="detail-card-header">
+              <div>
+                <p className="detail-section-label">Ajustes</p>
+                <h3 id="profile-modal-title">Editar informacion personal</h3>
+              </div>
+              <button type="button" className="inventory-secondary-button" onClick={() => setAjustesAbiertos(false)}>
+                Cerrar
+              </button>
+            </div>
+
+            {perfilError ? <p className="form-message form-message-error">{perfilError}</p> : null}
+            {perfilMensaje ? <p className="form-message form-message-success">{perfilMensaje}</p> : null}
+
+            <div className="settings-form">
+              <div className="settings-field">
+                <label htmlFor="profile-nombre">Nombre</label>
+                <input id="profile-nombre" value={perfilEditable.nombre} onChange={(event) => setPerfilEditable((actual) => ({ ...actual, nombre: event.target.value }))} />
+              </div>
+              <div className="settings-field">
+                <label htmlFor="profile-apellido-paterno">Apellido paterno</label>
+                <input id="profile-apellido-paterno" value={perfilEditable.apellido_paterno} onChange={(event) => setPerfilEditable((actual) => ({ ...actual, apellido_paterno: event.target.value }))} />
+              </div>
+              <div className="settings-field">
+                <label htmlFor="profile-apellido-materno">Apellido materno</label>
+                <input id="profile-apellido-materno" value={perfilEditable.apellido_materno} onChange={(event) => setPerfilEditable((actual) => ({ ...actual, apellido_materno: event.target.value }))} />
+              </div>
+              <div className="settings-field">
+                <label htmlFor="profile-telefono">Telefono</label>
+                <input id="profile-telefono" value={perfilEditable.telefono} onChange={(event) => setPerfilEditable((actual) => ({ ...actual, telefono: event.target.value }))} />
+              </div>
+              <div className="settings-field settings-field-full">
+                <label htmlFor="profile-email">Correo</label>
+                <input id="profile-email" type="email" value={perfilEditable.email} onChange={(event) => setPerfilEditable((actual) => ({ ...actual, email: event.target.value }))} />
+              </div>
+              <div className="settings-field settings-field-full">
+                <label htmlFor="profile-password">Nueva contrasena</label>
+                <input id="profile-password" type="password" placeholder="Dejala vacia si no deseas cambiarla" value={perfilEditable.contrasena} onChange={(event) => setPerfilEditable((actual) => ({ ...actual, contrasena: event.target.value }))} />
+                <small>Si la capturas, se actualizara en la base de datos.</small>
+              </div>
+            </div>
+
+            <div className="form-actions">
+              <button type="button" className="inventory-primary-button" onClick={guardarPerfil} disabled={guardandoPerfil}>
+                {guardandoPerfil ? "Guardando..." : "Guardar cambios"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </Layout>
   );
 }

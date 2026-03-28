@@ -5,7 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use RuntimeException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Models\usuarios;
 
@@ -54,6 +56,74 @@ class AuthController extends Controller
         ]);
 
         return response()->json($this->formatUser($user));
+    }
+
+    public function updateProfile(Request $request)
+    {
+        /** @var usuarios $user */
+        $user = $request->user();
+        $user->load('persona');
+
+        if (!$user->persona) {
+            return response()->json([
+                'message' => 'El usuario autenticado no tiene una persona asociada.',
+            ], 422);
+        }
+
+        $data = $request->validate([
+            'nombre' => ['required', 'string', 'max:100'],
+            'apellido_paterno' => ['required', 'string', 'max:100'],
+            'apellido_materno' => ['nullable', 'string', 'max:100'],
+            'telefono' => [
+                'required',
+                'string',
+                'max:20',
+                Rule::unique('personas', 'telefono')->ignore($user->persona->id_persona, 'id_persona'),
+            ],
+            'email' => [
+                'required',
+                'email',
+                'max:100',
+                Rule::unique('usuarios', 'email')->ignore($user->id_usuario, 'id_usuario'),
+            ],
+            'contrasena' => ['nullable', 'string', 'min:8'],
+        ]);
+
+        DB::transaction(function () use ($user, $data) {
+            DB::table('personas')
+                ->where('id_persona', $user->persona->id_persona)
+                ->update([
+                    'nombre' => $data['nombre'],
+                    'apellido_paterno' => $data['apellido_paterno'],
+                    'apellido_materno' => $data['apellido_materno'] ?? null,
+                    'telefono' => $data['telefono'],
+                ]);
+
+            $updates = [
+                'email' => $data['email'],
+            ];
+
+            if (!empty($data['contrasena'])) {
+                $updates['contrasena'] = Hash::make($data['contrasena']);
+            }
+
+            DB::table('usuarios')
+                ->where('id_usuario', $user->id_usuario)
+                ->update($updates);
+        });
+
+        $user->refresh();
+        $user->load([
+            'persona.direccion.calle.colonia.municipio.estado.pais',
+            'rol',
+            'estatus',
+            'tiendaEmpleado.tienda',
+        ]);
+
+        return response()->json([
+            'message' => 'Perfil actualizado correctamente.',
+            'usuario' => $this->formatUser($user),
+        ]);
     }
 
     public function logout(Request $request)

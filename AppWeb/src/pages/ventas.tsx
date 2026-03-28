@@ -4,9 +4,9 @@ import "../styles/dashboard.css";
 import { useApiData } from "../hooks/useApiData";
 import { getStoredUser } from "../lib/auth";
 import { postApi } from "../lib/api";
-import { ProductCatalog } from "../components/sales/ProductCatalog";
-import { SaleCheckout } from "../components/sales/SaleCheckout";
-import { SalesStoreStep } from "../components/sales/SalesStoreStep";
+import { ProductCatalog } from "../components/sales/CatalogoProductos";
+import { SaleCheckout } from "../components/sales/CheckoutVentas";
+import { SalesStoreStep } from "../components/sales/BypassVentas";
 import { useSaleCheckout } from "../hooks/useSaleCheckout";
 import type {
   MetodoPago,

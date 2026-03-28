@@ -43,6 +43,14 @@ export function saveSession(token: string, usuario: SessionUser, hash?: string) 
   }
 }
 
+export function updateStoredUser(usuario: SessionUser) {
+  localStorage.setItem("usuario", JSON.stringify(usuario));
+
+  if (usuario.rol) {
+    localStorage.setItem("rolUsuario", usuario.rol);
+  }
+}
+
 export function clearSession() {
   localStorage.removeItem("token");
   localStorage.removeItem("usuario");

@@ -1,6 +1,5 @@
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import logo from "/src/assets/LogoPI.png";
-import { clearSession, getToken } from "../lib/auth";
 
 const menuItems = [
   { to: "/dashboard", label: "Inicio" },
@@ -14,7 +13,6 @@ const menuItems = [
 ];
 
 export default function Sidebar() {
-  const navigate = useNavigate();
   const rolUsuario = localStorage.getItem("rolUsuario");
 
   const menuVisible =
@@ -23,29 +21,6 @@ export default function Sidebar() {
       : rolUsuario === "Comprador"
         ? menuItems.filter((item) => item.to === "/compras-cliente")
         : menuItems.filter((item) => item.to !== "/compras-cliente");
-
-  const cerrarSesion = async () => {
-    try {
-      const token = getToken();
-      const currentHost = window.location.hostname;
-      const API_URL = `http://${currentHost}:8000/api/v1/auth/logout`;
-
-      if (token) {
-        await fetch(API_URL, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "Accept": "application/json",
-          },
-        });
-      }
-    } catch (error) {
-      console.error("Error al cerrar sesión en el servidor:", error);
-    } finally {
-      clearSession();
-      navigate("/");
-    }
-  };
 
   return (
     <aside className="sidebar">
@@ -75,10 +50,6 @@ export default function Sidebar() {
               Configuracion
             </NavLink>
           ) : null}
-
-          <button type="button" className="sidebar-action" onClick={cerrarSesion}>
-            Cerrar sesion
-          </button>
         </div>
       </nav>
     </aside>

@@ -9,6 +9,7 @@ type ProductoInventario = {
   id_producto: number;
   sku: string;
   producto: string;
+  imagen_url?: string | null;
   categoria: string;
   stock: number;
   minimo: number;
@@ -172,7 +173,7 @@ export default function Inventario() {
       stock: String(producto.stock),
       precio_base: String(producto.costo),
       precio_unitario: String(producto.precio),
-      imagen_url: "",
+      imagen_url: producto.imagen_url ?? "",
       id_estatus: data.catalogos.estatus.find((estatus) => estatus.nombre === producto.estatus)?.id_estatus?.toString() ?? "1",
     });
     const primeraTienda = producto.stock_por_tienda[0]?.id_tienda?.toString() ?? data.catalogos.tiendas[0]?.id_tienda?.toString() ?? "";
@@ -482,6 +483,13 @@ export default function Inventario() {
             </label>
           </div>
 
+          {nuevoProducto.imagen_url ? (
+            <div className="inventory-image-preview">
+              <span className="detail-section-label">Vista previa</span>
+              <img src={nuevoProducto.imagen_url} alt="Vista previa del producto" className="inventory-image-preview-tag" />
+            </div>
+          ) : null}
+
           {formError ? <p className="form-message form-message-error">{formError}</p> : null}
           {formSuccess ? <p className="form-message form-message-success">{formSuccess}</p> : null}
 
@@ -637,6 +645,13 @@ export default function Inventario() {
                     <input value={productoEditable.imagen_url} onChange={(e) => setProductoEditable((actual) => ({ ...actual, imagen_url: e.target.value }))} />
                   </label>
                 </div>
+
+                {productoEditable.imagen_url ? (
+                  <div className="inventory-image-preview">
+                    <span className="detail-section-label">Vista previa</span>
+                    <img src={productoEditable.imagen_url} alt="Vista previa del producto" className="inventory-image-preview-tag" />
+                  </div>
+                ) : null}
 
                 <div className="detail-edit-form-header">
                   <p className="detail-section-label">Stock por tienda</p>

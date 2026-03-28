@@ -1,18 +1,18 @@
 :root {
-  --brand-900: #0f8ea5;
-  --brand-800: #1592a8;
-  --brand-700: #117d90;
-  --brand-600: #1590a5;
-  --brand-500: #218e9c;
-  --brand-200: #bfe8ee;
-  --brand-100: #ddf4f7;
-  --brand-050: #eef9fb;
-  --surface-page: #eef4f5;
+  --brand-900: #0f2f6f;
+  --brand-800: #15438f;
+  --brand-700: #1d56ae;
+  --brand-600: #2a67c7;
+  --brand-500: #4c84d9;
+  --brand-200: #c9daf8;
+  --brand-100: #e3edff;
+  --brand-050: #f3f7ff;
+  --surface-page: #eef3fb;
   --surface-card: #ffffff;
-  --text-strong: #16323a;
-  --text-muted: #5f7680;
-  --border-soft: #c8dbe0;
-  --shadow-soft: 0 18px 40px rgba(11, 79, 92, 0.1);
+  --text-strong: #173054;
+  --text-muted: #5e728f;
+  --border-soft: #cfdaea;
+  --shadow-soft: 0 18px 40px rgba(15, 47, 111, 0.1);
 }
 
 html,
@@ -29,7 +29,7 @@ body {
   min-height: 100vh;
   font-family: Arial, Helvetica, sans-serif;
   background:
-    radial-gradient(circle at top left, rgba(42, 174, 192, 0.12), transparent 28%),
+    radial-gradient(circle at top left, rgba(42, 103, 199, 0.12), transparent 28%),
     linear-gradient(180deg, #f7fbfc 0%, var(--surface-page) 100%);
 }
 

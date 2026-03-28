@@ -13,6 +13,7 @@ type ProductoInventario = {
   id_producto: number;
   sku: string;
   producto: string;
+  imagen_url?: string | null;
   precio: number;
   stock: number;
   stock_por_tienda: Array<{
@@ -79,6 +80,7 @@ export default function ComprasCliente() {
       id_producto: producto.id_producto,
       sku: producto.sku,
       nombre: producto.producto,
+      imagen: producto.imagen_url ?? null,
       precio: producto.precio,
       stock: producto.stock,
       stock_por_tienda: producto.stock_por_tienda.map((stock) => ({

@@ -29,11 +29,56 @@ const ISSUER_EMAIL = "soporte@pigestion.local";
 const RECEIVER_GENERIC_RFC = "XAXX010101000";
 const RECEIVER_GENERIC_ADDRESS = "Domicilio generico del receptor";
 
-function escapePdfText(value: string) {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/\(/g, "\\(")
-    .replace(/\)/g, "\\)");
+const WIN_ANSI_MAP: Record<string, number> = {
+  "€": 0x80,
+  "‚": 0x82,
+  "ƒ": 0x83,
+  "„": 0x84,
+  "…": 0x85,
+  "†": 0x86,
+  "‡": 0x87,
+  "ˆ": 0x88,
+  "‰": 0x89,
+  "Š": 0x8a,
+  "‹": 0x8b,
+  "Œ": 0x8c,
+  "Ž": 0x8e,
+  "‘": 0x91,
+  "’": 0x92,
+  "“": 0x93,
+  "”": 0x94,
+  "•": 0x95,
+  "–": 0x96,
+  "—": 0x97,
+  "˜": 0x98,
+  "™": 0x99,
+  "š": 0x9a,
+  "›": 0x9b,
+  "œ": 0x9c,
+  "ž": 0x9e,
+  "Ÿ": 0x9f,
+};
+
+function encodePdfText(value: string) {
+  const bytes: number[] = [];
+
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0x3f;
+
+    if (codePoint >= 0x20 && codePoint <= 0x7e) {
+      bytes.push(codePoint);
+      continue;
+    }
+
+    if (codePoint >= 0xa0 && codePoint <= 0xff) {
+      bytes.push(codePoint);
+      continue;
+    }
+
+    bytes.push(WIN_ANSI_MAP[character] ?? 0x3f);
+  }
+
+  return `<${bytes.map((byte) => byte.toString(16).padStart(2, "0").toUpperCase()).join("")}>`;
 }
 
 function formatColor([red, green, blue]: [number, number, number]) {
@@ -45,7 +90,7 @@ function buildTextBlock(lines: PdfTextLine[]) {
     const fontSize = line.size ?? 11;
     const font = line.font ?? "F1";
     const color = formatColor(line.color ?? [0.145, 0.173, 0.239]);
-    return `BT /${font} ${fontSize} Tf ${color} rg 1 0 0 1 ${line.x} ${line.y} Tm (${escapePdfText(line.text)}) Tj ET`;
+    return `BT /${font} ${fontSize} Tf ${color} rg 1 0 0 1 ${line.x} ${line.y} Tm ${encodePdfText(line.text)} Tj ET`;
   }).join("\n");
 }
 
@@ -66,8 +111,8 @@ function createPdfDocument(rectangles: PdfRect[], lines: PdfTextLine[]) {
     "<< /Type /Catalog /Pages 2 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
     `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
   ];
 
@@ -90,6 +135,240 @@ function createPdfDocument(rectangles: PdfRect[], lines: PdfTextLine[]) {
   pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
 
   return new Blob([pdf], { type: "application/pdf" });
+}
+
+function encodePdfString(value: string) {
+  return new TextEncoder().encode(value);
+}
+
+function concatPdfBytes(chunks: Uint8Array[]) {
+  const totalLength = chunks.reduce((accumulator, chunk) => accumulator + chunk.length, 0);
+  const output = new Uint8Array(totalLength);
+  let offset = 0;
+
+  chunks.forEach((chunk) => {
+    output.set(chunk, offset);
+    offset += chunk.length;
+  });
+
+  return output;
+}
+
+function createMultiPagePdfDocument(pageStreams: string[]) {
+  const fontObjectStart = 3 + pageStreams.length;
+  const contentObjectStart = fontObjectStart + 2;
+  const pageObjectRefs = pageStreams.map((_, index) => `${3 + index} 0 R`).join(" ");
+  const objects: Uint8Array[] = [
+    encodePdfString("<< /Type /Catalog /Pages 2 0 R >>"),
+    encodePdfString(`<< /Type /Pages /Kids [${pageObjectRefs}] /Count ${pageStreams.length} >>`),
+  ];
+
+  pageStreams.forEach((stream, index) => {
+    const contentObjectRef = `${contentObjectStart + index} 0 R`;
+    objects.push(
+      encodePdfString(
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontObjectStart} 0 R /F2 ${fontObjectStart + 1} 0 R >> >> /Contents ${contentObjectRef} >>`,
+      ),
+    );
+  });
+
+  objects.push(
+    encodePdfString("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"),
+    encodePdfString("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>"),
+  );
+
+  pageStreams.forEach((stream) => {
+    objects.push(encodePdfString(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`));
+  });
+
+  const chunks: Uint8Array[] = [encodePdfString("%PDF-1.4\n")];
+  const offsets = [0];
+  let pdfLength = chunks[0].length;
+
+  objects.forEach((object, index) => {
+    offsets.push(pdfLength);
+    const objectHeader = encodePdfString(`${index + 1} 0 obj\n`);
+    const objectFooter = encodePdfString("\nendobj\n");
+    chunks.push(objectHeader, object, objectFooter);
+    pdfLength += objectHeader.length + object.length + objectFooter.length;
+  });
+
+  const xrefOffset = pdfLength;
+  let xref = `xref\n0 ${objects.length + 1}\n`;
+  xref += "0000000000 65535 f \n";
+
+  offsets.slice(1).forEach((offset) => {
+    xref += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+
+  xref += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  chunks.push(encodePdfString(xref));
+
+  return new Blob([concatPdfBytes(chunks)], { type: "application/pdf" });
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+type ReportChartPdfData = {
+  title: string;
+  subtitle?: string;
+  period?: string;
+  headers: string[];
+  rows: string[][];
+  summary?: Array<{ label: string; value: string }>;
+  fileName: string;
+};
+
+type ReportTableLayout = {
+  columnXs: number[];
+  columnWidths: number[];
+};
+
+function fitTableCell(value: string, maxLength: number) {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function chunkRows<T>(rows: T[], chunkSize: number) {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < rows.length; index += chunkSize) {
+    chunks.push(rows.slice(index, index + chunkSize));
+  }
+
+  return chunks;
+}
+
+function createTableLayout(columnCount: number): ReportTableLayout {
+  if (columnCount === 2) {
+    return { columnXs: [42, 332], columnWidths: [270, 238] };
+  }
+
+  if (columnCount === 3) {
+    return { columnXs: [42, 202, 372], columnWidths: [148, 158, 138] };
+  }
+
+  return { columnXs: [42, 152, 282, 412], columnWidths: [98, 118, 118, 96] };
+}
+
+function createReportTablePdfDocument(report: Omit<ReportChartPdfData, "fileName">) {
+  const generatedAt = new Intl.DateTimeFormat("es-MX", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date());
+  const layout = createTableLayout(report.headers.length);
+  const summaryItems = report.summary?.slice(0, 4) ?? [];
+  const headerHeight = 24;
+  const rowHeight = 18;
+  const firstPageTableTop = summaryItems.length > 0 ? 560 : 610;
+  const laterPageTableTop = 686;
+  const firstPageRows = Math.floor((firstPageTableTop - 126) / rowHeight);
+  const laterPageRows = Math.floor((laterPageTableTop - 126) / rowHeight);
+  const pageRowGroups = report.rows.length === 0
+    ? [[]]
+    : [
+        report.rows.slice(0, firstPageRows),
+        ...chunkRows(report.rows.slice(firstPageRows), laterPageRows),
+      ].filter((group, index) => index === 0 || group.length > 0);
+
+  const pageStreams = pageRowGroups.map((rows, pageIndex) => {
+    const isFirstPage = pageIndex === 0;
+    const tableTop = isFirstPage ? firstPageTableTop : laterPageTableTop;
+    const rectangles: PdfRect[] = [
+      { x: 28, y: 736, width: 556, height: 34, color: [0.055, 0.302, 0.522] },
+      { x: 28, y: 112, width: 556, height: 600, color: [1, 1, 1], strokeColor: [0.83, 0.87, 0.92], lineWidth: 1 },
+    ];
+    const lines: PdfTextLine[] = [
+      { text: report.title, x: 42, y: 748, size: 16, font: "F2", color: [1, 1, 1] },
+      { text: report.subtitle || "Reporte tabular", x: 42, y: 714, size: 11, font: "F2", color: [0.145, 0.173, 0.239] },
+      { text: `PI Gestion - Reporte PDF${pageRowGroups.length > 1 ? ` (${pageIndex + 1}/${pageRowGroups.length})` : ""}`, x: 340, y: 748, size: 10, font: "F2", color: [1, 1, 1] },
+    ];
+
+    if (isFirstPage) {
+      lines.push(
+        { text: report.period ? `Periodo: ${report.period}` : "Periodo: General", x: 42, y: 696, size: 10, color: [0.286, 0.333, 0.408] },
+        { text: `Generado: ${generatedAt}`, x: 42, y: 680, size: 10, color: [0.286, 0.333, 0.408] },
+      );
+    }
+
+    if (isFirstPage) {
+      summaryItems.forEach((item, index) => {
+        const boxX = 42 + (index * 132);
+        rectangles.push({ x: boxX, y: 610, width: 122, height: 42, color: [0.961, 0.973, 0.992], strokeColor: [0.79, 0.86, 0.96], lineWidth: 0.8 });
+        lines.push(
+          { text: fitTableCell(item.label, 18), x: boxX + 8, y: 636, size: 8, font: "F2", color: [0.055, 0.302, 0.522] },
+          { text: fitTableCell(item.value, 20), x: boxX + 8, y: 620, size: 10, color: [0.145, 0.173, 0.239] },
+        );
+      });
+    }
+
+    rectangles.push({ x: 42, y: tableTop, width: 514, height: headerHeight, color: [0.055, 0.302, 0.522] });
+
+    report.headers.forEach((header, index) => {
+      lines.push({
+        text: fitTableCell(header, Math.floor(layout.columnWidths[index] / 7)),
+        x: layout.columnXs[index] + 6,
+        y: tableTop + 8,
+        size: 9,
+        font: "F2",
+        color: [1, 1, 1],
+      });
+    });
+
+    rows.forEach((row, rowIndex) => {
+      const rowY = tableTop - ((rowIndex + 1) * rowHeight);
+      rectangles.push({
+        x: 42,
+        y: rowY,
+        width: 514,
+        height: rowHeight,
+        color: rowIndex % 2 === 0 ? [0.984, 0.988, 0.996] : [1, 1, 1],
+        strokeColor: [0.89, 0.92, 0.96],
+        lineWidth: 0.4,
+      });
+
+      row.forEach((cell, index) => {
+        lines.push({
+          text: fitTableCell(cell, Math.floor(layout.columnWidths[index] / 6.6)),
+          x: layout.columnXs[index] + 6,
+          y: rowY + 6,
+          size: 8,
+          color: [0.145, 0.173, 0.239],
+        });
+      });
+    });
+
+    if (report.rows.length === 0) {
+      lines.push({
+        text: "No hay datos disponibles para este reporte.",
+        x: 42,
+        y: tableTop - 24,
+        size: 10,
+        color: [0.286, 0.333, 0.408],
+      });
+    }
+
+    return [buildRectBlock(rectangles), buildTextBlock(lines)].filter(Boolean).join("\n");
+  });
+
+  return createMultiPagePdfDocument(pageStreams);
+}
+
+export async function downloadReportChartPdf(reportChart: ReportChartPdfData) {
+  const blob = createReportTablePdfDocument(reportChart);
+  downloadBlob(blob, reportChart.fileName);
 }
 
 export type InvoicePdfDetail = {
@@ -417,12 +696,5 @@ export function downloadInvoicePdf(invoice: InvoicePdfData) {
   }
 
   const blob = createPdfDocument(rectangles, lines);
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `${invoice.folio}.pdf`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, `${invoice.folio}.pdf`);
 }

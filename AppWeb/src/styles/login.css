@@ -191,6 +191,21 @@ body {
   gap: 18px;
 }
 
+.login-link-button {
+  align-self: flex-end;
+  border: none;
+  background: transparent;
+  color: var(--brand-800);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.login-link-button:hover {
+  text-decoration: underline;
+}
+
 .form-message {
   margin: 0;
   padding: 14px 16px;
@@ -217,7 +232,7 @@ body {
   border-color: #64748b;
 }
 
-.login-form button {
+.login-form > button[type="submit"] {
   height: 58px;
   border: none;
   background: #1f2d4a;
@@ -226,8 +241,96 @@ body {
   cursor: pointer;
 }
 
-.login-form button:hover {
+.login-form > button[type="submit"]:hover {
   opacity: 0.95;
+}
+
+.login-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 30;
+}
+
+.login-modal-card {
+  width: min(560px, 100%);
+  border: 1px solid var(--border-soft);
+  background: #ffffff;
+  box-shadow: 0 28px 60px rgba(15, 23, 42, 0.18);
+  padding: 28px;
+}
+
+.login-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.login-modal-header h2 {
+  margin: 0 0 8px;
+  font-size: 28px;
+  color: var(--text-strong);
+}
+
+.login-modal-header p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 16px;
+}
+
+.login-modal-close {
+  border: 1px solid #cfd5df;
+  background: #ffffff;
+  color: #374151;
+  height: 40px;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+.login-modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.login-modal-form button {
+  height: 54px;
+  border: none;
+  background: #1f2d4a;
+  color: #ffffff;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.login-temporary-password-box {
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  padding: 16px;
+  color: #1e3a8a;
+}
+
+.login-temporary-password-box strong {
+  display: block;
+  margin-bottom: 10px;
+}
+
+.login-temporary-password-box span {
+  display: inline-block;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 10px;
+}
+
+.login-temporary-password-box p {
+  margin: 0;
+  font-size: 14px;
 }
 
 @media (max-width: 900px) {

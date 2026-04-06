@@ -1647,8 +1647,30 @@ body {
   margin-bottom: 12px;
 }
 
+.reports-chart-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .reports-chart-header h4 {
   margin: 0;
+}
+
+.reports-chart-header small {
+  color: #6b7280;
+  font-size: 12px;
+}
+
+.reports-download-button {
+  min-width: 148px;
+  flex-shrink: 0;
+}
+
+.reports-download-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 .reports-chart-placeholder {

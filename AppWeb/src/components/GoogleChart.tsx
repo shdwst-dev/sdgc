@@ -1,5 +1,10 @@
 import { useEffect, useRef } from "react";
 
+type GoogleChartInstance = {
+  draw: (data: unknown, options: Record<string, unknown>) => void;
+  getImageURI?: () => string;
+};
+
 declare global {
   interface Window {
     google?: {
@@ -9,8 +14,11 @@ declare global {
       };
       visualization: {
         arrayToDataTable: (data: (string | number)[][]) => unknown;
-        LineChart: new (element: Element) => { draw: (data: unknown, options: Record<string, unknown>) => void };
-        BarChart: new (element: Element) => { draw: (data: unknown, options: Record<string, unknown>) => void };
+        LineChart: new (element: Element) => GoogleChartInstance;
+        BarChart: new (element: Element) => GoogleChartInstance;
+        events: {
+          addListener: (chart: GoogleChartInstance, eventName: string, callback: () => void) => void;
+        };
       };
     };
   }
@@ -68,6 +76,7 @@ type GoogleChartProps = {
   options: Record<string, unknown>;
   className?: string;
   emptyMessage?: string;
+  onImageUriChange?: (imageUri: string | null) => void;
 };
 
 export function GoogleChart({
@@ -76,11 +85,13 @@ export function GoogleChart({
   options,
   className = "google-chart",
   emptyMessage = "No hay datos disponibles para esta grafica.",
+  onImageUriChange,
 }: GoogleChartProps) {
   const chartRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (data.length <= 1 || !chartRef.current) {
+      onImageUriChange?.(null);
       return;
     }
 
@@ -96,6 +107,13 @@ export function GoogleChart({
       const dataTable = window.google.visualization.arrayToDataTable(data);
       const ChartConstructor = window.google.visualization[type];
       const chart = new ChartConstructor(chartRef.current);
+      window.google.visualization.events.addListener(chart, "ready", () => {
+        if (cancelled) {
+          return;
+        }
+
+        onImageUriChange?.(chart.getImageURI?.() ?? null);
+      });
       chart.draw(dataTable, options);
     }
 
@@ -104,7 +122,7 @@ export function GoogleChart({
     return () => {
       cancelled = true;
     };
-  }, [data, options, type]);
+  }, [data, onImageUriChange, options, type]);
 
   if (data.length <= 1) {
     return <div className={`${className} google-chart-empty`}>{emptyMessage}</div>;

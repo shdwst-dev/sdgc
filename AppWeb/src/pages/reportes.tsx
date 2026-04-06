@@ -4,15 +4,20 @@ import "../styles/dashboard.css";
 import { useApiData } from "../hooks/useApiData";
 import { formatCurrency } from "../lib/format";
 import { GoogleChart } from "../components/GoogleChart";
+import { downloadReportChartPdf } from "../lib/pdf";
+
+type ReportChartKey = "utilidad" | "ingresos" | "gastos" | "productos";
 
 export default function Reportes() {
   const [fechaInicio, setFechaInicio] = useState("");
   const [fechaFin, setFechaFin] = useState("");
+  const [descargandoGrafica, setDescargandoGrafica] = useState<ReportChartKey | null>(null);
   const [filtroAplicado, setFiltroAplicado] = useState<{ inicio: string; fin: string }>({
     inicio: "",
     fin: "",
   });
   const [filtroError, setFiltroError] = useState<string | null>(null);
+  const [descargaError, setDescargaError] = useState<string | null>(null);
 
   const reportesPath = useMemo(() => {
     const params = new URLSearchParams();
@@ -136,6 +141,89 @@ export default function Reportes() {
     });
   };
 
+  const periodoSeleccionado = useMemo(() => {
+    if (filtroAplicado.inicio && filtroAplicado.fin) {
+      return `${filtroAplicado.inicio} a ${filtroAplicado.fin}`;
+    }
+
+    if (data.periodo_referencia.inicio && data.periodo_referencia.fin) {
+      return `${data.periodo_referencia.inicio} a ${data.periodo_referencia.fin}`;
+    }
+
+    return data.periodo_referencia.mes || "General";
+  }, [data.periodo_referencia.fin, data.periodo_referencia.inicio, data.periodo_referencia.mes, filtroAplicado.fin, filtroAplicado.inicio]);
+  const utilidadRows = useMemo(
+    () =>
+      data.flujo_periodo.labels.map((label, index) => [
+        label,
+        formatCurrency(data.flujo_periodo.ingresos[index] ?? 0),
+        formatCurrency(data.flujo_periodo.gastos[index] ?? 0),
+        formatCurrency(data.flujo_periodo.utilidad[index] ?? 0),
+      ]),
+    [data.flujo_periodo.gastos, data.flujo_periodo.ingresos, data.flujo_periodo.labels, data.flujo_periodo.utilidad],
+  );
+
+  const ingresosRows = useMemo(
+    () =>
+      ingresosVsGastosData.series.labels.map((label, index) => [
+        label,
+        formatCurrency(ingresosVsGastosData.series.ingresos[index] ?? 0),
+      ]),
+    [ingresosVsGastosData.series.ingresos, ingresosVsGastosData.series.labels],
+  );
+
+  const gastosRows = useMemo(
+    () =>
+      ingresosVsGastosData.series.labels.map((label, index) => [
+        label,
+        formatCurrency(ingresosVsGastosData.series.gastos[index] ?? 0),
+      ]),
+    [ingresosVsGastosData.series.gastos, ingresosVsGastosData.series.labels],
+  );
+
+  const productosRows = useMemo(
+    () =>
+      productosMasVendidosData.series.labels.map((label, index) => [
+        label,
+        String(productosMasVendidosData.series.cantidad[index] ?? 0),
+      ]),
+    [productosMasVendidosData.series.cantidad, productosMasVendidosData.series.labels],
+  );
+
+  const descargarGrafica = async (
+    key: ReportChartKey,
+    title: string,
+    subtitle: string,
+    fileName: string,
+    headers: string[],
+    rows: string[][],
+    summary?: Array<{ label: string; value: string }>,
+  ) => {
+    if (rows.length === 0) {
+      setDescargaError("No hay datos disponibles para exportar este reporte.");
+      return;
+    }
+
+    setDescargaError(null);
+    setDescargandoGrafica(key);
+
+    try {
+      await downloadReportChartPdf({
+        title,
+        subtitle,
+        period: periodoSeleccionado,
+        headers,
+        rows,
+        summary,
+        fileName,
+      });
+    } catch {
+      setDescargaError("No fue posible generar el PDF de la grafica.");
+    } finally {
+      setDescargandoGrafica(null);
+    }
+  };
+
   return (
     <Layout>
       <section className="inventory-header">
@@ -207,7 +295,33 @@ export default function Reportes() {
 
       <section className="panel reports-chart-panel">
         <div className="reports-chart-header">
-          <h4>Utilidad a lo largo del tiempo</h4>
+          <div>
+            <h4>Utilidad a lo largo del tiempo</h4>
+            <small>{periodoSeleccionado}</small>
+          </div>
+          <button
+            type="button"
+            className="inventory-primary-button reports-download-button"
+            onClick={() =>
+              descargarGrafica(
+                "utilidad",
+                "Utilidad a lo largo del tiempo",
+                "Ventas, costos y utilidad del periodo",
+                "reporte-utilidad-tiempo.pdf",
+                ["Dia", "Ventas", "Costos", "Utilidad"],
+                utilidadRows,
+                [
+                  { label: "Ventas", value: formatCurrency(data.metricas.ventas_totales) },
+                  { label: "Costos", value: formatCurrency(data.metricas.costos_totales) },
+                  { label: "Utilidad bruta", value: formatCurrency(data.metricas.utilidad_bruta) },
+                  { label: "Utilidad neta", value: formatCurrency(data.metricas.utilidad_neta) },
+                ],
+              )
+            }
+            disabled={utilidadRows.length === 0 || descargandoGrafica !== null}
+          >
+            {descargandoGrafica === "utilidad" ? "Generando PDF..." : "Descargar PDF"}
+          </button>
         </div>
         <GoogleChart
           type="LineChart"
@@ -233,8 +347,28 @@ export default function Reportes() {
 
       <section className="panel reports-chart-panel">
         <div className="reports-chart-header">
-          <h4>Ingresos</h4>
-          <small>{ingresosVsGastosData.periodo_referencia.mes || data.periodo_referencia.mes}</small>
+          <div>
+            <h4>Ingresos</h4>
+            <small>{ingresosVsGastosData.periodo_referencia.mes || data.periodo_referencia.mes}</small>
+          </div>
+          <button
+            type="button"
+            className="inventory-primary-button reports-download-button"
+            onClick={() =>
+              descargarGrafica(
+                "ingresos",
+                "Ingresos",
+                "Comportamiento de ingresos del periodo",
+                "reporte-ingresos.pdf",
+                ["Dia", "Ingresos"],
+                ingresosRows,
+                [{ label: "Total ingresos", value: formatCurrency(ingresosVsGastosData.totales.ingresos) }],
+              )
+            }
+            disabled={ingresosRows.length === 0 || descargandoGrafica !== null}
+          >
+            {descargandoGrafica === "ingresos" ? "Generando PDF..." : "Descargar PDF"}
+          </button>
         </div>
         <GoogleChart
           type="LineChart"
@@ -261,8 +395,28 @@ export default function Reportes() {
 
       <section className="panel reports-chart-panel">
         <div className="reports-chart-header">
-          <h4>Gastos</h4>
-          <small>{ingresosVsGastosData.periodo_referencia.mes || data.periodo_referencia.mes}</small>
+          <div>
+            <h4>Gastos</h4>
+            <small>{ingresosVsGastosData.periodo_referencia.mes || data.periodo_referencia.mes}</small>
+          </div>
+          <button
+            type="button"
+            className="inventory-primary-button reports-download-button"
+            onClick={() =>
+              descargarGrafica(
+                "gastos",
+                "Gastos",
+                "Comportamiento de gastos del periodo",
+                "reporte-gastos.pdf",
+                ["Dia", "Gastos"],
+                gastosRows,
+                [{ label: "Total gastos", value: formatCurrency(ingresosVsGastosData.totales.gastos) }],
+              )
+            }
+            disabled={gastosRows.length === 0 || descargandoGrafica !== null}
+          >
+            {descargandoGrafica === "gastos" ? "Generando PDF..." : "Descargar PDF"}
+          </button>
         </div>
         <GoogleChart
           type="LineChart"
@@ -289,8 +443,27 @@ export default function Reportes() {
 
       <section className="panel reports-chart-panel">
         <div className="reports-chart-header">
-          <h4>Productos mas vendidos</h4>
-          <small>{productosMasVendidosData.periodo_referencia.mes || data.periodo_referencia.mes}</small>
+          <div>
+            <h4>Productos mas vendidos</h4>
+            <small>{productosMasVendidosData.periodo_referencia.mes || data.periodo_referencia.mes}</small>
+          </div>
+          <button
+            type="button"
+            className="inventory-primary-button reports-download-button"
+            onClick={() =>
+              descargarGrafica(
+                "productos",
+                "Productos mas vendidos",
+                "Ranking de productos con mayor demanda",
+                "reporte-productos-mas-vendidos.pdf",
+                ["Producto", "Cantidad"],
+                productosRows,
+              )
+            }
+            disabled={productosRows.length === 0 || descargandoGrafica !== null}
+          >
+            {descargandoGrafica === "productos" ? "Generando PDF..." : "Descargar PDF"}
+          </button>
         </div>
         <GoogleChart
           type="BarChart"
@@ -313,6 +486,7 @@ export default function Reportes() {
         />
       </section>
 
+      {descargaError ? <p className="form-message form-message-error">{descargaError}</p> : null}
       {loading ? <p className="panel">Cargando reportes...</p> : null}
       {error ? <p className="panel">Error al cargar reportes: {error}</p> : null}
     </Layout>

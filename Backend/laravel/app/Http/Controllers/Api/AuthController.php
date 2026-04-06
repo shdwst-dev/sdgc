@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use RuntimeException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use App\Models\usuarios;
@@ -42,7 +44,35 @@ class AuthController extends Controller
         return response()->json([
             'token' => $token,
             'hash' => $hash,
+            'requiere_cambio_contrasena' => (bool) $user->requiere_cambio_contrasena,
             'usuario' => $this->formatUser($user),
+        ]);
+    }
+
+    public function forgotPassword(Request $request)
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email'],
+        ]);
+
+        /** @var usuarios|null $user */
+        $user = usuarios::where('email', $data['email'])->first();
+
+        if (!$user) {
+            throw ValidationException::withMessages([
+                'email' => ['No existe un usuario registrado con ese correo.'],
+            ]);
+        }
+
+        $temporaryPassword = $this->generateTemporaryPassword();
+        $user->contrasena = Hash::make($temporaryPassword);
+        $user->requiere_cambio_contrasena = true;
+        $user->contrasena_temporal_generada_en = Carbon::now();
+        $user->save();
+
+        return response()->json([
+            'message' => 'Se genero una contrasena temporal para el usuario.',
+            'contrasena_temporal' => $temporaryPassword,
         ]);
     }
 
@@ -105,6 +135,8 @@ class AuthController extends Controller
 
             if (!empty($data['contrasena'])) {
                 $updates['contrasena'] = Hash::make($data['contrasena']);
+                $updates['requiere_cambio_contrasena'] = false;
+                $updates['contrasena_temporal_generada_en'] = null;
             }
 
             DB::table('usuarios')
@@ -122,6 +154,27 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Perfil actualizado correctamente.',
+            'usuario' => $this->formatUser($user),
+        ]);
+    }
+
+    public function replaceTemporaryPassword(Request $request)
+    {
+        /** @var usuarios $user */
+        $user = $request->user();
+
+        $data = $request->validate([
+            'contrasena' => ['required', 'string', 'min:8'],
+            'confirmacion_contrasena' => ['required', 'same:contrasena'],
+        ]);
+
+        $user->contrasena = Hash::make($data['contrasena']);
+        $user->requiere_cambio_contrasena = false;
+        $user->contrasena_temporal_generada_en = null;
+        $user->save();
+
+        return response()->json([
+            'message' => 'Contrasena actualizada correctamente.',
             'usuario' => $this->formatUser($user),
         ]);
     }
@@ -154,11 +207,17 @@ class AuthController extends Controller
         return false;
     }
 
+    private function generateTemporaryPassword(): string
+    {
+        return Str::upper(Str::random(4)) . random_int(1000, 9999);
+    }
+
     private function formatUser(usuarios $user): array
     {
         return [
             'id_usuario' => $user->id_usuario,
             'email' => $user->email,
+            'requiere_cambio_contrasena' => (bool) $user->requiere_cambio_contrasena,
             'rol' => $user->rol?->nombre,
             'estatus' => $user->estatus?->nombre,
             'tienda' => $user->tiendaEmpleado?->tienda ? [

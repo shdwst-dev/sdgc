@@ -16,6 +16,8 @@ class usuarios extends Authenticatable
     protected $fillable = [
         'id_persona',
         'contrasena',
+        'requiere_cambio_contrasena',
+        'contrasena_temporal_generada_en',
         'email',
         'id_rol',
         'id_estatus',

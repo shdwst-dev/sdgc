@@ -146,18 +146,18 @@ export default function Login() {
   };
 
   return (
-    <div className="login-page">
-      <div className="login-card">
-        <div className="login-header">
-          <div className="logo-circle">
-            <img src={logo} alt="Logo" className="logo-img" />
+    <div className="pagina-inicio-sesion">
+      <div className="tarjeta-inicio-sesion">
+        <div className="encabezado-inicio-sesion">
+          <div className="circulo-logo">
+            <img src={logo} alt="Logo" className="logo-imagen" />
           </div>
           <h1>Iniciar sesión</h1>
-          <p className="description">Introduce tus datos para ingresar</p>
+          <p className="descripcion-inicio-sesion">Introduce tus datos para ingresar</p>
         </div>
 
         <form
-          className="login-form"
+          className="formulario-inicio-sesion"
           onSubmit={(e) => {
             e.preventDefault();
             iniciarSesion();
@@ -189,7 +189,7 @@ export default function Login() {
             />
           </div>
 
-          <button type="button" className="login-link-button" onClick={abrirModalRecuperacion}>
+          <button type="button" className="boton-enlace-inicio-sesion" onClick={abrirModalRecuperacion}>
             Olvidaste tu contraseña?
           </button>
 
@@ -200,19 +200,19 @@ export default function Login() {
       </div>
 
       {isRecoveryModalOpen ? (
-        <div className="login-modal-backdrop" role="presentation" onClick={() => setIsRecoveryModalOpen(false)}>
-          <div className="login-modal-card" role="dialog" aria-modal="true" aria-labelledby="recovery-modal-title" onClick={(e) => e.stopPropagation()}>
-            <div className="login-modal-header">
+        <div className="fondo-modal-inicio-sesion" role="presentation" onClick={() => setIsRecoveryModalOpen(false)}>
+          <div className="tarjeta-modal-inicio-sesion" role="dialog" aria-modal="true" aria-labelledby="recovery-modal-title" onClick={(e) => e.stopPropagation()}>
+            <div className="encabezado-modal-inicio-sesion">
               <div>
                 <h2 id="recovery-modal-title">Recuperar acceso</h2>
                 <p>Escribe tu correo para validar tu cuenta y generar una contraseña temporal.</p>
               </div>
-              <button type="button" className="login-modal-close" onClick={() => setIsRecoveryModalOpen(false)}>
+              <button type="button" className="boton-cerrar-modal-inicio-sesion" onClick={() => setIsRecoveryModalOpen(false)}>
                 Cerrar
               </button>
             </div>
 
-            <form className="login-modal-form" onSubmit={solicitarContrasenaTemporal}>
+            <form className="formulario-modal-inicio-sesion" onSubmit={solicitarContrasenaTemporal}>
               {recoveryError ? <p className="form-message form-message-error">{recoveryError}</p> : null}
               <div className="form-group">
                 <label htmlFor="recovery-email">Correo electrónico</label>
@@ -227,7 +227,7 @@ export default function Login() {
               </div>
 
               {temporaryPassword ? (
-                <div className="login-temporary-password-box">
+                <div className="caja-contrasena-temporal">
                   <strong>Contraseña temporal generada</strong>
                   <span>{temporaryPassword}</span>
                   <p>Usa esta contraseña para iniciar sesion. Al entrar, te pediremos definir una nueva.</p>
@@ -243,16 +243,16 @@ export default function Login() {
       ) : null}
 
       {isTemporaryPasswordModalOpen ? (
-        <div className="login-modal-backdrop">
-          <div className="login-modal-card" role="dialog" aria-modal="true" aria-labelledby="temporary-password-title">
-            <div className="login-modal-header">
+        <div className="fondo-modal-inicio-sesion">
+          <div className="tarjeta-modal-inicio-sesion" role="dialog" aria-modal="true" aria-labelledby="temporary-password-title">
+            <div className="encabezado-modal-inicio-sesion">
               <div>
                 <h2 id="temporary-password-title">Nueva contraseña requerida</h2>
                 <p>Entraste con una contraseña temporal. Antes de continuar, define una nueva contraseña.</p>
               </div>
             </div>
 
-            <form className="login-modal-form" onSubmit={actualizarContrasenaTemporal}>
+            <form className="formulario-modal-inicio-sesion" onSubmit={actualizarContrasenaTemporal}>
               {temporaryPasswordError ? <p className="form-message form-message-error">{temporaryPasswordError}</p> : null}
 
               <div className="form-group">

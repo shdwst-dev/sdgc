@@ -233,8 +233,8 @@ export default function Reportes() {
         </div>
       </section>
 
-      <section className="panel reports-filter-panel">
-        <div className="reports-filters">
+      <section className="panel reportes-panel-filtros">
+        <div className="reportes-filtros">
           <label htmlFor="fecha-inicio">Rango de fechas:</label>
           <input id="fecha-inicio" type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} />
           <span>a</span>
@@ -246,7 +246,7 @@ export default function Reportes() {
         {filtroError ? <p className="form-message form-message-error">{filtroError}</p> : null}
       </section>
 
-      <section className="stats-grid reports-stats-grid">
+      <section className="stats-grid reportes-cuadricula-estadisticas">
         <div className="stat-card">
           <div className="stat-title-row">
             <span>Ventas totales</span>
@@ -293,15 +293,15 @@ export default function Reportes() {
         </div>
       </section>
 
-      <section className="panel reports-chart-panel">
-        <div className="reports-chart-header">
+      <section className="panel reportes-panel-grafica">
+        <div className="reportes-encabezado-grafica">
           <div>
             <h4>Utilidad a lo largo del tiempo</h4>
             <small>{periodoSeleccionado}</small>
           </div>
           <button
             type="button"
-            className="inventory-primary-button reports-download-button"
+            className="inventory-primary-button reportes-boton-descarga"
             onClick={() =>
               descargarGrafica(
                 "utilidad",
@@ -345,15 +345,15 @@ export default function Reportes() {
         />
       </section>
 
-      <section className="panel reports-chart-panel">
-        <div className="reports-chart-header">
+      <section className="panel reportes-panel-grafica">
+        <div className="reportes-encabezado-grafica">
           <div>
             <h4>Ingresos</h4>
             <small>{ingresosVsGastosData.periodo_referencia.mes || data.periodo_referencia.mes}</small>
           </div>
           <button
             type="button"
-            className="inventory-primary-button reports-download-button"
+            className="inventory-primary-button reportes-boton-descarga"
             onClick={() =>
               descargarGrafica(
                 "ingresos",
@@ -393,15 +393,15 @@ export default function Reportes() {
         />
       </section>
 
-      <section className="panel reports-chart-panel">
-        <div className="reports-chart-header">
+      <section className="panel reportes-panel-grafica">
+        <div className="reportes-encabezado-grafica">
           <div>
             <h4>Gastos</h4>
             <small>{ingresosVsGastosData.periodo_referencia.mes || data.periodo_referencia.mes}</small>
           </div>
           <button
             type="button"
-            className="inventory-primary-button reports-download-button"
+            className="inventory-primary-button reportes-boton-descarga"
             onClick={() =>
               descargarGrafica(
                 "gastos",
@@ -441,15 +441,15 @@ export default function Reportes() {
         />
       </section>
 
-      <section className="panel reports-chart-panel">
-        <div className="reports-chart-header">
+      <section className="panel reportes-panel-grafica">
+        <div className="reportes-encabezado-grafica">
           <div>
             <h4>Productos mas vendidos</h4>
             <small>{productosMasVendidosData.periodo_referencia.mes || data.periodo_referencia.mes}</small>
           </div>
           <button
             type="button"
-            className="inventory-primary-button reports-download-button"
+            className="inventory-primary-button reportes-boton-descarga"
             onClick={() =>
               descargarGrafica(
                 "productos",

@@ -1600,25 +1600,25 @@ body {
   box-shadow: 0 14px 28px rgba(15, 47, 111, 0.22);
 }
 
-.reports-filter-panel {
+.reportes-panel-filtros {
   padding: 16px;
   margin-bottom: 16px;
 }
 
-.reports-filters {
+.reportes-filtros {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
 }
 
-.reports-filters label,
-.reports-filters span {
+.reportes-filtros label,
+.reportes-filtros span {
   color: #4b5563;
   font-size: 14px;
 }
 
-.reports-filters input {
+.reportes-filtros input {
   width: 150px;
   height: 42px;
   border: 1px solid #cfd5df;
@@ -1628,18 +1628,18 @@ body {
   font-size: 14px;
 }
 
-.reports-stats-grid .stat-card small {
+.reportes-cuadricula-estadisticas .stat-card small {
   display: block;
   margin-top: 8px;
   color: #6b7280;
   font-size: 12px;
 }
 
-.reports-chart-panel {
+.reportes-panel-grafica {
   padding: 16px;
 }
 
-.reports-chart-header {
+.reportes-encabezado-grafica {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1647,27 +1647,27 @@ body {
   margin-bottom: 12px;
 }
 
-.reports-chart-header > div {
+.reportes-encabezado-grafica > div {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.reports-chart-header h4 {
+.reportes-encabezado-grafica h4 {
   margin: 0;
 }
 
-.reports-chart-header small {
+.reportes-encabezado-grafica small {
   color: #6b7280;
   font-size: 12px;
 }
 
-.reports-download-button {
+.reportes-boton-descarga {
   min-width: 148px;
   flex-shrink: 0;
 }
 
-.reports-download-button:disabled {
+.reportes-boton-descarga:disabled {
   opacity: 0.6;
   cursor: not-allowed;
   box-shadow: none;
@@ -2028,7 +2028,7 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 
-  .reports-chart-header {
+  .reportes-encabezado-grafica {
     flex-direction: column;
     align-items: stretch;
   }

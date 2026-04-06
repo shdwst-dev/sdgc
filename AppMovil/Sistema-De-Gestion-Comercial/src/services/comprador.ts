@@ -33,8 +33,21 @@ export type CartItem = {
 };
 
 export type MetodoPago = {
-  id_metodo_pago: number;
+  id: number;
+  id_metodo_pago?: number;
   nombre: string;
+};
+
+export type Direccion = {
+  id: number;
+  calle: string;
+  numero_exterior: number;
+  numero_interior?: number;
+  colonia: string;
+  ciudad: string;
+  estado: string;
+  codigoPostal: string;
+  esPrincipal?: boolean;
 };
 
 export type DashboardCompradorData = {
@@ -179,18 +192,93 @@ export async function getMetodosPago(token: string): Promise<MetodoPago[]> {
     const items = Array.isArray(catalogos?.metodos_pago) ? catalogos.metodos_pago : [];
 
     return items.map((raw: Record<string, unknown>) => ({
+      id: Number(raw.id_metodo_pago ?? raw.id ?? 0),
       id_metodo_pago: Number(raw.id_metodo_pago ?? raw.id ?? 0),
       nombre: String(raw.nombre ?? ''),
     }));
   } catch {
     // Fallback: devolver métodos de pago por defecto
     return [
-      { id_metodo_pago: 1, nombre: 'Efectivo' },
-      { id_metodo_pago: 2, nombre: 'Tarjeta de Crédito' },
-      { id_metodo_pago: 3, nombre: 'Tarjeta de Débito' },
-      { id_metodo_pago: 4, nombre: 'Transferencia' },
+      { id: 1, id_metodo_pago: 1, nombre: 'Efectivo' },
+      { id: 2, id_metodo_pago: 2, nombre: 'Tarjeta de Crédito' },
+      { id: 3, id_metodo_pago: 3, nombre: 'Tarjeta de Débito' },
+      { id: 4, id_metodo_pago: 4, nombre: 'Transferencia' },
     ];
   }
+}
+
+export async function getMetodosPagoLocal(): Promise<MetodoPago[]> {
+  return [
+    { id: 1, nombre: 'Efectivo' },
+    { id: 2, nombre: 'Tarjeta de Crédito' },
+    { id: 3, nombre: 'Tarjeta de Débito' },
+    { id: 4, nombre: 'Transferencia' },
+    { id: 5, nombre: 'PayPal' },
+    { id: 6, nombre: 'Mercado Pago' },
+  ];
+}
+
+export async function getFavoritePaymentMethodLocal(): Promise<number | null> {
+  try {
+    const metodo = await AsyncStorage.getItem('@metodoPagoFavorito');
+    return metodo ? parseInt(metodo, 10) : null;
+  } catch (error) {
+    console.error('Error loading favorite payment method:', error);
+    return null;
+  }
+}
+
+export async function setFavoritePaymentMethodLocal(methodId: number): Promise<void> {
+  try {
+    await AsyncStorage.setItem('@metodoPagoFavorito', methodId.toString());
+  } catch (error) {
+    console.error('Error saving favorite payment method:', error);
+    throw error;
+  }
+}
+
+export async function getDireccionesLocal(): Promise<Direccion[]> {
+  try {
+    const direccionesData = await AsyncStorage.getItem('@direcciones');
+    return direccionesData ? JSON.parse(direccionesData) : [];
+  } catch (error) {
+    console.error('Error loading direcciones:', error);
+    return [];
+  }
+}
+
+export async function saveDireccionLocal(direccion: Direccion): Promise<Direccion[]> {
+  const direcciones = await getDireccionesLocal();
+
+  if (direccion.id === 0) {
+    direccion.id = Date.now();
+    if (direcciones.length === 0) {
+      direccion.esPrincipal = true;
+    }
+    direcciones.push(direccion);
+  } else {
+    const index = direcciones.findIndex((d) => d.id === direccion.id);
+    if (index >= 0) {
+      direcciones[index] = direccion;
+    }
+  }
+
+  await AsyncStorage.setItem('@direcciones', JSON.stringify(direcciones));
+  return direcciones;
+}
+
+export async function deleteDireccionLocal(id: number): Promise<Direccion[]> {
+  let direcciones = await getDireccionesLocal();
+  const deleted = direcciones.find((d) => d.id === id);
+
+  direcciones = direcciones.filter((d) => d.id !== id);
+
+  if (deleted?.esPrincipal && direcciones.length > 0) {
+    direcciones[0].esPrincipal = true;
+  }
+
+  await AsyncStorage.setItem('@direcciones', JSON.stringify(direcciones));
+  return direcciones;
 }
 
 // ─── Checkout (CORREGIDO: ahora usa POST /api/v1/ventas/registrar) ───────────

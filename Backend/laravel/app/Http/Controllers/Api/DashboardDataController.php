@@ -841,6 +841,56 @@ class DashboardDataController extends Controller
         ]);
     }
 
+    public function configuracionStats(Request $request): JsonResponse
+    {
+        $assignedStoreId = $this->resolveUserStoreId($request);
+
+        $baseQuery = DB::table('tiendas_empleados as te')
+            ->join('usuarios as u', 'u.id_usuario', '=', 'te.id_empleado')
+            ->leftJoin('roles as r', 'r.id_rol', '=', 'u.id_rol')
+            ->leftJoin('estatus as e', 'e.id_estatus', '=', 'u.id_estatus')
+            ->when($assignedStoreId, fn ($query) => $query->where('te.id_tienda', $assignedStoreId));
+
+        $porRol = (clone $baseQuery)
+            ->select('r.nombre as grupo', DB::raw('COUNT(*) as cantidad'))
+            ->groupBy('r.nombre')
+            ->orderByDesc('cantidad')
+            ->get();
+
+        $porEstatus = (clone $baseQuery)
+            ->select('e.nombre as grupo', DB::raw('COUNT(*) as cantidad'))
+            ->groupBy('e.nombre')
+            ->orderByDesc('cantidad')
+            ->get();
+
+        $totalEmpleados = (clone $baseQuery)->count();
+
+        // Formato Google Charts (array de arrays con header)
+        $chartPorRol = [['Rol', 'Cantidad']];
+        foreach ($porRol as $row) {
+            $chartPorRol[] = [$row->grupo ?? 'Sin rol', (int) $row->cantidad];
+        }
+
+        $chartPorEstatus = [['Estatus', 'Cantidad']];
+        foreach ($porEstatus as $row) {
+            $chartPorEstatus[] = [$row->grupo ?? 'Sin estatus', (int) $row->cantidad];
+        }
+
+        return response()->json([
+            'total_empleados' => $totalEmpleados,
+            'empleados_por_rol' => $chartPorRol,
+            'empleados_por_estatus' => $chartPorEstatus,
+            'resumen_rol' => $porRol->map(fn ($row) => [
+                'nombre' => $row->grupo ?? 'Sin rol',
+                'cantidad' => (int) $row->cantidad,
+            ])->values(),
+            'resumen_estatus' => $porEstatus->map(fn ($row) => [
+                'nombre' => $row->grupo ?? 'Sin estatus',
+                'cantidad' => (int) $row->cantidad,
+            ])->values(),
+        ]);
+    }
+
     public function verEmpleadoConfiguracion(Request $request, int $idEmpleado): JsonResponse
     {
         $empleado = $this->resolveStoreEmployee($request, $idEmpleado);

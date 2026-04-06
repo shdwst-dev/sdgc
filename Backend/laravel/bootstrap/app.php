@@ -24,6 +24,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
             return '/';
         });
+
+        $middleware->alias([
+            'admin' => \App\Http\Middleware\EnsureAdminRole::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

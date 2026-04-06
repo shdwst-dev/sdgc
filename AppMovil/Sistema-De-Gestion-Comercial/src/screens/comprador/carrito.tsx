@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, ActivityIndicator } from 'react-native';
-import { Minus, Plus, Trash2, ShoppingBag, CreditCard } from 'lucide-react-native';
-import { useNavigation, useIsFocused, CommonActions } from '@react-navigation/native';
-import { getCarritoLocal, saveCarritoLocal, CartItem, checkout, getMetodosPago, MetodoPago } from '../../services/comprador';
-import { ApiError } from '../../services/apiClient';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
+import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react-native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { getCarritoLocal, saveCarritoLocal, CartItem, checkout } from '../../services/comprador';
+import { ApiError } from '../../services/auth';
 import { getToken, hydrateToken, clearToken } from '../../services/storage';
-
-const { width } = Dimensions.get('window');
 
 export default function Carrito() {
   const navigation = useNavigation();
@@ -14,16 +12,9 @@ export default function Carrito() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
-  const [metodosPago, setMetodosPago] = useState<MetodoPago[]>([]);
-  const [selectedMetodo, setSelectedMetodo] = useState<number>(1); // Default: Efectivo
 
   const goToLogin = useCallback(() => {
-    navigation.dispatch(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: 'InicioSesion' as never }],
-      }),
-    );
+    navigation.reset({ index: 0, routes: [{ name: 'InicioSesion' as never }] });
   }, [navigation]);
 
   useEffect(() => {
@@ -37,16 +28,6 @@ export default function Carrito() {
       setIsLoading(true);
       const carritoData = await getCarritoLocal();
       setCart(carritoData);
-
-      // Cargar métodos de pago
-      const token = getToken() || await hydrateToken();
-      if (token) {
-        const metodos = await getMetodosPago(token);
-        setMetodosPago(metodos);
-        if (metodos.length > 0 && !metodos.find(m => m.id_metodo_pago === selectedMetodo)) {
-          setSelectedMetodo(metodos[0].id_metodo_pago);
-        }
-      }
     } catch (error) {
       Alert.alert('Error', 'No se pudo cargar el carrito');
     } finally {
@@ -56,7 +37,7 @@ export default function Carrito() {
 
   const updateQuantity = useCallback(async (id: number, newQty: number) => {
     if (newQty < 1) return;
-
+    
     const updatedCart = cart.map(item =>
       item.id === id ? { ...item, cantidad: newQty } : item
     );
@@ -79,7 +60,7 @@ export default function Carrito() {
     ]);
   }, [cart]);
 
-  const getCartTotal = () =>
+  const getCartTotal = () => 
     cart.reduce((acc, item) => acc + (item.precio_unitario * item.cantidad), 0);
 
   const performCheckout = useCallback(async () => {
@@ -92,12 +73,12 @@ export default function Carrito() {
       }
 
       setIsCheckingOut(true);
-      await checkout(token, cart, selectedMetodo);
-
-      // El carrito se limpia automáticamente en checkout()
+      await checkout(token, cart);
+      
+      await saveCarritoLocal([]);
       setCart([]);
-
-      Alert.alert('¡Compra exitosa!', 'Tu compra ha sido procesada correctamente.', [
+      
+      Alert.alert('¡Éxito!', 'Tu compra ha sido procesada correctamente', [
         {
           text: 'OK',
           onPress: () => navigation.navigate('InicioTab' as never)
@@ -107,18 +88,15 @@ export default function Carrito() {
       if (error instanceof ApiError) {
         if (error.status === 401) {
           await clearToken();
-          Alert.alert('Sesión expirada', 'Inicia sesión nuevamente.');
           goToLogin();
           return;
         }
       }
-      Alert.alert('Error', error instanceof Error ? error.message : 'Error al procesar la compra');
+      Alert.alert('Error', error instanceof Error ? error.message : 'Error al procesar el pago');
     } finally {
       setIsCheckingOut(false);
     }
-  }, [cart, selectedMetodo, goToLogin, navigation]);
-
-  // ─── Loading ─────────────────────────────────────────────────────────────
+  }, [cart, goToLogin, navigation]);
 
   if (isLoading) {
     return (
@@ -128,15 +106,13 @@ export default function Carrito() {
     );
   }
 
-  // ─── Empty cart ──────────────────────────────────────────────────────────
-
   if (cart.length === 0) {
     return (
       <View style={styles.emptyContainer}>
         <ShoppingBag size={80} color="#D1D5DB" />
         <Text style={styles.emptyTitle}>Tu carrito está vacío</Text>
         <Text style={styles.emptySubtitle}>Agrega productos para comenzar tu compra</Text>
-        <TouchableOpacity
+        <TouchableOpacity 
           style={styles.primaryBtn}
           onPress={() => navigation.navigate('InicioTab' as never)}
         >
@@ -145,8 +121,6 @@ export default function Carrito() {
       </View>
     );
   }
-
-  // ─── Cart ────────────────────────────────────────────────────────────────
 
   return (
     <View style={styles.mainContainer}>
@@ -167,24 +141,24 @@ export default function Carrito() {
                 <View style={styles.productDetails}>
                   <Text style={styles.productName} numberOfLines={2}>{item.nombre}</Text>
                   <Text style={styles.productPrice}>${item.precio_unitario.toLocaleString('es-MX')}</Text>
-
+                  
                   <View style={styles.controlsRow}>
                     <View style={styles.quantitySelector}>
-                      <TouchableOpacity
+                      <TouchableOpacity 
                         onPress={() => updateQuantity(item.id, item.cantidad - 1)}
                         style={styles.qtyBtn}
                       >
                         <Minus size={16} color="#101828" />
                       </TouchableOpacity>
                       <Text style={styles.qtyText}>{item.cantidad}</Text>
-                      <TouchableOpacity
+                      <TouchableOpacity 
                         onPress={() => updateQuantity(item.id, item.cantidad + 1)}
                         style={styles.qtyBtn}
                       >
                         <Plus size={16} color="#101828" />
                       </TouchableOpacity>
                     </View>
-
+                    
                     <TouchableOpacity onPress={() => removeFromCart(item.id)}>
                       <Trash2 size={20} color="#EF4444" />
                     </TouchableOpacity>
@@ -194,39 +168,6 @@ export default function Carrito() {
             </View>
           ))}
         </View>
-
-        {/* Método de pago */}
-        <View style={styles.paymentSection}>
-          <View style={styles.paymentHeader}>
-            <CreditCard size={18} color="#101828" />
-            <Text style={styles.paymentTitle}>Método de Pago</Text>
-          </View>
-          <View style={styles.paymentOptions}>
-            {metodosPago.map((metodo) => (
-              <TouchableOpacity
-                key={metodo.id_metodo_pago}
-                style={[
-                  styles.paymentOption,
-                  selectedMetodo === metodo.id_metodo_pago && styles.paymentOptionSelected,
-                ]}
-                onPress={() => setSelectedMetodo(metodo.id_metodo_pago)}
-              >
-                <View style={[
-                  styles.radioOuter,
-                  selectedMetodo === metodo.id_metodo_pago && styles.radioOuterSelected,
-                ]}>
-                  {selectedMetodo === metodo.id_metodo_pago && <View style={styles.radioInner} />}
-                </View>
-                <Text style={[
-                  styles.paymentOptionText,
-                  selectedMetodo === metodo.id_metodo_pago && styles.paymentOptionTextSelected,
-                ]}>
-                  {metodo.nombre}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
       </ScrollView>
 
       <View style={styles.summaryFooter}>
@@ -234,12 +175,16 @@ export default function Carrito() {
           <Text style={styles.summaryLabel}>Subtotal</Text>
           <Text style={styles.summaryValue}>${getCartTotal().toLocaleString('es-MX')}</Text>
         </View>
+        <View style={styles.summaryRow}>
+          <Text style={styles.summaryLabel}>Envío</Text>
+          <Text style={[styles.summaryValue, { color: '#10B981' }]}>Gratis</Text>
+        </View>
         <View style={[styles.summaryRow, styles.totalBorder]}>
           <Text style={styles.totalLabel}>Total</Text>
           <Text style={styles.totalValue}>${getCartTotal().toLocaleString('es-MX')}</Text>
         </View>
 
-        <TouchableOpacity
+        <TouchableOpacity 
           style={[styles.checkoutBtn, isCheckingOut && styles.checkoutBtnDisabled]}
           onPress={performCheckout}
           disabled={isCheckingOut}
@@ -247,7 +192,7 @@ export default function Carrito() {
           {isCheckingOut ? (
             <ActivityIndicator color="#FFF" />
           ) : (
-            <Text style={styles.checkoutBtnText}>Confirmar Compra</Text>
+            <Text style={styles.checkoutBtnText}>Proceder al Pago</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -256,47 +201,34 @@ export default function Carrito() {
 }
 
 const styles = StyleSheet.create({
-  mainContainer: { flex: 1, backgroundColor: '#F9FAFB' },
-  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' },
+  mainContainer: { flex: 1, backgroundColor: '#e6f3fb' },
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#e6f3fb' },
   scrollContainer: { flex: 1, padding: 16 },
-  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#101828', marginBottom: 20, marginTop: 40 },
+  headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#1C3A5C', marginBottom: 20, marginTop: 40 },
   itemsList: { gap: 16 },
-  cartCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E5E7EB', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
+  cartCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#cfdaea', elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2 },
   productRow: { flexDirection: 'row', gap: 12 },
-  productImage: { width: 80, height: 80, borderRadius: 8, backgroundColor: '#F3F4F6' },
+  productImage: { width: 80, height: 80, borderRadius: 8, backgroundColor: '#f3f7ff' },
   productDetails: { flex: 1 },
-  productName: { fontSize: 14, fontWeight: '500', color: '#101828', marginBottom: 4 },
-  productPrice: { fontSize: 16, fontWeight: 'bold', color: '#1C273F', marginBottom: 12 },
+  productName: { fontSize: 14, fontWeight: '500', color: '#1C3A5C', marginBottom: 4 },
+  productPrice: { fontSize: 16, fontWeight: 'bold', color: '#0f2f6f', marginBottom: 12 },
   controlsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  quantitySelector: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, overflow: 'hidden' },
-  qtyBtn: { padding: 8, backgroundColor: '#F9FAFB' },
-  qtyText: { paddingHorizontal: 12, fontSize: 14, fontWeight: '600', color: '#101828' },
-  // Payment section
-  paymentSection: { marginTop: 24, backgroundColor: '#FFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E5E7EB' },
-  paymentHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  paymentTitle: { fontSize: 15, fontWeight: '600', color: '#101828' },
-  paymentOptions: { gap: 8 },
-  paymentOption: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', gap: 10 },
-  paymentOptionSelected: { borderColor: '#1C273F', backgroundColor: '#F8FAFC' },
-  paymentOptionText: { fontSize: 14, color: '#6B7280' },
-  paymentOptionTextSelected: { color: '#1C273F', fontWeight: '600' },
-  radioOuter: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#D1D5DB', justifyContent: 'center', alignItems: 'center' },
-  radioOuterSelected: { borderColor: '#1C273F' },
-  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#1C273F' },
-  // Footer
-  summaryFooter: { backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E5E7EB', padding: 16, paddingBottom: 24 },
+  quantitySelector: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#cfdaea', borderRadius: 8, overflow: 'hidden' },
+  qtyBtn: { padding: 8, backgroundColor: '#f3f7ff' },
+  qtyText: { paddingHorizontal: 12, fontSize: 14, fontWeight: '600', color: '#1C3A5C' },
+  summaryFooter: { backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#cfdaea', padding: 16, paddingBottom: 24 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  summaryLabel: { fontSize: 14, color: '#6B7280' },
-  summaryValue: { fontSize: 14, fontWeight: '600', color: '#101828' },
-  totalBorder: { borderTopWidth: 1, borderTopColor: '#F3F4F6', paddingTop: 12, marginTop: 4 },
-  totalLabel: { fontSize: 16, fontWeight: 'bold', color: '#101828' },
-  totalValue: { fontSize: 20, fontWeight: 'bold', color: '#1C273F' },
-  checkoutBtn: { backgroundColor: '#1C273F', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 16 },
-  checkoutBtnDisabled: { backgroundColor: '#9CA3AF' },
+  summaryLabel: { fontSize: 14, color: '#5e728f' },
+  summaryValue: { fontSize: 14, fontWeight: '600', color: '#1C3A5C' },
+  totalBorder: { borderTopWidth: 1, borderTopColor: '#f3f7ff', paddingTop: 12, marginTop: 4 },
+  totalLabel: { fontSize: 16, fontWeight: 'bold', color: '#1C3A5C' },
+  totalValue: { fontSize: 20, fontWeight: 'bold', color: '#0f2f6f' },
+  checkoutBtn: { backgroundColor: '#0f2f6f', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 16 },
+  checkoutBtnDisabled: { backgroundColor: '#7a8ba5' },
   checkoutBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#101828', marginTop: 20 },
-  emptySubtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginTop: 8, marginBottom: 24 },
-  primaryBtn: { backgroundColor: '#1C273F', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12 },
-  primaryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
+  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#1C3A5C', marginTop: 20 },
+  emptySubtitle: { fontSize: 14, color: '#5e728f', textAlign: 'center', marginTop: 8, marginBottom: 24 },
+  primaryBtn: { backgroundColor: '#0f2f6f', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12 },
+  primaryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '600' }
 });

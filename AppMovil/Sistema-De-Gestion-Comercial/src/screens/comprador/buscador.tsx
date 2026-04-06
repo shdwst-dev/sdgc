@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, Dimensio
 import { Search, SlidersHorizontal, X } from 'lucide-react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { Image } from 'react-native';
-import { ApiError, getMe } from '../../services/auth';
+import { ApiError } from '../../services/auth';
 import { buscarProductos, Producto, addToCarritoLocal } from '../../services/comprador';
 import { clearToken, getToken, hydrateToken } from '../../services/storage';
 
@@ -11,10 +11,14 @@ const { width } = Dimensions.get('window');
 const columnWidth = (width - 40) / 2;
 
 const categories = [
-  { name: 'Ropa', icon: '👕' },
   { name: 'Electrónica', icon: '📱' },
+  { name: 'Alimentos', icon: '🍎' },
+  { name: 'Bebidas', icon: '🥤' },
+  { name: 'Limpieza', icon: '🧹' },
   { name: 'Hogar', icon: '🏠' },
-  { name: 'Belleza', icon: '💄' },
+  { name: 'Papelería', icon: '📝' },
+  { name: 'Ropa', icon: '👕' },
+  { name: 'Deportes', icon: '⚽' },
 ];
 
 export default function Buscar() {
@@ -24,6 +28,7 @@ export default function Buscar() {
   const [isLoading, setIsLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState('relevance');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const goToLogin = useCallback(() => {
     navigation.dispatch(
@@ -50,15 +55,23 @@ export default function Buscar() {
     try {
       setIsLoading(true);
       const results = await buscarProductos(token, query);
-      let sortedResults = [...results];
+      let filteredResults = [...results];
 
-      if (sortBy === 'price-low') {
-        sortedResults.sort((a, b) => a.precio_unitario - b.precio_unitario);
-      } else if (sortBy === 'price-high') {
-        sortedResults.sort((a, b) => b.precio_unitario - a.precio_unitario);
+      // Filtrar por categoría si está seleccionada
+      if (selectedCategory) {
+        filteredResults = filteredResults.filter(
+          product => product.categoria.toLowerCase() === selectedCategory.toLowerCase()
+        );
       }
 
-      setProductos(sortedResults);
+      // Ordenar resultados
+      if (sortBy === 'price-low') {
+        filteredResults.sort((a, b) => a.precio_unitario - b.precio_unitario);
+      } else if (sortBy === 'price-high') {
+        filteredResults.sort((a, b) => b.precio_unitario - a.precio_unitario);
+      }
+
+      setProductos(filteredResults);
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
         await clearToken();
@@ -75,11 +88,11 @@ export default function Buscar() {
     } finally {
       setIsLoading(false);
     }
-  }, [goToLogin, sortBy]);
+  }, [goToLogin, sortBy, selectedCategory]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchQuery.trim().length > 0) {
+      if (searchQuery.trim().length > 0 || selectedCategory) {
         performSearch(searchQuery);
       } else {
         setProductos([]);
@@ -87,7 +100,13 @@ export default function Buscar() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, performSearch]);
+  }, [searchQuery, performSearch, selectedCategory]);
+
+  useEffect(() => {
+    if (searchQuery.trim().length > 0 || selectedCategory) {
+      performSearch(searchQuery);
+    }
+  }, [sortBy, selectedCategory, searchQuery, performSearch]);
 
   const handleSortPress = () => {
     Alert.alert(
@@ -177,10 +196,21 @@ export default function Buscar() {
             {categories.map((cat, i) => (
               <TouchableOpacity 
                 key={i}
-                style={styles.catBtn}
-                onPress={() => Alert.alert('Info', `Filtro por ${cat.name} (próximamente)`)}
+                style={[
+                  styles.catBtn,
+                  selectedCategory === cat.name && styles.catBtnActive
+                ]}
+                onPress={() => {
+                  const newCategory = selectedCategory === cat.name ? null : cat.name;
+                  setSelectedCategory(newCategory);
+                }}
               >
-                <Text style={styles.catBtnText}>{cat.icon} {cat.name}</Text>
+                <Text style={[
+                  styles.catBtnText,
+                  selectedCategory === cat.name && styles.catBtnTextActive
+                ]}>
+                  {cat.icon} {cat.name}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -226,30 +256,32 @@ export default function Buscar() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  searchHeader: { padding: 16, backgroundColor: '#fff', marginTop: 20, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  searchBar: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
-  searchInput: { flex: 1, marginHorizontal: 8, fontSize: 14, color: '#101828' },
+  searchHeader: { padding: 16, backgroundColor: '#fff', marginTop: 20, borderBottomWidth: 1, borderBottomColor: '#cfdaea' },
+  searchBar: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#cfdaea', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  searchInput: { flex: 1, marginHorizontal: 8, fontSize: 14, color: '#1C3A5C' },
   controlBar: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
-  controlBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, paddingVertical: 10, gap: 6 },
-  controlBtnActive: { backgroundColor: '#1C273F', borderColor: '#1C273F' },
-  controlBtnText: { fontSize: 14, color: '#101828', fontWeight: '600' },
-  sortBtn: { flex: 1, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, justifyContent: 'center', alignItems: 'center', paddingVertical: 10 },
-  sortBtnText: { fontSize: 14, color: '#101828', fontWeight: '600' },
-  filtersPanel: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#F9FAFB', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  filterTitle: { fontSize: 14, fontWeight: '600', color: '#101828', marginBottom: 10 },
+  controlBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#cfdaea', borderRadius: 8, paddingVertical: 10, gap: 6 },
+  controlBtnActive: { backgroundColor: '#0f2f6f', borderColor: '#0f2f6f' },
+  controlBtnText: { fontSize: 14, color: '#1C3A5C', fontWeight: '600' },
+  sortBtn: { flex: 1, borderWidth: 1, borderColor: '#cfdaea', borderRadius: 8, justifyContent: 'center', alignItems: 'center', paddingVertical: 10 },
+  sortBtnText: { fontSize: 14, color: '#1C3A5C', fontWeight: '600' },
+  filtersPanel: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#f3f7ff', borderBottomWidth: 1, borderBottomColor: '#cfdaea' },
+  filterTitle: { fontSize: 14, fontWeight: '600', color: '#1C3A5C', marginBottom: 10 },
   catList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  catBtn: { paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 6 },
-  catBtnText: { fontSize: 12, color: '#101828' },
-  resultsHeader: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
-  resultsCount: { fontSize: 14, color: '#6B7280', fontWeight: '600' },
-  productCard: { width: columnWidth, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#eee', marginHorizontal: 8, marginBottom: 16, overflow: 'hidden' },
-  imageContainer: { width: '100%', height: 120, backgroundColor: '#F3F4F6' },
+  catBtn: { paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#cfdaea', borderRadius: 6 },
+  catBtnActive: { backgroundColor: '#0f2f6f', borderColor: '#0f2f6f' },
+  catBtnText: { fontSize: 12, color: '#1C3A5C' },
+  catBtnTextActive: { color: '#FFF' },
+  resultsHeader: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#cfdaea' },
+  resultsCount: { fontSize: 14, color: '#5e728f', fontWeight: '600' },
+  productCard: { width: columnWidth, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e8ecf0', marginHorizontal: 8, marginBottom: 16, overflow: 'hidden' },
+  imageContainer: { width: '100%', height: 120, backgroundColor: '#f3f7ff' },
   productImage: { width: '100%', height: '100%' },
   productInfo: { padding: 10 },
-  productName: { fontSize: 13, color: '#101828', height: 35 },
-  productCategory: { fontSize: 11, color: '#9CA3AF', marginBottom: 4 },
-  productPrice: { fontSize: 15, fontWeight: 'bold', color: '#101828', marginVertical: 8 },
-  addButton: { backgroundColor: '#1C273F', padding: 8, borderRadius: 6, alignItems: 'center' },
+  productName: { fontSize: 13, color: '#1C3A5C', height: 35 },
+  productCategory: { fontSize: 11, color: '#7a8ba5', marginBottom: 4 },
+  productPrice: { fontSize: 15, fontWeight: 'bold', color: '#1C3A5C', marginVertical: 8 },
+  addButton: { backgroundColor: '#0f2f6f', padding: 8, borderRadius: 6, alignItems: 'center' },
   addButtonText: { color: '#fff', fontSize: 11, fontWeight: '600' },
   loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },

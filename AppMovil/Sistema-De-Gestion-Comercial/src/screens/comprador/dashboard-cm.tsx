@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList, Dimensions, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, ActivityIndicator } from 'react-native';
 import { Search } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, CommonActions } from '@react-navigation/native';
@@ -87,7 +87,7 @@ export default function Inicio() {
     }
   }, []);
 
-  const renderProduct = ({ item }: { item: ProductoDestacado }) => (
+  const renderProduct = (item: ProductoDestacado) => (
     <View style={styles.productCard}>
       <View style={styles.imageContainer}>
         {item.imagen_url ? (
@@ -163,14 +163,13 @@ export default function Inicio() {
       <View style={styles.paddingContainer}>
         <Text style={styles.sectionTitle}>Recomendado para Ti</Text>
         {productos.length > 0 ? (
-          <FlatList
-            data={productos}
-            renderItem={renderProduct}
-            keyExtractor={(item) => item.id.toString()}
-            numColumns={2}
-            scrollEnabled={false}
-            columnWrapperStyle={{ justifyContent: 'space-between' }}
-          />
+          <View style={styles.productsGrid}>
+            {productos.map((item) => (
+              <React.Fragment key={item.id.toString()}>
+                {renderProduct(item)}
+              </React.Fragment>
+            ))}
+          </View>
         ) : (
           <View style={{ paddingVertical: 20, alignItems: 'center' }}>
             <Text style={{ color: '#6B7280', marginBottom: 10 }}>No hay productos disponibles</Text>
@@ -199,6 +198,7 @@ const styles = StyleSheet.create({
   categoryItem: { alignItems: 'center', marginRight: 20 },
   categoryIconCircle: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#1C273F', justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
   categoryName: { fontSize: 12, color: '#101828' },
+  productsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   productCard: { width: columnWidth, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#eee', marginBottom: 16, overflow: 'hidden' },
   imageContainer: { width: '100%', height: 120, backgroundColor: '#F3F4F6' },
   productImage: { width: '100%', height: '100%' },

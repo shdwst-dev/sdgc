@@ -1,10 +1,12 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, FlatList, Dimensions, Alert, ActivityIndicator } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, Dimensions, Alert, ActivityIndicator } from 'react-native';
 import { FileText, ChevronRight, RefreshCw } from 'lucide-react-native';
 import { CommonActions, useNavigation } from '@react-navigation/native';
-import { getVentasRecientes, VentaReciente } from '../../services/dashboard';
+import { getVentasPeriodo, VentaReciente, VentasPeriodoData } from '../../services/dashboard';
 import { ApiError } from '../../services/apiClient';
 import { clearToken, getToken, hydrateToken } from '../../services/storage';
+import { GoogleChartView } from '../../components/GoogleChartView';
+import { exportSaleReceiptPdf } from '../../lib/pdf';
 
 const { width } = Dimensions.get('window');
 
@@ -33,11 +35,14 @@ function formatDate(dateStr: string): string {
 export default function Ventas() {
   const navigation = useNavigation();
   const [ventas, setVentas] = useState<VentaReciente[]>([]);
+  const [ventasPeriodo, setVentasPeriodo] = useState<VentasPeriodoData | null>(null);
   const [selectedVenta, setSelectedVenta] = useState<VentaReciente | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rangeDays, setRangeDays] = useState<7 | 15 | 30>(30);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
   const goToLogin = useCallback(() => {
     navigation.dispatch(
@@ -52,7 +57,7 @@ export default function Ventas() {
     return token;
   }, [goToLogin]);
 
-  const loadVentas = useCallback(async (showFullLoader = true) => {
+  const loadVentas = useCallback(async (showFullLoader = true, days: 7 | 15 | 30 = rangeDays) => {
     const token = await requireToken();
     if (!token) return;
 
@@ -61,8 +66,25 @@ export default function Ventas() {
     setError(null);
 
     try {
-      const data = await getVentasRecientes(token);
-      setVentas(data);
+      const end = new Date();
+      const start = new Date(end);
+      start.setDate(end.getDate() - days + 1);
+
+      const inicio = start.toISOString().slice(0, 10);
+      const fin = end.toISOString().slice(0, 10);
+
+      const data = await getVentasPeriodo(token, { inicio, fin });
+      setVentasPeriodo(data);
+      setVentas(
+        data.ventas.map((venta) => ({
+          factura: venta.factura,
+          cliente: venta.cliente,
+          responsable: venta.responsable,
+          monto: venta.monto,
+          fecha: venta.fecha,
+          metodo_pago: venta.metodo_pago,
+        })),
+      );
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
         await clearToken();
@@ -76,7 +98,7 @@ export default function Ventas() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, [goToLogin, requireToken]);
+  }, [goToLogin, rangeDays, requireToken]);
 
   useEffect(() => {
     loadVentas().catch(() => { setError('No se pudo cargar las ventas.'); setIsLoading(false); });
@@ -87,10 +109,62 @@ export default function Ventas() {
     setModalVisible(true);
   };
 
+  const exportSelectedVentaPdf = useCallback(async () => {
+    if (!selectedVenta || isExportingPdf) {
+      return;
+    }
+
+    try {
+      setIsExportingPdf(true);
+      await exportSaleReceiptPdf({
+        factura: selectedVenta.factura,
+        cliente: selectedVenta.cliente,
+        responsable: selectedVenta.responsable,
+        monto: selectedVenta.monto,
+        fecha: selectedVenta.fecha,
+        metodoPago: selectedVenta.metodo_pago || ventasPeriodo?.series.metodos_pago[0]?.nombre,
+        periodo: ventasPeriodo?.periodo_referencia.mes,
+      });
+    } catch (exportError) {
+      Alert.alert('Error', exportError instanceof Error ? exportError.message : 'No se pudo exportar el PDF.');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  }, [isExportingPdf, selectedVenta, ventasPeriodo]);
+
   // Métricas derivadas
-  const totalVentas = ventas.reduce((sum, v) => sum + v.monto, 0);
-  const ventasCount = ventas.length;
+  const filteredVentas = useMemo(() => {
+    return ventas;
+  }, [ventas, rangeDays]);
+
+  const totalVentas = ventasPeriodo?.totales.ventas ?? filteredVentas.reduce((sum, v) => sum + v.monto, 0);
+  const ventasCount = ventasPeriodo?.totales.transacciones ?? filteredVentas.length;
   const promedio = ventasCount > 0 ? totalVentas / ventasCount : 0;
+
+  const ventasPorFechaChartData = useMemo<(string | number)[][]>(() => {
+    if (!ventasPeriodo?.series.labels.length) {
+      return [['Fecha', 'Monto']];
+    }
+
+    return [
+      ['Fecha', 'Monto'],
+      ...ventasPeriodo.series.labels.map((label, index) => [
+        label,
+        Number(ventasPeriodo.series.ventas_diarias[index] ?? 0),
+      ]),
+    ];
+  }, [ventasPeriodo]);
+
+  const ventasPorMetodoChartData = useMemo<(string | number)[][]>(() => {
+    if (!ventasPeriodo?.series.metodos_pago.length) {
+      return [['Método de Pago', 'Total']];
+    }
+
+    return [
+      ['Método de Pago', 'Total'],
+      ...ventasPeriodo.series.metodos_pago.map((item) => [item.nombre, item.total]),
+    ];
+  }, [ventasPeriodo]);
 
   // ─── Render item ─────────────────────────────────────────────────────────
 
@@ -149,79 +223,143 @@ export default function Ventas() {
   // ─── Main render ─────────────────────────────────────────────────────────
 
   return (
-    <View style={styles.container}>
-      <View style={styles.headerRow}>
-        <Text style={styles.headerTitle}>Ventas</Text>
-        <TouchableOpacity onPress={() => loadVentas(false)} disabled={isRefreshing}>
-          {isRefreshing ? <ActivityIndicator size="small" color="#1C273F" /> : <RefreshCw size={20} color="#1C273F" />}
-        </TouchableOpacity>
-      </View>
+      <ScrollView>
+        <View style={styles.container}>
+          <View style={styles.headerRow}>
+            <Text style={styles.headerTitle}>Ventas</Text>
+            <TouchableOpacity onPress={() => loadVentas(false)} disabled={isRefreshing}>
+              {isRefreshing ? <ActivityIndicator size="small" color="#1C273F" /> : <RefreshCw size={20} color="#1C273F" />}
+            </TouchableOpacity>
+          </View>
 
-      <View style={styles.summaryContainer}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Total</Text>
-          <Text style={styles.summaryValue}>{formatCurrency(totalVentas)}</Text>
-        </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Ventas</Text>
-          <Text style={styles.summaryValue}>{ventasCount}</Text>
-        </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Promedio</Text>
-          <Text style={styles.summaryValue}>{formatCurrency(promedio)}</Text>
-        </View>
-      </View>
+          {ventasPeriodo?.periodo_referencia?.mes ? (
+              <Text style={styles.periodoText}>{ventasPeriodo.periodo_referencia.mes}</Text>
+          ) : null}
 
-      <View style={styles.listContainer}>
-        <Text style={styles.sectionTitle}>Transacciones Recientes</Text>
-        <FlatList
-          data={ventas}
-          renderItem={renderSaleItem}
-          keyExtractor={(item) => item.factura}
-          showsVerticalScrollIndicator={false}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          ListEmptyComponent={<Text style={styles.emptyText}>No hay ventas registradas.</Text>}
-        />
-      </View>
-
-      {/* Modal de detalle */}
-      <Modal animationType="fade" transparent visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            {selectedVenta && (
-              <ScrollView showsVerticalScrollIndicator={false}>
-                <View style={styles.modalHeader}>
-                  <View style={styles.modalIconBadge}><FileText size={32} color="#FFF" /></View>
-                  <Text style={styles.modalTitle}>{selectedVenta.factura}</Text>
-                  <Text style={styles.modalSubtitle}>{formatDate(selectedVenta.fecha)}</Text>
-                </View>
-
-                <View style={styles.clientBox}>
-                  <Text style={styles.clientLabel}>Responsable</Text>
-                  <Text style={styles.clientName}>{selectedVenta.responsable}</Text>
-                </View>
-
-                <View style={styles.clientBox}>
-                  <Text style={styles.clientLabel}>Cliente</Text>
-                  <Text style={styles.clientName}>{selectedVenta.cliente}</Text>
-                </View>
-
-                <View style={styles.totalsSection}>
-                  <View style={[styles.totalRow, { marginTop: 10 }]}>
-                    <Text style={styles.grandTotalLabel}>Total</Text>
-                    <Text style={styles.grandTotalValue}>{formatCurrency(selectedVenta.monto)}</Text>
-                  </View>
-                </View>
-
-                <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.closeBtnText}>Cerrar</Text>
+          <View style={styles.filterRow}>
+            {[7, 15, 30].map((days) => (
+                <TouchableOpacity
+                    key={days}
+                    style={[styles.filterBtn, rangeDays === days ? styles.filterBtnActive : null]}
+                    onPress={() => setRangeDays(days as 7 | 15 | 30)}
+                >
+                  <Text style={[styles.filterBtnText, rangeDays === days ? styles.filterBtnTextActive : null]}>{days} dias</Text>
                 </TouchableOpacity>
-              </ScrollView>
+            ))}
+          </View>
+
+          <View style={styles.summaryContainer}>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Total</Text>
+              <Text style={styles.summaryValue}>{formatCurrency(totalVentas)}</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Ventas</Text>
+              <Text style={styles.summaryValue}>{ventasCount}</Text>
+            </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Promedio</Text>
+              <Text style={styles.summaryValue}>{formatCurrency(promedio)}</Text>
+            </View>
+          </View>
+
+          <View style={styles.chartCard}>
+            <Text style={styles.sectionTitle}>Ventas por Fecha</Text>
+            <GoogleChartView
+                type="ColumnChart"
+                data={ventasPorFechaChartData}
+                height={240}
+                options={{
+                  backgroundColor: 'transparent',
+                  colors: ['#2563EB'],
+                  legend: { position: 'none' },
+                  chartArea: { left: 48, right: 16, top: 22, bottom: 46, width: '100%', height: '72%' },
+                  hAxis: { slantedText: true, slantedTextAngle: 30 },
+                  vAxis: { minValue: 0 },
+                }}
+                emptyMessage="No hay ventas para graficar."
+            />
+          </View>
+
+          <View style={styles.chartCard}>
+            <Text style={styles.sectionTitle}>Ventas por Método de Pago</Text>
+            <GoogleChartView
+                type="PieChart"
+                data={ventasPorMetodoChartData}
+                height={240}
+                options={{
+                  backgroundColor: 'transparent',
+                  pieHole: 0.45,
+                  legend: { position: 'right' },
+                  chartArea: { left: 20, right: 20, top: 16, bottom: 16, width: '100%', height: '82%' },
+                }}
+                emptyMessage="Sin registros por método de pago."
+            />
+          </View>
+
+          <View style={styles.listContainer}>
+            <Text style={styles.sectionTitle}>Ventas Recientes</Text>
+            {filteredVentas.length === 0 ? (
+              <Text style={styles.emptyText}>No hay ventas registradas.</Text>
+            ) : (
+              filteredVentas.map((item, index) => (
+                <React.Fragment key={item.factura}>
+                  {renderSaleItem({ item })}
+                  {index < filteredVentas.length - 1 ? <View style={styles.separator} /> : null}
+                </React.Fragment>
+              ))
             )}
           </View>
+
+          {/* Modal de detalle */}
+          <Modal animationType="fade" transparent visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                {selectedVenta && (
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                      <View style={styles.modalHeader}>
+                        <View style={styles.modalIconBadge}><FileText size={32} color="#FFF" /></View>
+                        <Text style={styles.modalTitle}>{selectedVenta.factura}</Text>
+                        <Text style={styles.modalSubtitle}>{formatDate(selectedVenta.fecha)}</Text>
+                      </View>
+
+                      <View style={styles.clientBox}>
+                        <Text style={styles.clientLabel}>Responsable</Text>
+                        <Text style={styles.clientName}>{selectedVenta.responsable}</Text>
+                      </View>
+
+                      <View style={styles.clientBox}>
+                        <Text style={styles.clientLabel}>Cliente</Text>
+                        <Text style={styles.clientName}>{selectedVenta.cliente}</Text>
+                      </View>
+
+                      <View style={styles.totalsSection}>
+                        <View style={[styles.totalRow, { marginTop: 10 }]}>
+                          <Text style={styles.grandTotalLabel}>Total</Text>
+                          <Text style={styles.grandTotalValue}>{formatCurrency(selectedVenta.monto)}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.modalActionsRow}>
+                        <TouchableOpacity style={styles.exportBtn} onPress={exportSelectedVentaPdf} disabled={isExportingPdf}>
+                          {isExportingPdf ? (
+                            <ActivityIndicator size="small" color="#FFF" />
+                          ) : (
+                            <Text style={styles.exportBtnText}>Exportar PDF</Text>
+                          )}
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}>
+                          <Text style={styles.closeBtnText}>Cerrar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </ScrollView>
+                )}
+              </View>
+            </View>
+          </Modal>
         </View>
-      </Modal>
-    </View>
+      </ScrollView>
+
   );
 }
 
@@ -229,10 +367,17 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB', padding: 16 },
   headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, marginTop: 40 },
   headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#1C273F' },
+  periodoText: { fontSize: 12, color: '#6B7280', marginBottom: 12 },
+  filterRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  filterBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#FFF' },
+  filterBtnActive: { backgroundColor: '#1C273F', borderColor: '#1C273F' },
+  filterBtnText: { color: '#334155', fontSize: 12, fontWeight: '600' },
+  filterBtnTextActive: { color: '#FFF' },
   summaryContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
   summaryCard: { backgroundColor: '#FFF', width: (width - 48) / 3, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
   summaryLabel: { fontSize: 10, color: '#6B7280', marginBottom: 4 },
   summaryValue: { fontSize: 14, fontWeight: 'bold', color: '#101828' },
+  chartCard: { backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 16, padding: 16 },
   listContainer: { backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', flex: 1 },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#101828', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
   saleItem: { flexDirection: 'row', padding: 16, alignItems: 'center', justifyContent: 'space-between' },
@@ -260,6 +405,9 @@ const styles = StyleSheet.create({
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   grandTotalLabel: { fontSize: 16, fontWeight: 'bold', color: '#101828' },
   grandTotalValue: { fontSize: 18, fontWeight: 'bold', color: '#101828' },
+  modalActionsRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  exportBtn: { flex: 1, padding: 14, borderRadius: 10, alignItems: 'center', backgroundColor: '#1C273F' },
+  exportBtnText: { color: '#FFF', fontWeight: '700' },
   closeBtn: { padding: 14, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, alignItems: 'center' },
   closeBtnText: { color: '#101828', fontWeight: '500' },
 });

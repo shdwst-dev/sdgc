@@ -25,7 +25,6 @@ export default function Inicio() {
   const navigation = useNavigation();
   const [productos, setProductos] = useState<ProductoDestacado[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchSuggestions, setSearchSuggestions] = useState<Producto[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -55,7 +54,6 @@ export default function Inicio() {
 
     try {
       setIsLoading(true);
-      setError(null);
 
       const userInfo = await getMe(token);
       const dashboardData = await getDashboardCompradorData(token, userInfo);
@@ -72,8 +70,7 @@ export default function Inicio() {
       const message = requestError instanceof Error
         ? requestError.message
         : 'No se pudo cargar los datos del dashboard.';
-      
-      setError(message);
+
       Alert.alert('Error', message);
     } finally {
       setIsLoading(false);
@@ -108,6 +105,7 @@ export default function Inicio() {
 
     if (!token) {
       await clearToken();
+      goToLogin();
       return;
     }
 
@@ -121,7 +119,7 @@ export default function Inicio() {
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [goToLogin]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -137,7 +135,7 @@ export default function Inicio() {
     setSearchSuggestions([]);
   };
 
-  const renderProduct = ({ item }: { item: ProductoDestacado }) => (
+  const renderProduct = (item: ProductoDestacado) => (
     <View style={styles.productCard}>
       <View style={styles.imageContainer}>
         {item.imagen_url ? (
@@ -289,14 +287,13 @@ export default function Inicio() {
       <View style={styles.paddingContainer}>
         <Text style={styles.sectionTitle}>Recomendado para Ti</Text>
         {productos.length > 0 ? (
-          <FlatList
-            data={productos}
-            renderItem={renderProduct}
-            keyExtractor={(item) => item.id.toString()}
-            numColumns={2}
-            scrollEnabled={false}
-            columnWrapperStyle={{ justifyContent: 'space-between' }}
-          />
+          <View style={styles.productsGrid}>
+            {productos.map((item) => (
+              <React.Fragment key={item.id.toString()}>
+                {renderProduct(item)}
+              </React.Fragment>
+            ))}
+          </View>
         ) : (
           <View style={{ paddingVertical: 20, alignItems: 'center' }}>
             <Text style={{ color: '#6B7280', marginBottom: 10 }}>No hay productos disponibles</Text>
@@ -335,6 +332,7 @@ const styles = StyleSheet.create({
   categoryItem: { alignItems: 'center', marginRight: 20 },
   categoryIconCircle: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#0f2f6f', justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
   categoryName: { fontSize: 12, color: '#1C3A5C' },
+  productsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   productCard: { width: columnWidth, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e8ecf0', marginBottom: 16, overflow: 'hidden' },
   imageContainer: { width: '100%', height: 120, backgroundColor: '#f3f7ff' },
   productImage: { width: '100%', height: '100%' },

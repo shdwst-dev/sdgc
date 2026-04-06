@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
 import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { getCarritoLocal, saveCarritoLocal, CartItem, checkout } from '../../services/comprador';
 import { ApiError } from '../../services/auth';
 import { getToken, hydrateToken, clearToken } from '../../services/storage';
-
-const { width } = Dimensions.get('window');
 
 export default function Carrito() {
   const navigation = useNavigation();
@@ -16,7 +14,7 @@ export default function Carrito() {
   const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   const goToLogin = useCallback(() => {
-    navigation.reset({ index: 0, routes: [{ name: 'LoginScreen' as never }] });
+    navigation.reset({ index: 0, routes: [{ name: 'InicioSesion' as never }] });
   }, [navigation]);
 
   useEffect(() => {

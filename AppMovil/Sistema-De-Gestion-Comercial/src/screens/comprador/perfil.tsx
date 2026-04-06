@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch, StatusBar, Platform, ActivityIndicator, Modal, TextInput, FlatList } from 'react-native';
-import { User, Package, MapPin, CreditCard, LogOut, ChevronRight, X, Plus, Edit2, Trash2 } from 'lucide-react-native';
+import { User, Package, MapPin, CreditCard, LogOut, ChevronRight, X, Edit2, Trash2 } from 'lucide-react-native';
 import { useNavigation, CommonActions, useFocusEffect } from '@react-navigation/native';
 import { ApiError, getMe, logout, MeResponse } from '../../services/auth';
 import { clearToken, getToken, hydrateToken } from '../../services/storage';
@@ -354,12 +354,9 @@ export default function Perfil() {
                 {direcciones.length === 0 ? (
                   <Text style={styles.emptyText}>No hay direcciones guardadas</Text>
                 ) : (
-                  <FlatList
-                    data={direcciones}
-                    keyExtractor={(item) => item.id.toString()}
-                    scrollEnabled={false}
-                    renderItem={({ item }) => (
-                      <View style={styles.direccionItem}>
+                  <>
+                    {direcciones.map((item) => (
+                      <View style={styles.direccionItem} key={item.id.toString()}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.direccionCalle}>{item.calle} {item.numero_exterior}</Text>
                           <Text style={styles.direccionDetails}>{item.colonia}, {item.ciudad}</Text>
@@ -375,8 +372,8 @@ export default function Perfil() {
                           </TouchableOpacity>
                         </View>
                       </View>
-                    )}
-                  />
+                    ))}
+                  </>
                 )}
               </View>
             ) : null}

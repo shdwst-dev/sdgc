@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, Dimensio
 import { Search, SlidersHorizontal, X } from 'lucide-react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { Image } from 'react-native';
-import { ApiError, getMe } from '../../services/auth';
+import { ApiError } from '../../services/auth';
 import { buscarProductos, Producto, addToCarritoLocal } from '../../services/comprador';
 import { clearToken, getToken, hydrateToken } from '../../services/storage';
 
@@ -103,10 +103,10 @@ export default function Buscar() {
   }, [searchQuery, performSearch, selectedCategory]);
 
   useEffect(() => {
-    if ((searchQuery.trim().length > 0 || selectedCategory) && productos.length > 0) {
+    if (searchQuery.trim().length > 0 || selectedCategory) {
       performSearch(searchQuery);
     }
-  }, [sortBy]);
+  }, [sortBy, selectedCategory, searchQuery, performSearch]);
 
   const handleSortPress = () => {
     Alert.alert(

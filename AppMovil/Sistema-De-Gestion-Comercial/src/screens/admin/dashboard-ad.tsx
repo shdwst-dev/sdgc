@@ -1,66 +1,229 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { DollarSign, TrendingUp, TrendingDown, ShoppingCart, Package } from 'lucide-react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { DollarSign, TrendingUp, TrendingDown, ShoppingCart, Package, RefreshCw } from 'lucide-react-native';
+import { CommonActions, useNavigation } from '@react-navigation/native';
+import {
+  DashboardMetricas,
+  TopProducto,
+  getDashboardData,
+  getTopProductos,
+} from '../../services/dashboard';
+import { ApiError } from '../../services/apiClient';
+import { clearToken, getToken, hydrateToken } from '../../services/storage';
 
-const metricsData = [
-  { title: 'Ventas Hoy', icon: DollarSign, value: '$12,450', change: '+12%' },
-  { title: 'Ventas Mes', icon: TrendingUp, value: '$345,890', change: '+24%' },
-  { title: 'Gastos Mes', icon: TrendingDown, value: '$89,250', change: '-8%' },
-  { title: 'Pedidos', icon: ShoppingCart, value: '1,234', change: '+18%' },
-];
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const topProducts = [
-  { name: 'Laptop Dell XPS 15', sales: '$45,890', units: 89 },
-  { name: 'iPhone 14 Pro', sales: '$38,450', units: 76 },
-  { name: 'Samsung 4K TV', sales: '$32,100', units: 45 },
-];
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function DashboardAdmin() {
+  const navigation = useNavigation();
+  const [metricas, setMetricas] = useState<DashboardMetricas | null>(null);
+  const [topProductos, setTopProductos] = useState<TopProducto[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const goToLogin = useCallback(() => {
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'InicioSesion' as never }],
+      }),
+    );
+  }, [navigation]);
+
+  const requireToken = useCallback(async (): Promise<string | null> => {
+    let token = getToken();
+    if (!token) token = await hydrateToken();
+    if (!token) {
+      await clearToken();
+      goToLogin();
+      return null;
+    }
+    return token;
+  }, [goToLogin]);
+
+  const loadDashboard = useCallback(async (showFullLoader = true) => {
+    const token = await requireToken();
+    if (!token) return;
+
+    if (showFullLoader) setIsLoading(true);
+    else setIsRefreshing(true);
+
+    setError(null);
+
+    try {
+      const [dashData, topData] = await Promise.all([
+        getDashboardData(token),
+        getTopProductos(token),
+      ]);
+
+      setMetricas(dashData);
+      setTopProductos(topData);
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        await clearToken();
+        Alert.alert('Sesión expirada', 'Inicia sesión nuevamente.');
+        goToLogin();
+        return;
+      }
+
+      const message = requestError instanceof Error
+        ? requestError.message
+        : 'No se pudo cargar el dashboard.';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [goToLogin, requireToken]);
+
+  useEffect(() => {
+    loadDashboard().catch(() => {
+      setError('No se pudo cargar el dashboard.');
+      setIsLoading(false);
+    });
+  }, [loadDashboard]);
+
+  // Tarjetas de métricas derivadas del backend
+  const metricsCards = metricas
+    ? [
+        {
+          title: 'Ingresos Hoy',
+          icon: DollarSign,
+          value: formatCurrency(metricas.ingresos_hoy),
+        },
+        {
+          title: 'Ingresos Mes',
+          icon: TrendingUp,
+          value: formatCurrency(metricas.ingresos_mes),
+        },
+        {
+          title: 'Gastos Mes',
+          icon: TrendingDown,
+          value: formatCurrency(metricas.gastos_mes),
+        },
+        {
+          title: 'Ganancia',
+          icon: ShoppingCart,
+          value: formatCurrency(metricas.ganancia_mes),
+        },
+      ]
+    : [];
+
+  // ─── Loading state ─────────────────────────────────────────────────────────
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#1C273F" />
+        <Text style={{ marginTop: 12, color: '#6B7280' }}>Cargando dashboard...</Text>
+      </View>
+    );
+  }
+
+  // ─── Error state ───────────────────────────────────────────────────────────
+
+  if (error && !metricas) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+        <Text style={{ color: '#991B1B', fontWeight: '700', fontSize: 16, marginBottom: 8, textAlign: 'center' }}>
+          No se pudo cargar el dashboard
+        </Text>
+        <Text style={{ color: '#7F1D1D', fontSize: 13, textAlign: 'center', marginBottom: 16 }}>{error}</Text>
+        <TouchableOpacity
+          style={{ backgroundColor: '#1C273F', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+          onPress={() => loadDashboard()}
+        >
+          <Text style={{ color: '#FFF', fontWeight: '600' }}>Reintentar</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
     <ScrollView style={styles.container}>
-      <Text style={styles.headerTitle}>Dashboard Admin</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.headerTitle}>Dashboard Admin</Text>
+        <TouchableOpacity onPress={() => loadDashboard(false)} disabled={isRefreshing}>
+          {isRefreshing ? (
+            <ActivityIndicator size="small" color="#1C273F" />
+          ) : (
+            <RefreshCw size={20} color="#1C273F" />
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {metricas?.periodo_referencia ? (
+        <Text style={styles.periodoText}>{metricas.periodo_referencia}</Text>
+      ) : null}
 
       <View style={styles.grid}>
-        {metricsData.map((item, index) => (
+        {metricsCards.map((item, index) => (
           <View key={index} style={styles.metricCard}>
             <View style={styles.cardHeader}>
               <Text style={styles.metricTitle}>{item.title}</Text>
               <item.icon size={20} color="#fff" opacity={0.9} />
             </View>
             <Text style={styles.metricValue}>{item.value}</Text>
-            <Text style={styles.metricChange}>{item.change}</Text>
           </View>
         ))}
       </View>
 
       <View style={styles.whiteCard}>
-        <Text style={styles.sectionTitle}>Ingresos vs Gastos</Text>
-        <View style={styles.chartPlaceholder}>
-          <TrendingUp size={40} color="#1C273F" />
-          <Text style={{ marginTop: 8, color: '#101828' }}>Gráfico de Líneas</Text>
+        <Text style={styles.sectionTitle}>Top Productos Vendidos</Text>
+        {topProductos.length > 0 ? (
+          topProductos.map((product, index) => (
+            <View key={index} style={styles.productRow}>
+              <View style={styles.productIconContainer}>
+                <Package size={20} color="#fff" />
+              </View>
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <Text style={styles.productName}>{product.nombre}</Text>
+                <Text style={styles.productUnits}>{product.cantidad} unidades vendidas</Text>
+              </View>
+            </View>
+          ))
+        ) : (
+          <Text style={styles.emptyText}>No hay datos de ventas en este período.</Text>
+        )}
+      </View>
+
+      {/* Flujo mensual */}
+      {metricas?.flujo_mensual && metricas.flujo_mensual.labels.length > 0 ? (
+        <View style={styles.whiteCard}>
+          <Text style={styles.sectionTitle}>Flujo Mensual</Text>
+          {metricas.flujo_mensual.labels.slice(-7).map((label, i) => {
+            const startIdx = Math.max(metricas.flujo_mensual.labels.length - 7, 0);
+            const ingreso = metricas.flujo_mensual.ingresos[startIdx + i] ?? 0;
+            const gasto = metricas.flujo_mensual.gastos[startIdx + i] ?? 0;
+
+            return (
+              <View key={i} style={styles.flujoRow}>
+                <Text style={styles.flujoFecha}>{label}</Text>
+                <Text style={[styles.flujoMonto, { color: '#15803D' }]}>
+                  +{formatCurrency(ingreso)}
+                </Text>
+                <Text style={[styles.flujoMonto, { color: '#B91C1C' }]}>
+                  -{formatCurrency(gasto)}
+                </Text>
+              </View>
+            );
+          })}
         </View>
-      </View>
+      ) : null}
 
-      <View style={styles.whiteCard}>
-        <Text style={styles.sectionTitle}>Top Productos</Text>
-        {topProducts.map((product, index) => (
-          <View key={index} style={styles.productRow}>
-            <View style={styles.productIconContainer}>
-              <Package size={20} color="#fff" />
-            </View>
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <Text style={styles.productName}>{product.name}</Text>
-              <Text style={styles.productUnits}>{product.units} unidades</Text>
-            </View>
-            <View style={{ alignItems: 'flex-end' }}>
-              <Text style={styles.productSales}>{product.sales}</Text>
-              <TouchableOpacity>
-                <Text style={styles.viewLink}>Ver</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
-      </View>
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
@@ -71,12 +234,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8fafc',
     padding: 16,
   },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+    marginTop: 40,
+  },
   headerTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#1C273F',
-    marginBottom: 20,
-    marginTop: 40, 
+  },
+  periodoText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 16,
   },
   grid: {
     flexDirection: 'row',
@@ -85,7 +258,7 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     backgroundColor: '#1C273F',
-    width: '48%', 
+    width: '48%',
     padding: 16,
     borderRadius: 12,
     marginBottom: 12,
@@ -105,11 +278,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
-  metricChange: {
-    color: '#CBD5F5',
-    fontSize: 12,
-    marginTop: 4,
-  },
   whiteCard: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -123,13 +291,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#101828',
     marginBottom: 12,
-  },
-  chartPlaceholder: {
-    height: 150,
-    backgroundColor: '#f1f5f9',
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   productRow: {
     flexDirection: 'row',
@@ -155,14 +316,27 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748b',
   },
-  productSales: {
+  emptyText: {
+    textAlign: 'center',
+    color: '#6B7280',
     fontSize: 14,
-    fontWeight: '600',
-    color: '#101828',
+    paddingVertical: 20,
   },
-  viewLink: {
+  flujoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  flujoFecha: {
     fontSize: 12,
-    color: '#1C273F',
-    textDecorationLine: 'underline',
+    color: '#6B7280',
+    flex: 1,
+  },
+  flujoMonto: {
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 12,
   },
 });

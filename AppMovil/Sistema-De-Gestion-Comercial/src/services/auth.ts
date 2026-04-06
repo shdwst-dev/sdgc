@@ -1,46 +1,31 @@
-import { Platform } from 'react-native';
+/**
+ * auth.ts — Servicios de autenticación.
+ *
+ * Re-exporta API_BASE_URL y ApiError desde apiClient para mantener
+ * compatibilidad con los imports existentes en pantallas.
+ */
 
-function resolveApiBaseUrl(): string {
-  const fallback = Platform.OS === 'web'
-    ? 'http://localhost:8000/api/v1'
-    : 'http://10.0.2.2:8000/api/v1';
-  const configuredUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+import { apiRequest, API_BASE_URL, ApiError } from './apiClient';
 
-  if (!configuredUrl) {
-    return fallback;
-  }
+// Re-exports de compatibilidad (usado en inventario.ts, comprador.ts, screens)
+export { API_BASE_URL, ApiError };
 
-  try {
-    const parsed = new URL(configuredUrl);
-    const localhostHosts = new Set(['localhost', '127.0.0.1']);
-
-    if (Platform.OS === 'android' && localhostHosts.has(parsed.hostname)) {
-      parsed.hostname = '10.0.2.2';
-      return parsed.toString().replace(/\/$/, '');
-    }
-
-    if (Platform.OS === 'web' && parsed.hostname === '10.0.2.2') {
-      parsed.hostname = 'localhost';
-      return parsed.toString().replace(/\/$/, '');
-    }
-
-    return configuredUrl.replace(/\/$/, '');
-  } catch {
-    return fallback;
-  }
-}
-
-export const API_BASE_URL = resolveApiBaseUrl();
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 export type UsuarioAutenticado = {
   id_usuario: number;
   email: string;
   rol: string | null;
+  tienda?: {
+    id_tienda: number;
+    nombre: string;
+  } | null;
 };
 
 export type LoginResponse = {
   token: string;
   hash?: string;
+  requiere_cambio_contrasena?: boolean;
   usuario: UsuarioAutenticado;
 };
 
@@ -53,127 +38,60 @@ export type MeResponse = {
   email: string;
   rol?: EntityNombre | string;
   estatus?: EntityNombre | string;
+  tienda?: {
+    id_tienda: number;
+    nombre: string;
+  } | null;
   persona?: {
     nombre?: string;
     apellido_paterno?: string;
     apellido_materno?: string;
+    telefono?: string;
   } | null;
 };
 
-type ApiErrorResponse = {
-  message?: string;
-  errors?: Record<string, string[]>;
-};
-
-export class ApiError extends Error {
-  status: number;
-
-  constructor(message: string, status: number) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-  }
-}
-
-function buildApiErrorMessage(status: number, body: ApiErrorResponse | null): string {
-  const firstValidationError = body?.errors
-    ? Object.values(body.errors).flat()[0]
-    : undefined;
-
-  if (firstValidationError) {
-    return firstValidationError;
-  }
-
-  if (body?.message) {
-    return body.message;
-  }
-
-  if (status >= 500) {
-    return 'Error interno del servidor.';
-  }
-
-  return 'No se pudo iniciar sesion. Intenta nuevamente.';
-}
+// ─── Login ───────────────────────────────────────────────────────────────────
 
 export async function login(email: string, contrasena: string): Promise<LoginResponse> {
-  const response = await fetch(`${API_BASE_URL}/auth/login`, {
+  const body = await apiRequest<LoginResponse>('/auth/login', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify({ email, contrasena }),
+    body: { email, contrasena },
+    fallbackError: 'No se pudo iniciar sesión. Intenta nuevamente.',
   });
 
-  let body: LoginResponse | ApiErrorResponse | null;
-
-  try {
-    body = (await response.json()) as LoginResponse | ApiErrorResponse;
-  } catch {
-    body = null;
+  if (!body?.token || !body?.usuario) {
+    throw new ApiError('La respuesta del servidor no es válida.', 500);
   }
 
-  if (!response.ok) {
-    throw new ApiError(
-      buildApiErrorMessage(response.status, body as ApiErrorResponse | null),
-      response.status,
-    );
-  }
-
-  const successBody = body as LoginResponse;
-
-  if (!successBody?.token || !successBody?.usuario) {
-    throw new ApiError('La respuesta del servidor no es valida.', 500);
-  }
-
-  return successBody;
+  return body;
 }
 
-export async function logout(token: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/auth/logout`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-  });
+// ─── Logout ──────────────────────────────────────────────────────────────────
 
-  if (!response.ok) {
+export async function logout(token: string): Promise<void> {
+  try {
+    await apiRequest('/auth/logout', {
+      method: 'POST',
+      token,
+      retries: 0,
+      fallbackError: 'No se pudo cerrar la sesión en el servidor.',
+    });
+  } catch {
     console.error('Error al cerrar sesión en el servidor');
   }
 }
 
+// ─── Me (perfil) ─────────────────────────────────────────────────────────────
+
 export async function getMe(token: string): Promise<MeResponse> {
-  const response = await fetch(`${API_BASE_URL}/auth/me`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
+  const body = await apiRequest<MeResponse>('/auth/me', {
+    token,
+    fallbackError: 'No se pudo cargar el perfil del usuario.',
   });
 
-  let body: MeResponse | ApiErrorResponse | null;
-
-  try {
-    body = (await response.json()) as MeResponse | ApiErrorResponse;
-  } catch {
-    body = null;
+  if (!body?.email) {
+    throw new ApiError('La respuesta del servidor no es válida.', 500);
   }
 
-  if (!response.ok) {
-    throw new ApiError(
-      buildApiErrorMessage(response.status, body as ApiErrorResponse | null),
-      response.status,
-    );
-  }
-
-  const successBody = body as MeResponse;
-
-  if (!successBody?.email) {
-    throw new ApiError('La respuesta del servidor no es valida.', 500);
-  }
-
-  return successBody;
+  return body;
 }

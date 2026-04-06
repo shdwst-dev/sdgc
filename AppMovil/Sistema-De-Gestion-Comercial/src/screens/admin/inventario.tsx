@@ -401,6 +401,7 @@ export default function Inventario() {
           nombre,
           precioBase,
           precioUnitario,
+          stock: Number(form.stock) || 0,
           codigoBarras: form.sku.trim() || undefined,
           imagenUrl: form.imagenUrl.trim() || undefined,
           idEstatus,

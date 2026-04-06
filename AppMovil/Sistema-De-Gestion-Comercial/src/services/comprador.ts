@@ -1,10 +1,17 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { API_BASE_URL, ApiError, MeResponse } from './auth';
+/**
+ * comprador.ts — Servicios para flujo de comprador.
+ *
+ * Usa apiClient centralizado. Corrige checkout para usar
+ * POST /api/v1/ventas/registrar (no /compras).
+ */
 
-type ApiErrorResponse = {
-  message?: string;
-  errors?: Record<string, string[]>;
-};
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiRequest, ApiError } from './apiClient';
+import type { MeResponse } from './auth';
+
+export { ApiError };
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 export type ProductoDestacado = {
   id: number;
@@ -25,6 +32,11 @@ export type CartItem = {
   imagen_url: string | null;
 };
 
+export type MetodoPago = {
+  id_metodo_pago: number;
+  nombre: string;
+};
+
 export type DashboardCompradorData = {
   usuario: MeResponse;
   productosDestacados: ProductoDestacado[];
@@ -32,69 +44,37 @@ export type DashboardCompradorData = {
   comprasHoy: number;
 };
 
-function getErrorMessage(status: number, body: ApiErrorResponse | null, defaultMessage: string): string {
-  const firstValidationError = body?.errors
-    ? Object.values(body.errors).flat()[0]
-    : undefined;
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-  if (firstValidationError) {
-    return firstValidationError;
-  }
-
-  if (body?.message) {
-    return body.message;
-  }
-
-  if (status >= 500) {
-    return 'Error interno del servidor.';
-  }
-
-  return defaultMessage;
-}
-
-function mapProducto(raw: any): Producto {
+function mapProducto(raw: Record<string, unknown>): Producto {
   return {
     id: Number(raw.id_producto ?? raw.id ?? 0),
     nombre: String(raw.nombre ?? raw.name ?? 'Producto sin nombre'),
-    imagen_url: raw.imagen_url ?? null,
+    imagen_url: raw.imagen_url ? String(raw.imagen_url) : null,
     precio_unitario: Number(raw.precio_unitario ?? raw.precio_base ?? 0),
     categoria: String(raw.categoria ?? raw.nombre_subcategoria ?? raw.subcategoria ?? 'Sin categoría'),
     stock_actual: Number(raw.stock_actual ?? raw.stock ?? 0),
   };
 }
 
+function extractDataArray(body: unknown): unknown[] {
+  if (Array.isArray(body)) return body;
+
+  const asObj = body as { data?: unknown[] } | null;
+  if (Array.isArray(asObj?.data)) return asObj!.data;
+
+  return [];
+}
+
+// ─── Productos ───────────────────────────────────────────────────────────────
+
 export async function getProductosDestacados(token: string): Promise<Producto[]> {
-  const response = await fetch(`${API_BASE_URL}/productos?limit=10`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
+  const body = await apiRequest<unknown>('/productos?limit=10', {
+    token,
+    fallbackError: 'No se pudo cargar los productos.',
   });
 
-  let body: unknown;
-
-  try {
-    body = await response.json();
-  } catch {
-    body = null;
-  }
-
-  if (!response.ok) {
-    throw new ApiError(
-      getErrorMessage(response.status, body as ApiErrorResponse | null, 'No se pudo cargar los productos.'),
-      response.status,
-    );
-  }
-
-  const rows = Array.isArray(body)
-    ? body
-    : Array.isArray((body as { data?: unknown[] } | null)?.data)
-      ? (body as { data: unknown[] }).data
-      : [];
-
-  return rows.slice(0, 10).map(mapProducto);
+  return extractDataArray(body).slice(0, 10).map((raw) => mapProducto(raw as Record<string, unknown>));
 }
 
 export async function buscarProductos(token: string, query: string): Promise<Producto[]> {
@@ -103,58 +83,32 @@ export async function buscarProductos(token: string, query: string): Promise<Pro
     params.append('search', query.trim());
   }
 
-  const response = await fetch(`${API_BASE_URL}/productos?${params.toString()}`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
+  const body = await apiRequest<unknown>(`/productos?${params.toString()}`, {
+    token,
+    fallbackError: 'No se pudo realizar la búsqueda.',
   });
 
-  let body: unknown;
-
-  try {
-    body = await response.json();
-  } catch {
-    body = null;
-  }
-
-  if (!response.ok) {
-    throw new ApiError(
-      getErrorMessage(response.status, body as ApiErrorResponse | null, 'No se pudo realizar la búsqueda.'),
-      response.status,
-    );
-  }
-
-  const rows = Array.isArray(body)
-    ? body
-    : Array.isArray((body as { data?: unknown[] } | null)?.data)
-      ? (body as { data: unknown[] }).data
-      : [];
-
-  return rows.map(mapProducto);
+  return extractDataArray(body).map((raw) => mapProducto(raw as Record<string, unknown>));
 }
 
-export async function getDashboardCompradorData(token: string, userInfo: MeResponse): Promise<DashboardCompradorData> {
-  try {
-    const productosDestacados = await getProductosDestacados(token);
-    
-    const totalCompras = 12;
-    const comprasHoy = 2;
+// ─── Dashboard Comprador ─────────────────────────────────────────────────────
 
-    return {
-      usuario: userInfo,
-      productosDestacados,
-      totalCompras,
-      comprasHoy,
-    };
-  } catch (error) {
-    throw error;
-  }
+export async function getDashboardCompradorData(
+  token: string,
+  userInfo: MeResponse,
+): Promise<DashboardCompradorData> {
+  const productosDestacados = await getProductosDestacados(token);
+
+  return {
+    usuario: userInfo,
+    productosDestacados,
+    totalCompras: 0,
+    comprasHoy: 0,
+  };
 }
 
-// Cart management functions
+// ─── Carrito local (AsyncStorage) ────────────────────────────────────────────
+
 export async function getCarritoLocal(): Promise<CartItem[]> {
   try {
     const carritoData = await AsyncStorage.getItem('@carrito');
@@ -174,68 +128,89 @@ export async function saveCarritoLocal(cart: CartItem[]): Promise<void> {
 }
 
 export async function addToCarritoLocal(producto: Producto, cantidad: number = 1): Promise<CartItem[]> {
+  const cart = await getCarritoLocal();
+  const existingItem = cart.find((item) => item.id === producto.id);
+
+  if (existingItem) {
+    existingItem.cantidad += cantidad;
+  } else {
+    cart.push({
+      id: producto.id,
+      nombre: producto.nombre,
+      precio_unitario: producto.precio_unitario,
+      cantidad,
+      imagen_url: producto.imagen_url,
+    });
+  }
+
+  await saveCarritoLocal(cart);
+  return cart;
+}
+
+export async function clearCarritoLocal(): Promise<void> {
+  await AsyncStorage.removeItem('@carrito');
+}
+
+// ─── Métodos de pago ─────────────────────────────────────────────────────────
+
+export async function getMetodosPago(token: string): Promise<MetodoPago[]> {
   try {
-    const cart = await getCarritoLocal();
-    const existingItem = cart.find(item => item.id === producto.id);
-    
-    if (existingItem) {
-      existingItem.cantidad += cantidad;
-    } else {
-      cart.push({
-        id: producto.id,
-        nombre: producto.nombre,
-        precio_unitario: producto.precio_unitario,
-        cantidad,
-        imagen_url: producto.imagen_url,
-      });
-    }
-    
-    await saveCarritoLocal(cart);
-    return cart;
-  } catch (error) {
-    console.error('Error adding to cart:', error);
-    throw error;
+    // /api/ventas (sin v1) devuelve { catalogos: { metodos_pago: [...] }, ... }
+    const { getApiRootUrl } = await import('./apiClient');
+
+    const body = await apiRequest<Record<string, unknown>>('/ventas', {
+      token,
+      baseUrl: getApiRootUrl(),
+      fallbackError: 'No se pudieron cargar los métodos de pago.',
+    });
+
+    // metodos_pago está dentro de catalogos
+    const catalogos = (body?.catalogos ?? {}) as Record<string, unknown>;
+    const items = Array.isArray(catalogos?.metodos_pago) ? catalogos.metodos_pago : [];
+
+    return items.map((raw: Record<string, unknown>) => ({
+      id_metodo_pago: Number(raw.id_metodo_pago ?? raw.id ?? 0),
+      nombre: String(raw.nombre ?? ''),
+    }));
+  } catch {
+    // Fallback: devolver métodos de pago por defecto
+    return [
+      { id_metodo_pago: 1, nombre: 'Efectivo' },
+      { id_metodo_pago: 2, nombre: 'Tarjeta de Crédito' },
+      { id_metodo_pago: 3, nombre: 'Tarjeta de Débito' },
+      { id_metodo_pago: 4, nombre: 'Transferencia' },
+    ];
   }
 }
 
-export async function checkout(token: string, cartItems: CartItem[]): Promise<any> {
+// ─── Checkout (CORREGIDO: ahora usa POST /api/v1/ventas/registrar) ───────────
+
+export async function checkout(
+  token: string,
+  cartItems: CartItem[],
+  idMetodoPago: number = 1,
+): Promise<{ message: string }> {
   if (!cartItems || cartItems.length === 0) {
     throw new ApiError('El carrito está vacío.', 400);
   }
 
   const payload = {
-    items: cartItems.map(item => ({
+    id_metodo_pago: idMetodoPago,
+    detalles: cartItems.map((item) => ({
       producto_id: item.id,
       cantidad: item.cantidad,
-      precio: item.precio_unitario,
     })),
-    total: cartItems.reduce((acc, item) => acc + (item.precio_unitario * item.cantidad), 0),
   };
 
-  const response = await fetch(`${API_BASE_URL}/compras`, {
+  const result = await apiRequest<{ message: string }>('/ventas/registrar', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
+    token,
+    body: payload,
+    fallbackError: 'No se pudo procesar la compra.',
   });
 
-  let body: unknown;
+  // Limpiar carrito local después de checkout exitoso
+  await clearCarritoLocal();
 
-  try {
-    body = await response.json();
-  } catch {
-    body = null;
-  }
-
-  if (!response.ok) {
-    throw new ApiError(
-      getErrorMessage(response.status, body as ApiErrorResponse | null, 'No se pudo procesar el pago.'),
-      response.status,
-    );
-  }
-
-  return body;
+  return result;
 }

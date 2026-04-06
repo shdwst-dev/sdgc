@@ -1,68 +1,117 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, FlatList, Dimensions } from 'react-native';
-import { FileText, ChevronRight, X } from 'lucide-react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal, FlatList, Dimensions, Alert, ActivityIndicator } from 'react-native';
+import { FileText, ChevronRight, RefreshCw } from 'lucide-react-native';
+import { CommonActions, useNavigation } from '@react-navigation/native';
+import { getVentasRecientes, VentaReciente } from '../../services/dashboard';
+import { ApiError } from '../../services/apiClient';
+import { clearToken, getToken, hydrateToken } from '../../services/storage';
 
 const { width } = Dimensions.get('window');
 
-interface Sale {
-  id: string;
-  date: string;
-  customer: string;
-  amount: string;
-  items: number;
-  status: 'Completado' | 'Pendiente' | 'Cancelado';
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN',
+    maximumFractionDigits: 2,
+  }).format(value);
 }
 
-const salesData: Sale[] = [
-  { id: '#12345', date: '22 Feb 2026', customer: 'Juan Pérez', amount: '$1,250', items: 3, status: 'Completado' },
-  { id: '#12346', date: '22 Feb 2026', customer: 'María García', amount: '$890', items: 2, status: 'Completado' },
-  { id: '#12347', date: '21 Feb 2026', customer: 'Carlos López', amount: '$2,340', items: 5, status: 'Pendiente' },
-  { id: '#12348', date: '21 Feb 2026', customer: 'Ana Martínez', amount: '$675', items: 1, status: 'Completado' },
-  { id: '#12349', date: '20 Feb 2026', customer: 'Luis Rodríguez', amount: '$1,890', items: 4, status: 'Completado' },
-  { id: '#12350', date: '20 Feb 2026', customer: 'Sofia González', amount: '$450', items: 2, status: 'Cancelado' },
-];
+function formatDate(dateStr: string): string {
+  if (!dateStr) return '';
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 
 export default function Ventas() {
-  const [selectedSale, setSelectedSale] = useState<Sale | null>(null);
+  const navigation = useNavigation();
+  const [ventas, setVentas] = useState<VentaReciente[]>([]);
+  const [selectedVenta, setSelectedVenta] = useState<VentaReciente | null>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const openDetail = (sale: Sale) => {
-    setSelectedSale(sale);
+  const goToLogin = useCallback(() => {
+    navigation.dispatch(
+      CommonActions.reset({ index: 0, routes: [{ name: 'InicioSesion' as never }] }),
+    );
+  }, [navigation]);
+
+  const requireToken = useCallback(async (): Promise<string | null> => {
+    let token = getToken();
+    if (!token) token = await hydrateToken();
+    if (!token) { await clearToken(); goToLogin(); return null; }
+    return token;
+  }, [goToLogin]);
+
+  const loadVentas = useCallback(async (showFullLoader = true) => {
+    const token = await requireToken();
+    if (!token) return;
+
+    if (showFullLoader) setIsLoading(true);
+    else setIsRefreshing(true);
+    setError(null);
+
+    try {
+      const data = await getVentasRecientes(token);
+      setVentas(data);
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        await clearToken();
+        Alert.alert('Sesión expirada', 'Inicia sesión nuevamente.');
+        goToLogin();
+        return;
+      }
+      const message = requestError instanceof Error ? requestError.message : 'No se pudo cargar las ventas.';
+      setError(message);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [goToLogin, requireToken]);
+
+  useEffect(() => {
+    loadVentas().catch(() => { setError('No se pudo cargar las ventas.'); setIsLoading(false); });
+  }, [loadVentas]);
+
+  const openDetail = (venta: VentaReciente) => {
+    setSelectedVenta(venta);
     setModalVisible(true);
   };
 
-  const getStatusStyle = (status: string) => {
-    switch (status) {
-      case 'Completado': return { bg: '#DCFCE7', text: '#15803D' };
-      case 'Pendiente': return { bg: '#FEF9C3', text: '#A16207' };
-      case 'Cancelado': return { bg: '#FEE2E2', text: '#B91C1C' };
-      default: return { bg: '#F3F4F6', text: '#374151' };
-    }
-  };
+  // Métricas derivadas
+  const totalVentas = ventas.reduce((sum, v) => sum + v.monto, 0);
+  const ventasCount = ventas.length;
+  const promedio = ventasCount > 0 ? totalVentas / ventasCount : 0;
 
-  const renderSaleItem = ({ item }: { item: Sale }) => {
-    const statusColors = getStatusStyle(item.status);
-    
+  // ─── Render item ─────────────────────────────────────────────────────────
+
+  const renderSaleItem = ({ item }: { item: VentaReciente }) => {
     return (
-      <TouchableOpacity 
-        style={styles.saleItem} 
-        onPress={() => openDetail(item)}
-      >
+      <TouchableOpacity style={styles.saleItem} onPress={() => openDetail(item)}>
         <View style={styles.saleItemLeft}>
           <View style={styles.iconContainer}>
             <FileText size={20} color="#FFF" />
           </View>
           <View>
-            <Text style={styles.saleId}>{item.id}</Text>
-            <Text style={styles.customerText}>{item.customer}</Text>
-            <Text style={styles.dateText}>{item.date}</Text>
+            <Text style={styles.saleId}>{item.factura}</Text>
+            <Text style={styles.customerText}>{item.responsable}</Text>
+            <Text style={styles.dateText}>{formatDate(item.fecha)}</Text>
           </View>
         </View>
         <View style={styles.saleItemRight}>
           <View style={{ alignItems: 'flex-end' }}>
-            <Text style={styles.amountText}>{item.amount}</Text>
-            <View style={[styles.statusBadge, { backgroundColor: statusColors.bg }]}>
-              <Text style={[styles.statusText, { color: statusColors.text }]}>{item.status}</Text>
+            <Text style={styles.amountText}>{formatCurrency(item.monto)}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: '#DCFCE7' }]}>
+              <Text style={[styles.statusText, { color: '#15803D' }]}>Completado</Text>
             </View>
           </View>
           <ChevronRight size={20} color="#9CA3AF" />
@@ -71,96 +120,100 @@ export default function Ventas() {
     );
   };
 
+  // ─── Loading / error states ──────────────────────────────────────────────
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#1C273F" />
+        <Text style={{ marginTop: 12, color: '#6B7280' }}>Cargando ventas...</Text>
+      </View>
+    );
+  }
+
+  if (error && ventas.length === 0) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 32 }]}>
+        <Text style={{ color: '#991B1B', fontWeight: '700', fontSize: 16, marginBottom: 8 }}>No se pudo cargar las ventas</Text>
+        <Text style={{ color: '#7F1D1D', fontSize: 13, marginBottom: 16, textAlign: 'center' }}>{error}</Text>
+        <TouchableOpacity
+          style={{ backgroundColor: '#1C273F', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+          onPress={() => loadVentas()}
+        >
+          <Text style={{ color: '#FFF', fontWeight: '600' }}>Reintentar</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // ─── Main render ─────────────────────────────────────────────────────────
+
   return (
     <View style={styles.container}>
-      <Text style={styles.headerTitle}>Ventas</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.headerTitle}>Ventas</Text>
+        <TouchableOpacity onPress={() => loadVentas(false)} disabled={isRefreshing}>
+          {isRefreshing ? <ActivityIndicator size="small" color="#1C273F" /> : <RefreshCw size={20} color="#1C273F" />}
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.summaryContainer}>
         <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Total Hoy</Text>
-          <Text style={styles.summaryValue}>$4,480</Text>
+          <Text style={styles.summaryLabel}>Total</Text>
+          <Text style={styles.summaryValue}>{formatCurrency(totalVentas)}</Text>
         </View>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Ventas</Text>
-          <Text style={styles.summaryValue}>15</Text>
+          <Text style={styles.summaryValue}>{ventasCount}</Text>
         </View>
         <View style={styles.summaryCard}>
           <Text style={styles.summaryLabel}>Promedio</Text>
-          <Text style={styles.summaryValue}>$299</Text>
+          <Text style={styles.summaryValue}>{formatCurrency(promedio)}</Text>
         </View>
       </View>
 
       <View style={styles.listContainer}>
         <Text style={styles.sectionTitle}>Transacciones Recientes</Text>
         <FlatList
-          data={salesData}
+          data={ventas}
           renderItem={renderSaleItem}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.factura}
           showsVerticalScrollIndicator={false}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
+          ListEmptyComponent={<Text style={styles.emptyText}>No hay ventas registradas.</Text>}
         />
       </View>
 
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
+      {/* Modal de detalle */}
+      <Modal animationType="fade" transparent visible={modalVisible} onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            {selectedSale && (
+            {selectedVenta && (
               <ScrollView showsVerticalScrollIndicator={false}>
                 <View style={styles.modalHeader}>
-                  <View style={styles.modalIconBadge}>
-                    <FileText size={32} color="#FFF" />
-                  </View>
-                  <Text style={styles.modalTitle}>Factura {selectedSale.id}</Text>
-                  <Text style={styles.modalSubtitle}>{selectedSale.date}</Text>
+                  <View style={styles.modalIconBadge}><FileText size={32} color="#FFF" /></View>
+                  <Text style={styles.modalTitle}>{selectedVenta.factura}</Text>
+                  <Text style={styles.modalSubtitle}>{formatDate(selectedVenta.fecha)}</Text>
+                </View>
+
+                <View style={styles.clientBox}>
+                  <Text style={styles.clientLabel}>Responsable</Text>
+                  <Text style={styles.clientName}>{selectedVenta.responsable}</Text>
                 </View>
 
                 <View style={styles.clientBox}>
                   <Text style={styles.clientLabel}>Cliente</Text>
-                  <Text style={styles.clientName}>{selectedSale.customer}</Text>
-                </View>
-
-                <View style={styles.itemsList}>
-                  <View style={styles.itemRow}>
-                    <Text style={styles.itemLabel}>Producto 1</Text>
-                    <Text style={styles.itemValue}>$500</Text>
-                  </View>
-                  <View style={styles.itemRow}>
-                    <Text style={styles.itemLabel}>Producto 2</Text>
-                    <Text style={styles.itemValue}>$400</Text>
-                  </View>
-                  <View style={[styles.itemRow, { borderBottomWidth: 0 }]}>
-                    <Text style={styles.itemLabel}>Producto 3</Text>
-                    <Text style={styles.itemValue}>$350</Text>
-                  </View>
+                  <Text style={styles.clientName}>{selectedVenta.cliente}</Text>
                 </View>
 
                 <View style={styles.totalsSection}>
-                  <View style={styles.totalRow}>
-                    <Text style={styles.totalLabel}>Subtotal</Text>
-                    <Text style={styles.totalValue}>$1,250</Text>
-                  </View>
-                  <View style={styles.totalRow}>
-                    <Text style={styles.totalLabel}>IVA (16%)</Text>
-                    <Text style={styles.totalValue}>$200</Text>
-                  </View>
                   <View style={[styles.totalRow, { marginTop: 10 }]}>
                     <Text style={styles.grandTotalLabel}>Total</Text>
-                    <Text style={styles.grandTotalValue}>{selectedSale.amount}</Text>
+                    <Text style={styles.grandTotalValue}>{formatCurrency(selectedVenta.monto)}</Text>
                   </View>
                 </View>
 
-                <TouchableOpacity style={styles.downloadBtn}>
-                  <Text style={styles.downloadBtnText}>Descargar Factura</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.closeBtn} 
-                  onPress={() => setModalVisible(false)}
-                >
+                <TouchableOpacity style={styles.closeBtn} onPress={() => setModalVisible(false)}>
                   <Text style={styles.closeBtnText}>Cerrar</Text>
                 </TouchableOpacity>
               </ScrollView>
@@ -174,11 +227,12 @@ export default function Ventas() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9FAFB', padding: 16 },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#1C273F', marginBottom: 20, marginTop: 40 },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, marginTop: 40 },
+  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#1C273F' },
   summaryContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
   summaryCard: { backgroundColor: '#FFF', width: (width - 48) / 3, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB' },
   summaryLabel: { fontSize: 10, color: '#6B7280', marginBottom: 4 },
-  summaryValue: { fontSize: 16, fontWeight: 'bold', color: '#101828' },
+  summaryValue: { fontSize: 14, fontWeight: 'bold', color: '#101828' },
   listContainer: { backgroundColor: '#FFF', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', flex: 1 },
   sectionTitle: { fontSize: 16, fontWeight: '600', color: '#101828', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
   saleItem: { flexDirection: 'row', padding: 16, alignItems: 'center', justifyContent: 'space-between' },
@@ -192,27 +246,20 @@ const styles = StyleSheet.create({
   statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, marginTop: 4 },
   statusText: { fontSize: 10, fontWeight: '600' },
   separator: { height: 1, backgroundColor: '#F3F4F6' },
+  emptyText: { textAlign: 'center', color: '#6B7280', fontSize: 14, paddingVertical: 20 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { backgroundColor: '#FFF', width: '90%', borderRadius: 20, padding: 20, maxHeight: '80%' },
   modalHeader: { alignItems: 'center', marginBottom: 24 },
   modalIconBadge: { width: 64, height: 64, backgroundColor: '#1C273F', borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#101828' },
   modalSubtitle: { fontSize: 14, color: '#6B7280' },
-  clientBox: { backgroundColor: '#F9FAFB', padding: 12, borderRadius: 10, marginBottom: 16 },
+  clientBox: { backgroundColor: '#F9FAFB', padding: 12, borderRadius: 10, marginBottom: 12 },
   clientLabel: { fontSize: 11, color: '#6B7280', marginBottom: 2 },
   clientName: { fontSize: 14, fontWeight: '600', color: '#101828' },
-  itemsList: { marginBottom: 20 },
-  itemRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
-  itemLabel: { fontSize: 14, color: '#4B5563' },
-  itemValue: { fontSize: 14, fontWeight: '500', color: '#101828' },
   totalsSection: { borderTopWidth: 2, borderTopColor: '#E5E7EB', paddingTop: 12, marginBottom: 24 },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  totalLabel: { fontSize: 14, color: '#6B7280' },
-  totalValue: { fontSize: 14, color: '#101828' },
   grandTotalLabel: { fontSize: 16, fontWeight: 'bold', color: '#101828' },
   grandTotalValue: { fontSize: 18, fontWeight: 'bold', color: '#101828' },
-  downloadBtn: { backgroundColor: '#1C273F', padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 10 },
-  downloadBtnText: { color: '#FFF', fontWeight: '600', fontSize: 14 },
   closeBtn: { padding: 14, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 10, alignItems: 'center' },
-  closeBtnText: { color: '#101828', fontWeight: '500' }
+  closeBtnText: { color: '#101828', fontWeight: '500' },
 });

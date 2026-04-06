@@ -1,10 +1,15 @@
-import { API_BASE_URL, ApiError } from './auth';
+/**
+ * inventario.ts — Servicios de inventario (productos CRUD).
+ *
+ * Usa apiClient centralizado para requests con timeout, retry y token.
+ */
 
-type ApiErrorResponse = {
-  message?: string;
-  error?: string;
-  errors?: Record<string, string[]>;
-};
+import { apiRequest, ApiError } from './apiClient';
+
+// Re-export para compatibilidad con imports en pantallas
+export { ApiError };
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 export type InventarioProducto = {
   id: number;
@@ -34,10 +39,13 @@ export type ActualizarProductoPayload = {
   nombre: string;
   precioBase: number;
   precioUnitario: number;
+  stock: number;
   codigoBarras?: string;
   imagenUrl?: string;
   idEstatus: number;
 };
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function toNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -54,30 +62,6 @@ function toNumber(value: unknown): number | null {
   }
 
   return null;
-}
-
-function getErrorMessage(status: number, body: ApiErrorResponse | null, defaultMessage: string): string {
-  const firstValidationError = body?.errors
-    ? Object.values(body.errors).flat()[0]
-    : undefined;
-
-  if (firstValidationError) {
-    return firstValidationError;
-  }
-
-  if (body?.error) {
-    return body.error;
-  }
-
-  if (body?.message) {
-    return body.message;
-  }
-
-  if (status >= 500) {
-    return 'Error interno del servidor.';
-  }
-
-  return defaultMessage;
 }
 
 function mapProducto(raw: Record<string, unknown>): InventarioProducto {
@@ -101,86 +85,49 @@ function mapProducto(raw: Record<string, unknown>): InventarioProducto {
   };
 }
 
+function extractDataArray(body: unknown): Record<string, unknown>[] {
+  if (Array.isArray(body)) return body;
+
+  const asObj = body as { data?: unknown[] } | null;
+  if (Array.isArray(asObj?.data)) return asObj!.data as Record<string, unknown>[];
+
+  return [];
+}
+
+// ─── API functions ───────────────────────────────────────────────────────────
+
 export async function getInventario(token: string): Promise<InventarioProducto[]> {
-  const response = await fetch(`${API_BASE_URL}/productos`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
+  const body = await apiRequest<unknown>('/productos', {
+    token,
+    fallbackError: 'No se pudo cargar el inventario.',
   });
 
-  let body: unknown;
-
-  try {
-    body = await response.json();
-  } catch {
-    body = null;
-  }
-
-  if (!response.ok) {
-    throw new ApiError(
-      getErrorMessage(response.status, body as ApiErrorResponse | null, 'No se pudo cargar el inventario.'),
-      response.status,
-    );
-  }
-
-  const rows = Array.isArray(body)
-    ? body
-    : Array.isArray((body as { data?: unknown[] } | null)?.data)
-      ? (body as { data: unknown[] }).data
-      : [];
-
-  return rows
+  return extractDataArray(body)
     .filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object')
     .map(mapProducto)
     .filter((item) => item.id > 0);
 }
 
 export async function getProductoById(token: string, idProducto: number): Promise<InventarioProducto> {
-  const response = await fetch(`${API_BASE_URL}/productos/${idProducto}`, {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
+  const body = await apiRequest<{ data?: unknown }>(`/productos/${idProducto}`, {
+    token,
+    fallbackError: 'No se pudo leer el producto.',
   });
 
-  let body: unknown;
-
-  try {
-    body = await response.json();
-  } catch {
-    body = null;
-  }
-
-  if (!response.ok) {
-    throw new ApiError(
-      getErrorMessage(response.status, body as ApiErrorResponse | null, 'No se pudo leer el producto.'),
-      response.status,
-    );
-  }
-
-  const row = (body as { data?: unknown } | null)?.data;
+  const row = body?.data;
 
   if (!row || typeof row !== 'object') {
-    throw new ApiError('La respuesta del servidor no es valida.', 500);
+    throw new ApiError('La respuesta del servidor no es válida.', 500);
   }
 
   return mapProducto(row as Record<string, unknown>);
 }
 
 export async function crearProducto(token: string, payload: CrearProductoPayload): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/productos`, {
+  await apiRequest('/productos', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
+    token,
+    body: {
       id_medida: payload.idMedida,
       id_unidad: payload.idUnidad,
       id_subcategoria: payload.idSubcategoria,
@@ -190,81 +137,36 @@ export async function crearProducto(token: string, payload: CrearProductoPayload
       codigo_barras: payload.codigoBarras || null,
       imagen_url: payload.imagenUrl || null,
       id_estatus: payload.idEstatus ?? 1,
-    }),
+    },
+    fallbackError: 'No se pudo crear el producto.',
   });
-
-  let body: ApiErrorResponse | null;
-
-  try {
-    body = (await response.json()) as ApiErrorResponse;
-  } catch {
-    body = null;
-  }
-
-  if (!response.ok) {
-    throw new ApiError(
-      getErrorMessage(response.status, body, 'No se pudo crear el producto.'),
-      response.status,
-    );
-  }
 }
 
-export async function actualizarProducto(token: string, idProducto: number, payload: ActualizarProductoPayload): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/productos/${idProducto}`, {
+export async function actualizarProducto(
+  token: string,
+  idProducto: number,
+  payload: ActualizarProductoPayload,
+): Promise<void> {
+  await apiRequest(`/productos/${idProducto}`, {
     method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
+    token,
+    body: {
       nombre: payload.nombre,
       precio_base: payload.precioBase,
       precio_unitario: payload.precioUnitario,
+      stock: payload.stock,
       codigo_barras: payload.codigoBarras || null,
       imagen_url: payload.imagenUrl || null,
       id_estatus: payload.idEstatus,
-    }),
+    },
+    fallbackError: 'No se pudo actualizar el producto.',
   });
-
-  let body: ApiErrorResponse | null;
-
-  try {
-    body = (await response.json()) as ApiErrorResponse;
-  } catch {
-    body = null;
-  }
-
-  if (!response.ok) {
-    throw new ApiError(
-      getErrorMessage(response.status, body, 'No se pudo actualizar el producto.'),
-      response.status,
-    );
-  }
 }
 
 export async function eliminarProducto(token: string, idProducto: number): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/productos/${idProducto}`, {
+  await apiRequest(`/productos/${idProducto}`, {
     method: 'DELETE',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
+    token,
+    fallbackError: 'No se pudo eliminar el producto.',
   });
-
-  let body: ApiErrorResponse | null;
-
-  try {
-    body = (await response.json()) as ApiErrorResponse;
-  } catch {
-    body = null;
-  }
-
-  if (!response.ok) {
-    throw new ApiError(
-      getErrorMessage(response.status, body, 'No se pudo eliminar el producto.'),
-      response.status,
-    );
-  }
 }

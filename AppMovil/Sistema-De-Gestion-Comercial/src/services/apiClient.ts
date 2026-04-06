@@ -15,10 +15,11 @@ import { Platform } from 'react-native';
 // ─── URL resolution ──────────────────────────────────────────────────────────
 
 function resolveApiBaseUrl(): string {
-  const fallback =
-    Platform.OS === 'web'
-      ? 'http://localhost:8000/api/v1'
-      : 'http://10.0.2.2:8000/api/v1';
+  // Para iOS Simulator y Web, localhost funciona. Para Android, 10.0.2.2 es requerido.
+  const isAndroid = Platform.OS === 'android';
+  const fallback = isAndroid
+    ? 'http://10.0.2.2:8000/api/v1'
+    : 'http://localhost:8000/api/v1';
 
   const configuredUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 

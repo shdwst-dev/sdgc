@@ -1,44 +1,112 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, Alert, ActivityIndicator } from 'react-native';
 import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { getCarritoLocal, saveCarritoLocal, CartItem, checkout } from '../../services/comprador';
+import { ApiError } from '../../services/auth';
+import { getToken, hydrateToken, clearToken } from '../../services/storage';
 
 const { width } = Dimensions.get('window');
 
-const initialCart = [
-  { 
-    id: 1, 
-    name: 'Vestido Elegante de Verano', 
-    price: 1299, 
-    quantity: 1,
-    image: 'https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=500' 
-  },
-  { 
-    id: 2, 
-    name: 'Audífonos Inalámbricos Premium', 
-    price: 2499, 
-    quantity: 2,
-    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500' 
-  }
-];
-
 export default function Carrito() {
   const navigation = useNavigation();
-  const [cart, setCart] = useState(initialCart);
+  const isFocused = useIsFocused();
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
 
-  const updateQuantity = (id: number, newQty: number) => {
+  const goToLogin = useCallback(() => {
+    navigation.reset({ index: 0, routes: [{ name: 'LoginScreen' as never }] });
+  }, [navigation]);
+
+  useEffect(() => {
+    if (isFocused) {
+      loadCart();
+    }
+  }, [isFocused]);
+
+  const loadCart = async () => {
+    try {
+      setIsLoading(true);
+      const carritoData = await getCarritoLocal();
+      setCart(carritoData);
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo cargar el carrito');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateQuantity = useCallback(async (id: number, newQty: number) => {
     if (newQty < 1) return;
-    setCart(cart.map(item => item.id === id ? { ...item, quantity: newQty } : item));
-  };
+    
+    const updatedCart = cart.map(item =>
+      item.id === id ? { ...item, cantidad: newQty } : item
+    );
+    setCart(updatedCart);
+    await saveCarritoLocal(updatedCart);
+  }, [cart]);
 
-  const removeFromCart = (id: number) => {
-    Alert.alert("Eliminar", "¿Quitar este producto del carrito?", [
-      { text: "Cancelar", style: "cancel" },
-      { text: "Quitar", style: "destructive", onPress: () => setCart(cart.filter(item => item.id !== id)) }
+  const removeFromCart = useCallback((id: number) => {
+    Alert.alert('Eliminar', '¿Quitar este producto del carrito?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Quitar',
+        style: 'destructive',
+        onPress: async () => {
+          const updatedCart = cart.filter(item => item.id !== id);
+          setCart(updatedCart);
+          await saveCarritoLocal(updatedCart);
+        }
+      }
     ]);
-  };
+  }, [cart]);
 
-  const getCartTotal = () => cart.reduce((acc, item) => acc + (item.price * item.quantity), 0);
+  const getCartTotal = () => 
+    cart.reduce((acc, item) => acc + (item.precio_unitario * item.cantidad), 0);
+
+  const performCheckout = useCallback(async () => {
+    try {
+      const token = getToken() || await hydrateToken();
+      if (!token) {
+        await clearToken();
+        goToLogin();
+        return;
+      }
+
+      setIsCheckingOut(true);
+      await checkout(token, cart);
+      
+      await saveCarritoLocal([]);
+      setCart([]);
+      
+      Alert.alert('¡Éxito!', 'Tu compra ha sido procesada correctamente', [
+        {
+          text: 'OK',
+          onPress: () => navigation.navigate('InicioTab' as never)
+        }
+      ]);
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.status === 401) {
+          await clearToken();
+          goToLogin();
+          return;
+        }
+      }
+      Alert.alert('Error', error instanceof Error ? error.message : 'Error al procesar el pago');
+    } finally {
+      setIsCheckingOut(false);
+    }
+  }, [cart, goToLogin, navigation]);
+
+  if (isLoading) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color="#1C273F" />
+      </View>
+    );
+  }
 
   if (cart.length === 0) {
     return (
@@ -65,22 +133,28 @@ export default function Carrito() {
           {cart.map((item) => (
             <View key={item.id} style={styles.cartCard}>
               <View style={styles.productRow}>
-                <Image source={{ uri: item.image }} style={styles.productImage} />
+                {item.imagen_url ? (
+                  <Image source={{ uri: item.imagen_url }} style={styles.productImage} />
+                ) : (
+                  <View style={[styles.productImage, { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }]}>
+                    <ShoppingBag size={32} color="#D1D5DB" />
+                  </View>
+                )}
                 <View style={styles.productDetails}>
-                  <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-                  <Text style={styles.productPrice}>${item.price.toLocaleString('es-MX')}</Text>
+                  <Text style={styles.productName} numberOfLines={2}>{item.nombre}</Text>
+                  <Text style={styles.productPrice}>${item.precio_unitario.toLocaleString('es-MX')}</Text>
                   
                   <View style={styles.controlsRow}>
                     <View style={styles.quantitySelector}>
                       <TouchableOpacity 
-                        onPress={() => updateQuantity(item.id, item.quantity - 1)}
+                        onPress={() => updateQuantity(item.id, item.cantidad - 1)}
                         style={styles.qtyBtn}
                       >
                         <Minus size={16} color="#101828" />
                       </TouchableOpacity>
-                      <Text style={styles.qtyText}>{item.quantity}</Text>
+                      <Text style={styles.qtyText}>{item.cantidad}</Text>
                       <TouchableOpacity 
-                        onPress={() => updateQuantity(item.id, item.quantity + 1)}
+                        onPress={() => updateQuantity(item.id, item.cantidad + 1)}
                         style={styles.qtyBtn}
                       >
                         <Plus size={16} color="#101828" />
@@ -113,10 +187,15 @@ export default function Carrito() {
         </View>
 
         <TouchableOpacity 
-          style={styles.checkoutBtn}
-          onPress={() => Alert.alert("Compra", "Procesando el pago...")}
+          style={[styles.checkoutBtn, isCheckingOut && styles.checkoutBtnDisabled]}
+          onPress={performCheckout}
+          disabled={isCheckingOut}
         >
-          <Text style={styles.checkoutBtnText}>Proceder al Pago</Text>
+          {isCheckingOut ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text style={styles.checkoutBtnText}>Proceder al Pago</Text>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -125,6 +204,7 @@ export default function Carrito() {
 
 const styles = StyleSheet.create({
   mainContainer: { flex: 1, backgroundColor: '#F9FAFB' },
+  centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F9FAFB' },
   scrollContainer: { flex: 1, padding: 16 },
   headerTitle: { fontSize: 22, fontWeight: 'bold', color: '#101828', marginBottom: 20, marginTop: 40 },
   itemsList: { gap: 16 },
@@ -146,6 +226,7 @@ const styles = StyleSheet.create({
   totalLabel: { fontSize: 16, fontWeight: 'bold', color: '#101828' },
   totalValue: { fontSize: 20, fontWeight: 'bold', color: '#1C273F' },
   checkoutBtn: { backgroundColor: '#1C273F', padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 16 },
+  checkoutBtnDisabled: { backgroundColor: '#9CA3AF' },
   checkoutBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#101828', marginTop: 20 },

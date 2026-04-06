@@ -1,13 +1,81 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch, StatusBar, Platform } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch, StatusBar, Platform, ActivityIndicator } from 'react-native';
 import { User, Package, MapPin, CreditCard, LogOut, ChevronRight } from 'lucide-react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
-import { logout } from '../../services/auth';
-import { getToken, setToken } from '../../services/storage';
+import { ApiError, getMe, logout, MeResponse } from '../../services/auth';
+import { clearToken, getToken, hydrateToken } from '../../services/storage';
 
 export default function Perfil() {
   const navigation = useNavigation();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [profileData, setProfileData] = useState<MeResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const goToLogin = useCallback(() => {
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'InicioSesion' as never }],
+      }),
+    );
+  }, [navigation]);
+
+  const loadProfile = useCallback(async () => {
+    let token = getToken();
+
+    if (!token) {
+      token = await hydrateToken();
+    }
+
+    if (!token) {
+      await clearToken();
+      goToLogin();
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      const userData = await getMe(token);
+      setProfileData(userData);
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        await clearToken();
+        Alert.alert('Sesión expirada', 'Inicia sesión nuevamente.');
+        goToLogin();
+        return;
+      }
+
+      const message = requestError instanceof Error
+        ? requestError.message
+        : 'No se pudo cargar el perfil.';
+      
+      Alert.alert('Error', message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [goToLogin]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  const getDisplayName = () => {
+    if (!profileData?.persona) return 'Usuario';
+    
+    const { nombre, apellido_paterno, apellido_materno } = profileData.persona;
+    const fullName = [nombre, apellido_paterno, apellido_materno]
+      .filter(Boolean)
+      .join(' ')
+      .trim();
+
+    return fullName || 'Usuario';
+  };
+
+  const getRolName = () => {
+    if (!profileData?.rol) return 'Sin rol';
+    if (typeof profileData.rol === 'string') return profileData.rol;
+    return profileData.rol.nombre ?? 'Sin rol';
+  };
 
   const menuItems = [
     {
@@ -30,23 +98,18 @@ export default function Perfil() {
     },
   ];
 
-  const performLogout = () => {
-    // 1. Intentar notificar al servidor (fire and forget)
+  const performLogout = async () => {
     const token = getToken();
     if (token) {
-      logout(token).catch(err => console.error("Error cierre sesión remoto:", err));
+      try {
+        await logout(token);
+      } catch (err) {
+        console.error("Error cierre sesión remoto:", err);
+      }
     }
     
-    // 2. Limpiar localmente
-    setToken(null);
-    
-    // 3. Navegar inmediatamente
-    navigation.dispatch(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: 'InicioSesion' }],
-      })
-    );
+    await clearToken();
+    goToLogin();
   };
 
   const handleLogout = () => {
@@ -71,6 +134,15 @@ export default function Perfil() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#1C273F" />
+        <Text style={{ marginTop: 10, color: '#6B7280' }}>Cargando perfil...</Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <StatusBar barStyle="dark-content" />
@@ -80,8 +152,9 @@ export default function Perfil() {
           <User size={40} color="#FFF" />
         </View>
         <View>
-          <Text style={styles.userName}>Usuario Comprador</Text>
-          <Text style={styles.userEmail}>comprador@prueba.com</Text>
+          <Text style={styles.userName}>{getDisplayName()}</Text>
+          <Text style={styles.userEmail}>{profileData?.email}</Text>
+          <Text style={styles.userRole}>{getRolName()}</Text>
         </View>
       </View>
 
@@ -139,6 +212,7 @@ export default function Perfil() {
         <View style={styles.footer}>
           <Text style={styles.footerText}>Tienda Departamental</Text>
           <Text style={styles.footerText}>Versión 1.0.0</Text>
+          <Text style={styles.footerSubtext}>Conectado a BD</Text>
         </View>
       </View>
       <View style={{ height: 40 }} />
@@ -168,6 +242,7 @@ const styles = StyleSheet.create({
   },
   userName: { fontSize: 20, fontWeight: 'bold', color: '#101828' },
   userEmail: { fontSize: 14, color: '#6B7280' },
+  userRole: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
   content: { padding: 16, gap: 16 },
   sectionCard: { 
     backgroundColor: '#FFF', 
@@ -228,5 +303,6 @@ const styles = StyleSheet.create({
   },
   logoutText: { flex: 1, fontSize: 15, fontWeight: '600', color: '#DC2626' },
   footer: { marginTop: 8, alignItems: 'center' },
-  footerText: { fontSize: 12, color: '#9CA3AF' }
+  footerText: { fontSize: 12, color: '#9CA3AF' },
+  footerSubtext: { fontSize: 11, color: '#D1D5DB', marginTop: 4 }
 });

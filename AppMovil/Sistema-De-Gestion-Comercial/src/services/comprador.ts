@@ -32,6 +32,24 @@ export type DashboardCompradorData = {
   comprasHoy: number;
 };
 
+export type Direccion = {
+  id: number;
+  calle: string;
+  numero_exterior: number;
+  numero_interior?: number;
+  colonia: string;
+  ciudad: string;
+  estado: string;
+  codigoPostal: string;
+  esPrincipal?: boolean;
+};
+
+export type MetodoPago = {
+  id: number;
+  nombre: string;
+  icono?: string;
+};
+
 function getErrorMessage(status: number, body: ApiErrorResponse | null, defaultMessage: string): string {
   const firstValidationError = body?.errors
     ? Object.values(body.errors).flat()[0]
@@ -238,4 +256,95 @@ export async function checkout(token: string, cartItems: CartItem[]): Promise<an
   }
 
   return body;
+}
+
+// Direcciones management
+export async function getDireccionesLocal(): Promise<Direccion[]> {
+  try {
+    const direccionesData = await AsyncStorage.getItem('@direcciones');
+    return direccionesData ? JSON.parse(direccionesData) : [];
+  } catch (error) {
+    console.error('Error loading direcciones:', error);
+    return [];
+  }
+}
+
+export async function saveDireccionLocal(direccion: Direccion): Promise<Direccion[]> {
+  try {
+    const direcciones = await getDireccionesLocal();
+    
+    if (direccion.id === 0) {
+      // Nueva dirección
+      direccion.id = Date.now();
+      if (direcciones.length === 0) {
+        direccion.esPrincipal = true;
+      }
+      direcciones.push(direccion);
+    } else {
+      // Actualizar existente
+      const index = direcciones.findIndex(d => d.id === direccion.id);
+      if (index >= 0) {
+        direcciones[index] = direccion;
+      }
+    }
+    
+    await AsyncStorage.setItem('@direcciones', JSON.stringify(direcciones));
+    return direcciones;
+  } catch (error) {
+    console.error('Error saving direccion:', error);
+    throw error;
+  }
+}
+
+export async function deleteDireccionLocal(id: number): Promise<Direccion[]> {
+  try {
+    let direcciones = await getDireccionesLocal();
+    const deleted = direcciones.find(d => d.id === id);
+    
+    direcciones = direcciones.filter(d => d.id !== id);
+    
+    // Si se eliminó la principal, hacer principal la primera
+    if (deleted?.esPrincipal && direcciones.length > 0) {
+      direcciones[0].esPrincipal = true;
+    }
+    
+    await AsyncStorage.setItem('@direcciones', JSON.stringify(direcciones));
+    return direcciones;
+  } catch (error) {
+    console.error('Error deleting direccion:', error);
+    throw error;
+  }
+}
+
+// Payment Methods
+export async function getMetodosPagoLocal(): Promise<MetodoPago[]> {
+  const metodosDefault: MetodoPago[] = [
+    { id: 1, nombre: 'Efectivo' },
+    { id: 2, nombre: 'Tarjeta de Crédito' },
+    { id: 3, nombre: 'Tarjeta de Débito' },
+    { id: 4, nombre: 'Transferencia' },
+    { id: 5, nombre: 'PayPal' },
+    { id: 6, nombre: 'Mercado Pago' },
+  ];
+  
+  return metodosDefault;
+}
+
+export async function getFavoritePaymentMethodLocal(): Promise<number | null> {
+  try {
+    const metodo = await AsyncStorage.getItem('@metodoPagoFavorito');
+    return metodo ? parseInt(metodo) : null;
+  } catch (error) {
+    console.error('Error loading favorite payment method:', error);
+    return null;
+  }
+}
+
+export async function setFavoritePaymentMethodLocal(methodId: number): Promise<void> {
+  try {
+    await AsyncStorage.setItem('@metodoPagoFavorito', methodId.toString());
+  } catch (error) {
+    console.error('Error saving favorite payment method:', error);
+    throw error;
+  }
 }

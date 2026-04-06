@@ -113,14 +113,6 @@ export default function InicioSesion() {
     }
   };
 
-  const handleAdminDashboard = () => {
-    navigation.navigate('dashboard-ad' as never);
-  };
-
-  const handleCompradorDashboard = () => {
-    navigation.navigate('dashboard-cm' as never);
-  };
-
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
@@ -173,24 +165,6 @@ export default function InicioSesion() {
                 <Text style={styles.buttonPrimaryText}>Entrar</Text>
               )}
             </TouchableOpacity>
-
-            <View style={styles.buttonContainer}>
-              <TouchableOpacity
-                style={styles.buttonSecondary}
-                onPress={handleAdminDashboard}
-                disabled={isLoading}
-              >
-                <Text style={styles.buttonSecondaryText}>Admin</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.buttonSecondary}
-                onPress={handleCompradorDashboard}
-                disabled={isLoading}
-              >
-                <Text style={styles.buttonSecondaryText}>Comprador</Text>
-              </TouchableOpacity>
-            </View>
           </View>
           <View style={styles.registerContainer}>
             <Text style={styles.termsText}>¿No tienes cuenta? </Text>
@@ -224,7 +198,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   title: {
-    color: '#1C273F',
+    color: '#0f2f6f',
     fontSize: 34,
     fontWeight: 'bold',
     textAlign: 'center',
@@ -275,12 +249,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   forgotPasswordText: {
-    color: '#1C273F',
+    color: '#0f2f6f',
     fontSize: 14,
     fontWeight: '600',
   },
   buttonPrimary: {
-    backgroundColor: '#1C273F',
+    backgroundColor: '#0f2f6f',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
@@ -289,26 +263,6 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-    gap: 12,
-  },
-  buttonSecondary: {
-    backgroundColor: '#E8EEFB',
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#1C273F',
-  },
-  buttonSecondaryText: {
-    color: '#1C273F',
-    fontSize: 14,
-    fontWeight: '600',
   },
   registerContainer: {
     alignItems: 'center',
@@ -321,6 +275,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   termsLink: {
-    color: '#1C273F',
+    color: '#0f2f6f',
   },
 });

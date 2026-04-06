@@ -46,10 +46,20 @@ export type DashboardCompradorData = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+function toText(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim();
+
+  return normalized.length > 0 ? normalized : null;
+}
+
 function mapProducto(raw: Record<string, unknown>): Producto {
   return {
     id: Number(raw.id_producto ?? raw.id ?? 0),
-    nombre: String(raw.nombre ?? raw.name ?? 'Producto sin nombre'),
+    nombre: toText(raw.nombre) ?? toText(raw.producto) ?? toText(raw.name) ?? 'Producto sin nombre',
     imagen_url: raw.imagen_url ? String(raw.imagen_url) : null,
     precio_unitario: Number(raw.precio_unitario ?? raw.precio_base ?? 0),
     categoria: String(raw.categoria ?? raw.nombre_subcategoria ?? raw.subcategoria ?? 'Sin categoría'),

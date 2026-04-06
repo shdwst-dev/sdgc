@@ -69,6 +69,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/dashboard', [DashboardDataController::class, 'dashboard']);
         Route::get('/dashboard/ventas-recientes', [DashboardDataController::class, 'ventasRecientes']);
         Route::get('/dashboard/alertas-stock', [DashboardDataController::class, 'alertasStock']);
+        Route::get('/dashboard/ventas-periodo', [DashboardDataController::class, 'ventasPeriodo']);
         Route::get('/dashboard/top-productos', [DashboardDataController::class, 'topProductos']);
         Route::get('/compras', [DashboardDataController::class, 'compras']);
         Route::get('/proveedores', [DashboardDataController::class, 'proveedores']);

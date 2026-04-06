@@ -1,14 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, FlatList, Alert, ActivityIndicator } from 'react-native';
 import { Plus, Search, Filter, Trash2, X, PencilLine } from 'lucide-react-native';
-import { CommonActions, useNavigation } from '@react-navigation/native';
+import { CommonActions, useNavigation, useRoute } from '@react-navigation/native';
 import { ApiError } from '../../services/auth';
 import {
   actualizarProducto,
   crearProducto,
   eliminarProducto,
+  getInventarioCatalogos,
   getInventario,
   getProductoById,
+  InventarioCatalogos,
   InventarioProducto,
 } from '../../services/inventario';
 import { clearToken, getToken, hydrateToken } from '../../services/storage';
@@ -16,6 +18,8 @@ import { clearToken, getToken, hydrateToken } from '../../services/storage';
 type UiProduct = {
   id: string;
   idProducto: number;
+  idSubcategoria: number | null;
+  idTienda: number | null;
   sku: string;
   name: string;
   category: string;
@@ -28,6 +32,7 @@ type UiProduct = {
 };
 
 type ModalMode = 'view' | 'edit' | 'create';
+type CatalogKey = 'idMedida' | 'idUnidad' | 'idSubcategoria' | 'idEstatus' | 'idTienda';
 
 type ProductForm = {
   idProducto: number | null;
@@ -42,6 +47,7 @@ type ProductForm = {
   idMedida: string;
   idUnidad: string;
   idSubcategoria: string;
+  idTienda: string;
   imagenUrl: string;
 };
 
@@ -58,6 +64,7 @@ const defaultForm: ProductForm = {
   idMedida: '1',
   idUnidad: '1',
   idSubcategoria: '1',
+  idTienda: '',
   imagenUrl: '',
 };
 
@@ -77,6 +84,8 @@ function toUiProduct(product: InventarioProducto): UiProduct {
   return {
     id: String(product.id),
     idProducto: product.id,
+    idSubcategoria: product.idSubcategoria,
+    idTienda: null,
     sku: product.sku,
     name: product.nombre,
     category: product.categoria,
@@ -102,7 +111,8 @@ function toFormFromProduct(product: InventarioProducto): ProductForm {
     idEstatus: product.idEstatus !== null ? String(product.idEstatus) : '1',
     idMedida: '1',
     idUnidad: '1',
-    idSubcategoria: '1',
+    idSubcategoria: product.idSubcategoria !== null ? String(product.idSubcategoria) : '1',
+    idTienda: '',
     imagenUrl: '',
   };
 }
@@ -120,7 +130,8 @@ function toFormFromUiProduct(product: UiProduct): ProductForm {
     idEstatus: product.idEstatus !== null ? String(product.idEstatus) : '1',
     idMedida: '1',
     idUnidad: '1',
-    idSubcategoria: '1',
+    idSubcategoria: product.idSubcategoria !== null ? String(product.idSubcategoria) : '1',
+    idTienda: '',
     imagenUrl: '',
   };
 }
@@ -145,6 +156,16 @@ function toPositiveInteger(value: string): number | null {
   return parsed;
 }
 
+function toNonNegativeInteger(value: string): number | null {
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return null;
+  }
+
+  return parsed;
+}
+
 function getStockBadgeStyle(stock: number, stockMinimo: number | null): { bg: string; text: string } {
   if (stock <= 0) {
     return { bg: '#FEE2E2', text: '#B91C1C' };
@@ -161,6 +182,7 @@ function getStockBadgeStyle(stock: number, stockMinimo: number | null): { bg: st
 
 export default function Inventario() {
   const navigation = useNavigation();
+  const route = useRoute<any>();
   const [products, setProducts] = useState<UiProduct[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<UiProduct | null>(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -173,6 +195,15 @@ export default function Inventario() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDeletingId, setIsDeletingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [catalogos, setCatalogos] = useState<InventarioCatalogos>({
+    subcategorias: [],
+    medidas: [],
+    unidades: [],
+    estatus: [],
+    tiendas: [],
+  });
+  const [selectorVisible, setSelectorVisible] = useState(false);
+  const [selectorKey, setSelectorKey] = useState<CatalogKey>('idSubcategoria');
 
   const goToLogin = useCallback(() => {
     navigation.dispatch(
@@ -215,8 +246,20 @@ export default function Inventario() {
     setError(null);
 
     try {
-      const data = await getInventario(token);
-      setProducts(data.map(toUiProduct));
+      const [inventarioResult, catalogosResult] = await Promise.allSettled([
+        getInventario(token),
+        getInventarioCatalogos(token),
+      ]);
+
+      if (inventarioResult.status === 'fulfilled') {
+        setProducts(inventarioResult.value.map(toUiProduct));
+      } else {
+        throw inventarioResult.reason;
+      }
+
+      if (catalogosResult.status === 'fulfilled') {
+        setCatalogos(catalogosResult.value);
+      }
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
         await clearToken();
@@ -244,6 +287,15 @@ export default function Inventario() {
     });
   }, [loadInventario]);
 
+  useEffect(() => {
+    const suggestedSearch = route?.params?.search;
+
+    if (typeof suggestedSearch === 'string' && suggestedSearch.trim().length > 0) {
+      setQuery(suggestedSearch.trim());
+      navigation.setParams({ search: undefined } as never);
+    }
+  }, [route?.params?.search]);
+
   const filteredProducts = useMemo(() => {
     const term = query.trim().toLowerCase();
 
@@ -258,9 +310,77 @@ export default function Inventario() {
     );
   }, [products, query]);
 
+  const selectorItems = useMemo(() => {
+    switch (selectorKey) {
+      case 'idSubcategoria':
+        return catalogos.subcategorias.map((item) => ({
+          id: String(item.id),
+          label: `${item.nombre} (${item.categoria})`,
+        }));
+      case 'idMedida':
+        return catalogos.medidas.map((item) => ({ id: String(item.id), label: item.nombre }));
+      case 'idUnidad':
+        return catalogos.unidades.map((item) => ({ id: String(item.id), label: `${item.nombre} (${item.abreviatura})` }));
+      case 'idEstatus':
+        return catalogos.estatus.map((item) => ({ id: String(item.id), label: item.nombre }));
+      case 'idTienda':
+        return catalogos.tiendas.map((item) => ({ id: String(item.id), label: item.nombre }));
+      default:
+        return [];
+    }
+  }, [catalogos, selectorKey]);
+
+  const labelForSelected = (key: CatalogKey): string => {
+    const value = form[key];
+
+    if (!value) {
+      return 'Seleccionar';
+    }
+
+    if (key === 'idSubcategoria') {
+      const match = catalogos.subcategorias.find((item) => String(item.id) === value);
+      return match ? `${match.nombre} (${match.categoria})` : `ID ${value}`;
+    }
+
+    if (key === 'idMedida') {
+      const match = catalogos.medidas.find((item) => String(item.id) === value);
+      return match ? match.nombre : `ID ${value}`;
+    }
+
+    if (key === 'idUnidad') {
+      const match = catalogos.unidades.find((item) => String(item.id) === value);
+      return match ? `${match.nombre} (${match.abreviatura})` : `ID ${value}`;
+    }
+
+    if (key === 'idTienda') {
+      const match = catalogos.tiendas.find((item) => String(item.id) === value);
+      return match ? match.nombre : `ID ${value}`;
+    }
+
+    const match = catalogos.estatus.find((item) => String(item.id) === value);
+    return match ? match.nombre : `ID ${value}`;
+  };
+
+  const openSelector = (key: CatalogKey) => {
+    setSelectorKey(key);
+    setSelectorVisible(true);
+  };
+
   const handleOpenCreate = () => {
+    if (catalogos.subcategorias.length === 0 || catalogos.medidas.length === 0 || catalogos.unidades.length === 0) {
+      Alert.alert('Catalogos incompletos', 'No se pudieron cargar los catalogos necesarios para crear productos. Recarga inventario e intenta de nuevo.');
+      return;
+    }
+
     setSelectedProduct(null);
-    setForm(defaultForm);
+    setForm({
+      ...defaultForm,
+      idSubcategoria: catalogos.subcategorias[0] ? String(catalogos.subcategorias[0].id) : defaultForm.idSubcategoria,
+      idMedida: catalogos.medidas[0] ? String(catalogos.medidas[0].id) : defaultForm.idMedida,
+      idUnidad: catalogos.unidades[0] ? String(catalogos.unidades[0].id) : defaultForm.idUnidad,
+      idEstatus: catalogos.estatus[0] ? String(catalogos.estatus[0].id) : defaultForm.idEstatus,
+      idTienda: catalogos.tiendas[0] ? String(catalogos.tiendas[0].id) : defaultForm.idTienda,
+    });
     setModalMode('create');
     setIsModalVisible(true);
   };
@@ -280,7 +400,10 @@ export default function Inventario() {
       }
 
       const detail = await getProductoById(token, product.idProducto);
-      setForm(toFormFromProduct(detail));
+      setForm((prev) => ({
+        ...toFormFromProduct(detail),
+        idTienda: prev.idTienda || (catalogos.tiendas[0] ? String(catalogos.tiendas[0].id) : ''),
+      }));
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
         await clearToken();
@@ -387,6 +510,7 @@ export default function Inventario() {
           precioUnitario,
           codigoBarras: form.sku.trim() || undefined,
           imagenUrl: form.imagenUrl.trim() || undefined,
+          idTienda: form.idTienda ? Number(form.idTienda) : undefined,
           idEstatus,
         });
 
@@ -397,13 +521,42 @@ export default function Inventario() {
           return;
         }
 
+        const stock = toNonNegativeInteger(form.stock);
+        const idSubcategoria = toPositiveInteger(form.idSubcategoria);
+        const idTienda = form.idTienda ? toPositiveInteger(form.idTienda) : null;
+        const stockMinimoRaw = form.stockMinimo.trim();
+        const stockMinimoParsed = stockMinimoRaw.length > 0 ? toNonNegativeInteger(stockMinimoRaw) : undefined;
+
+        if (stock === null) {
+          Alert.alert('Validacion', 'Captura un stock valido (entero mayor o igual a 0).');
+          return;
+        }
+
+        if (!idSubcategoria) {
+          Alert.alert('Validacion', 'Selecciona una subcategoria valida.');
+          return;
+        }
+
+        if (catalogos.tiendas.length > 0 && !idTienda) {
+          Alert.alert('Validacion', 'Selecciona una tienda valida.');
+          return;
+        }
+
+        if (stockMinimoRaw.length > 0 && stockMinimoParsed === null) {
+          Alert.alert('Validacion', 'Stock minimo debe ser un entero mayor o igual a 0.');
+          return;
+        }
+
         await actualizarProducto(token, form.idProducto, {
           nombre,
           precioBase,
           precioUnitario,
-          stock: Number(form.stock) || 0,
+          stock,
+          stockMinimo: stockMinimoParsed ?? undefined,
           codigoBarras: form.sku.trim() || undefined,
           imagenUrl: form.imagenUrl.trim() || undefined,
+          idSubcategoria,
+          idTienda: idTienda ?? undefined,
           idEstatus,
         });
 
@@ -436,6 +589,14 @@ export default function Inventario() {
     if (!form.idProducto) {
       Alert.alert('Aviso', 'No hay un producto valido para editar.');
       return;
+    }
+
+    if (!form.idEstatus && catalogos.estatus.length > 0) {
+      setForm((prev) => ({ ...prev, idEstatus: String(catalogos.estatus[0].id) }));
+    }
+
+    if (!form.idTienda && catalogos.tiendas.length > 0) {
+      setForm((prev) => ({ ...prev, idTienda: String(catalogos.tiendas[0].id) }));
     }
 
     setModalMode('edit');
@@ -482,6 +643,7 @@ export default function Inventario() {
 
   const isReadOnly = modalMode !== 'edit' && modalMode !== 'create';
   const isCreate = modalMode === 'create';
+  const isEdit = modalMode === 'edit';
 
   return (
     <View style={styles.container}>
@@ -584,17 +746,35 @@ export default function Inventario() {
                   onChangeText={(value) => setForm((prev) => ({ ...prev, nombre: value }))}
                 />
 
-                <Text style={styles.label}>Categoria</Text>
-                <TextInput style={styles.inputDisabled} value={form.categoria} editable={false} />
+                <Text style={styles.label}>Subcategoria</Text>
+                {isReadOnly ? (
+                  <TextInput style={styles.inputDisabled} value={form.categoria} editable={false} />
+                ) : (
+                  <TouchableOpacity style={styles.selectorInput} onPress={() => openSelector('idSubcategoria')}>
+                    <Text style={styles.selectorInputText}>{labelForSelected('idSubcategoria')}</Text>
+                  </TouchableOpacity>
+                )}
 
                 <View style={styles.rowInputs}>
                   <View style={styles.flexInputRight}>
                     <Text style={styles.label}>Stock</Text>
-                    <TextInput style={styles.inputDisabled} value={form.stock} editable={false} />
+                    <TextInput
+                      style={isEdit ? styles.input : styles.inputDisabled}
+                      value={form.stock}
+                      editable={isEdit}
+                      keyboardType="number-pad"
+                      onChangeText={(value) => setForm((prev) => ({ ...prev, stock: value }))}
+                    />
                   </View>
                   <View style={styles.flexInputLeft}>
                     <Text style={styles.label}>Stock minimo</Text>
-                    <TextInput style={styles.inputDisabled} value={form.stockMinimo || 'N/A'} editable={false} />
+                    <TextInput
+                      style={isEdit ? styles.input : styles.inputDisabled}
+                      value={isEdit ? form.stockMinimo : (form.stockMinimo || 'N/A')}
+                      editable={isEdit}
+                      keyboardType="number-pad"
+                      onChangeText={(value) => setForm((prev) => ({ ...prev, stockMinimo: value }))}
+                    />
                   </View>
                 </View>
 
@@ -621,49 +801,45 @@ export default function Inventario() {
                   </View>
                 </View>
 
-                <Text style={styles.label}>Id estatus</Text>
-                <TextInput
-                  style={isReadOnly ? styles.inputDisabled : styles.input}
-                  value={form.idEstatus}
-                  editable={!isReadOnly}
-                  keyboardType="number-pad"
-                  onChangeText={(value) => setForm((prev) => ({ ...prev, idEstatus: value }))}
-                />
+                <Text style={styles.label}>Estatus</Text>
+                <TouchableOpacity
+                  style={isReadOnly ? styles.inputDisabled : styles.selectorInput}
+                  onPress={() => !isReadOnly && openSelector('idEstatus')}
+                  disabled={isReadOnly}
+                >
+                  <Text style={styles.selectorInputText}>{labelForSelected('idEstatus')}</Text>
+                </TouchableOpacity>
+
+                {!isReadOnly ? (
+                  <>
+                    <Text style={styles.label}>Tienda</Text>
+                    <TouchableOpacity style={styles.selectorInput} onPress={() => openSelector('idTienda')}>
+                      <Text style={styles.selectorInputText}>{labelForSelected('idTienda')}</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : null}
 
                 {!isReadOnly ? (
                   <>
                     {isCreate ? (
                       <>
-                        <Text style={styles.helperText}>Para crear, captura ids reales de catalogos (medida, unidad y subcategoria).</Text>
+                        <Text style={styles.helperText}>Selecciona los catálogos para crear el producto.</Text>
+
 
                         <View style={styles.rowInputs}>
                           <View style={styles.flexInputRight}>
-                            <Text style={styles.label}>Id medida</Text>
-                            <TextInput
-                              style={styles.input}
-                              value={form.idMedida}
-                              keyboardType="number-pad"
-                              onChangeText={(value) => setForm((prev) => ({ ...prev, idMedida: value }))}
-                            />
+                            <Text style={styles.label}>Medida</Text>
+                            <TouchableOpacity style={styles.selectorInput} onPress={() => openSelector('idMedida')}>
+                              <Text style={styles.selectorInputText}>{labelForSelected('idMedida')}</Text>
+                            </TouchableOpacity>
                           </View>
                           <View style={styles.flexInputLeft}>
-                            <Text style={styles.label}>Id unidad</Text>
-                            <TextInput
-                              style={styles.input}
-                              value={form.idUnidad}
-                              keyboardType="number-pad"
-                              onChangeText={(value) => setForm((prev) => ({ ...prev, idUnidad: value }))}
-                            />
+                            <Text style={styles.label}>Unidad</Text>
+                            <TouchableOpacity style={styles.selectorInput} onPress={() => openSelector('idUnidad')}>
+                              <Text style={styles.selectorInputText}>{labelForSelected('idUnidad')}</Text>
+                            </TouchableOpacity>
                           </View>
                         </View>
-
-                        <Text style={styles.label}>Id subcategoria</Text>
-                        <TextInput
-                          style={styles.input}
-                          value={form.idSubcategoria}
-                          keyboardType="number-pad"
-                          onChangeText={(value) => setForm((prev) => ({ ...prev, idSubcategoria: value }))}
-                        />
                       </>
                     ) : null}
 
@@ -735,6 +911,41 @@ export default function Inventario() {
           </View>
         </View>
       </Modal>
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={selectorVisible}
+        onRequestClose={() => setSelectorVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.selectorModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Seleccionar opcion</Text>
+              <TouchableOpacity onPress={() => setSelectorVisible(false)}>
+                <X size={22} color="#101828" />
+              </TouchableOpacity>
+            </View>
+
+            <FlatList
+              data={selectorItems}
+              keyExtractor={(item) => item.id}
+              ListEmptyComponent={<Text style={styles.emptyText}>No hay opciones disponibles.</Text>}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.selectorRow}
+                  onPress={() => {
+                    setForm((prev) => ({ ...prev, [selectorKey]: item.id }));
+                    setSelectorVisible(false);
+                  }}
+                >
+                  <Text style={styles.selectorRowText}>{item.label}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -779,9 +990,14 @@ const styles = StyleSheet.create({
   helperText: { fontSize: 11, color: '#6B7280', marginBottom: 10 },
   input: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 6, padding: 10, fontSize: 14, marginBottom: 12, color: '#101828' },
   inputDisabled: { backgroundColor: '#F3F4F6', borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 6, padding: 10, fontSize: 14, marginBottom: 12, color: '#9CA3AF' },
+  selectorInput: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 6, padding: 10, marginBottom: 12, backgroundColor: '#FFF' },
+  selectorInputText: { fontSize: 14, color: '#101828' },
   rowInputs: { flexDirection: 'row' },
   flexInputRight: { flex: 1, marginRight: 8 },
   flexInputLeft: { flex: 1 },
+  selectorModalContent: { backgroundColor: '#FFF', width: '90%', borderRadius: 14, padding: 14, maxHeight: '70%' },
+  selectorRow: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' },
+  selectorRowText: { fontSize: 14, color: '#101828' },
   modalFooter: { flexDirection: 'row', gap: 10, marginTop: 10 },
   secondaryBtn: { flex: 1, padding: 12, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
   secondaryBtnText: { color: '#101828', fontWeight: '500' },

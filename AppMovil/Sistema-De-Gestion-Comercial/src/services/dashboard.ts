@@ -36,6 +36,7 @@ export type VentaReciente = {
   responsable: string;
   monto: number;
   fecha: string;
+  metodo_pago?: string;
 };
 
 export type AlertaStock = {
@@ -43,6 +44,38 @@ export type AlertaStock = {
   producto: string;
   actual: number;
   minimo: number;
+};
+
+export type VentaPeriodoMetodoPago = {
+  nombre: string;
+  total: number;
+};
+
+export type VentaPeriodo = {
+  factura: string;
+  cliente: string;
+  responsable: string;
+  monto: number;
+  fecha: string;
+  metodo_pago: string;
+};
+
+export type VentasPeriodoData = {
+  periodo_referencia: {
+    inicio: string;
+    fin: string;
+    mes: string;
+  };
+  series: {
+    labels: string[];
+    ventas_diarias: number[];
+    metodos_pago: VentaPeriodoMetodoPago[];
+  };
+  totales: {
+    ventas: number;
+    transacciones: number;
+  };
+  ventas: VentaPeriodo[];
 };
 
 // ─── Dashboard principal ─────────────────────────────────────────────────────
@@ -110,13 +143,14 @@ export async function getVentasRecientes(token: string): Promise<VentaReciente[]
     responsable: String(raw.responsable ?? ''),
     monto: Number(raw.monto ?? 0),
     fecha: String(raw.fecha ?? ''),
+    metodo_pago: String(raw.metodo_pago ?? ''),
   }));
 }
 
 // ─── Alertas de stock ────────────────────────────────────────────────────────
 
-export async function getAlertasStock(token: string): Promise<AlertaStock[]> {
-  const body = await apiRequest<Record<string, unknown>>('/dashboard/alertas-stock', {
+export async function getAlertasStock(token: string, limit: number = 20): Promise<AlertaStock[]> {
+  const body = await apiRequest<Record<string, unknown>>(`/dashboard/alertas-stock?limit=${limit}`, {
     token,
     baseUrl: getApiRootUrl(),
     fallbackError: 'No se pudo cargar las alertas de stock.',
@@ -132,3 +166,57 @@ export async function getAlertasStock(token: string): Promise<AlertaStock[]> {
     minimo: Number(raw.minimo ?? 0),
   }));
 }
+
+// ─── Ventas por periodo ───────────────────────────────────────────────────────
+
+export async function getVentasPeriodo(
+  token: string,
+  params?: { inicio?: string; fin?: string },
+): Promise<VentasPeriodoData> {
+  const search = new URLSearchParams();
+
+  if (params?.inicio) search.set('inicio', params.inicio);
+  if (params?.fin) search.set('fin', params.fin);
+
+  const body = await apiRequest<Record<string, unknown>>(`/dashboard/ventas-periodo${search.toString() ? `?${search.toString()}` : ''}`, {
+    token,
+    baseUrl: getApiRootUrl(),
+    fallbackError: 'No se pudo cargar las ventas del periodo.',
+  });
+
+  const periodo = (body?.periodo_referencia ?? {}) as Record<string, unknown>;
+  const series = (body?.series ?? {}) as Record<string, unknown>;
+  const totales = (body?.totales ?? {}) as Record<string, unknown>;
+  const ventas = Array.isArray(body?.ventas) ? body.ventas : [];
+
+  return {
+    periodo_referencia: {
+      inicio: String(periodo.inicio ?? ''),
+      fin: String(periodo.fin ?? ''),
+      mes: String(periodo.mes ?? ''),
+    },
+    series: {
+      labels: Array.isArray(series.labels) ? series.labels.map((item) => String(item)) : [],
+      ventas_diarias: Array.isArray(series.ventas_diarias) ? series.ventas_diarias.map((item) => Number(item ?? 0)) : [],
+      metodos_pago: Array.isArray(series.metodos_pago)
+        ? series.metodos_pago.map((raw: Record<string, unknown>) => ({
+            nombre: String(raw.nombre ?? 'Sin método'),
+            total: Number(raw.total ?? 0),
+          }))
+        : [],
+    },
+    totales: {
+      ventas: Number(totales.ventas ?? 0),
+      transacciones: Number(totales.transacciones ?? 0),
+    },
+    ventas: ventas.map((raw: Record<string, unknown>) => ({
+      factura: String(raw.factura ?? ''),
+      cliente: String(raw.cliente ?? 'Venta mostrador'),
+      responsable: String(raw.responsable ?? ''),
+      monto: Number(raw.monto ?? 0),
+      fecha: String(raw.fecha ?? ''),
+      metodo_pago: String(raw.metodo_pago ?? 'Sin método'),
+    })),
+  };
+}
+

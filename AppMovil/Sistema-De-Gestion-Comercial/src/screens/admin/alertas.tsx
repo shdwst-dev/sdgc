@@ -37,7 +37,7 @@ export default function Alertas() {
     setError(null);
 
     try {
-      const data = await getAlertasStock(token);
+      const data = await getAlertasStock(token, 50);
       setAlertas(data);
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
@@ -123,6 +123,13 @@ export default function Alertas() {
         <View style={styles.stockBar}>
           <View style={[styles.stockBarFill, { width: `${pct}%`, backgroundColor: barColor }]} />
         </View>
+
+        <TouchableOpacity
+          style={styles.inventoryActionBtn}
+          onPress={() => (navigation as any).navigate('InventarioTab', { search: alerta.sku || alerta.producto })}
+        >
+          <Text style={styles.inventoryActionBtnText}>Ver en inventario</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -216,6 +223,8 @@ const styles = StyleSheet.create({
   alertSku: { fontSize: 11, color: '#9CA3AF', marginTop: 2 },
   stockBar: { height: 6, backgroundColor: '#F3F4F6', borderRadius: 3, overflow: 'hidden' },
   stockBarFill: { height: '100%', borderRadius: 3 },
+  inventoryActionBtn: { marginTop: 12, alignSelf: 'flex-start', backgroundColor: '#E2E8F0', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  inventoryActionBtnText: { color: '#1E293B', fontSize: 12, fontWeight: '600' },
   emptyCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 32, borderWidth: 1, borderColor: '#E5E7EB', alignItems: 'center', marginBottom: 24 },
   emptyTitle: { fontSize: 16, fontWeight: '600', color: '#101828', marginTop: 12, marginBottom: 4 },
   emptyText: { fontSize: 13, color: '#6B7280', textAlign: 'center' },

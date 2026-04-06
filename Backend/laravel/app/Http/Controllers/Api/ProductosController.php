@@ -26,6 +26,7 @@ class ProductosController extends Controller
                 )
                 ->select(
                     'p.id_producto',
+                    'p.id_subcategoria',
                     'p.nombre',
                     'p.codigo_barras',
                     'p.precio_base',
@@ -37,6 +38,7 @@ class ProductosController extends Controller
                 )
                 ->groupBy(
                     'p.id_producto',
+                    'p.id_subcategoria',
                     'p.nombre',
                     'p.codigo_barras',
                     'p.precio_base',
@@ -70,24 +72,42 @@ class ProductosController extends Controller
             'precio_unitario' => 'required|numeric|min:0.01',
             'codigo_barras' => 'nullable|string|max:50',
             'imagen_url' => 'nullable|string',
+            'id_tienda' => 'nullable|integer|exists:tiendas,id_tienda',
             'id_estatus' => 'nullable|integer|exists:estatus,id_estatus',
         ]);
 
         try {
-            DB::statement(
-                'CALL pa_crear_producto(?::integer, ?::integer, ?::integer, ?::varchar, ?::numeric, ?::numeric, ?::varchar, ?::text, ?::integer)',
-                [
-                    $data['id_medida'],
-                    $data['id_unidad'],
-                    $data['id_subcategoria'],
-                    $data['nombre'],
-                    $data['precio_base'],
-                    $data['precio_unitario'],
-                    $data['codigo_barras'] ?? null,
-                    $data['imagen_url'] ?? null,
-                    $data['id_estatus'] ?? 1,
-                ]
-            );
+            DB::transaction(function () use ($request, $data) {
+                $idProducto = DB::table('productos')->insertGetId([
+                    'id_medida' => $data['id_medida'],
+                    'id_unidad' => $data['id_unidad'],
+                    'id_subcategoria' => $data['id_subcategoria'],
+                    'nombre' => $data['nombre'],
+                    'id_estatus' => $data['id_estatus'] ?? 1,
+                    'precio_base' => $data['precio_base'],
+                    'precio_unitario' => $data['precio_unitario'],
+                    'codigo_barras' => $data['codigo_barras'] ?? null,
+                    'imagen_url' => $data['imagen_url'] ?? null,
+                ], 'id_producto');
+
+                $storeId = array_key_exists('id_tienda', $data) && $data['id_tienda'] !== null
+                    ? (int) $data['id_tienda']
+                    : $this->resolveUserStoreId($request);
+
+                // Para usuarios de tienda, crear fila de stock para que el producto sea visible en su inventario.
+                if ($storeId) {
+                    DB::table('stock')->updateOrInsert(
+                        [
+                            'id_tienda' => $storeId,
+                            'id_producto' => $idProducto,
+                        ],
+                        [
+                            'stock_minimo' => 0,
+                            'stock_actual' => 0,
+                        ]
+                    );
+                }
+            });
 
             return response()->json([
                 'message' => 'Producto creado correctamente.'
@@ -105,27 +125,78 @@ class ProductosController extends Controller
         $data = $request->validate([
             'nombre' => 'required|string|max:200',
             'stock' => 'required|integer|min:0',
+            'stock_minimo' => 'nullable|integer|min:0',
             'precio_base' => 'required|numeric|min:0.01',
             'precio_unitario' => 'required|numeric|min:0.01',
             'codigo_barras' => 'nullable|string|max:50',
             'imagen_url' => 'nullable|string',
+            'id_subcategoria' => 'nullable|integer|exists:subcategorias,id_subcategoria',
+            'id_tienda' => 'nullable|integer|exists:tiendas,id_tienda',
             'id_estatus' => 'required|integer|exists:estatus,id_estatus',
         ]);
 
+        $productoExiste = DB::table('productos')
+            ->where('id_producto', $idProducto)
+            ->exists();
+
+        if (!$productoExiste) {
+            return response()->json([
+                'message' => 'El producto no existe.',
+            ], 404);
+        }
+
         try {
-            DB::transaction(function () use ($idProducto, $data) {
-                DB::statement(
-                    'CALL pa_actualizar_producto(?::integer, ?::varchar, ?::numeric, ?::numeric, ?::varchar, ?::text, ?::integer)',
-                    [
-                        $idProducto,
-                        $data['nombre'],
-                        $data['precio_base'],
-                        $data['precio_unitario'],
-                        $data['codigo_barras'] ?? null,
-                        $data['imagen_url'] ?? null,
-                        $data['id_estatus'],
-                    ]
-                );
+            $storeId = array_key_exists('id_tienda', $data) && $data['id_tienda'] !== null
+                ? (int) $data['id_tienda']
+                : $this->resolveUserStoreId($request);
+
+            DB::transaction(function () use ($idProducto, $data, $storeId) {
+                $productUpdate = [
+                    'nombre' => $data['nombre'],
+                    'precio_base' => $data['precio_base'],
+                    'precio_unitario' => $data['precio_unitario'],
+                    'codigo_barras' => $data['codigo_barras'] ?? null,
+                    'imagen_url' => $data['imagen_url'] ?? null,
+                    'id_estatus' => $data['id_estatus'],
+                ];
+
+                if (array_key_exists('id_subcategoria', $data) && $data['id_subcategoria']) {
+                    $productUpdate['id_subcategoria'] = $data['id_subcategoria'];
+                }
+
+                DB::table('productos')
+                    ->where('id_producto', $idProducto)
+                    ->update($productUpdate);
+
+                $stockMinimoProvided = array_key_exists('stock_minimo', $data) && $data['stock_minimo'] !== null;
+
+                if ($storeId) {
+                    $storeStock = DB::table('stock')
+                        ->where('id_tienda', $storeId)
+                        ->where('id_producto', $idProducto)
+                        ->first(['id_stock', 'stock_minimo']);
+
+                    if ($storeStock) {
+                        $stockPayload = ['stock_actual' => $data['stock']];
+
+                        if ($stockMinimoProvided) {
+                            $stockPayload['stock_minimo'] = $data['stock_minimo'];
+                        }
+
+                        DB::table('stock')
+                            ->where('id_stock', $storeStock->id_stock)
+                            ->update($stockPayload);
+                    } else {
+                        DB::table('stock')->insert([
+                            'id_tienda' => $storeId,
+                            'id_producto' => $idProducto,
+                            'stock_actual' => $data['stock'],
+                            'stock_minimo' => $stockMinimoProvided ? $data['stock_minimo'] : 0,
+                        ]);
+                    }
+
+                    return;
+                }
 
                 $stockRows = DB::table('stock')
                     ->where('id_producto', $idProducto)
@@ -134,9 +205,9 @@ class ProductosController extends Controller
 
                 if ($stockRows->isEmpty()) {
                     DB::table('stock')->insert([
-                        'id_tienda' => 1,
+                        'id_tienda' => $storeId ?: 1,
                         'id_producto' => $idProducto,
-                        'stock_minimo' => 0,
+                        'stock_minimo' => $stockMinimoProvided ? $data['stock_minimo'] : 0,
                         'stock_actual' => $data['stock'],
                     ]);
 
@@ -145,9 +216,15 @@ class ProductosController extends Controller
 
                 $primaryStockId = $stockRows->first()->id_stock;
 
+                $stockPayload = ['stock_actual' => $data['stock']];
+
+                if ($stockMinimoProvided) {
+                    $stockPayload['stock_minimo'] = $data['stock_minimo'];
+                }
+
                 DB::table('stock')
                     ->where('id_stock', $primaryStockId)
-                    ->update(['stock_actual' => $data['stock']]);
+                    ->update($stockPayload);
 
                 $secondaryStockIds = $stockRows
                     ->skip(1)
@@ -276,6 +353,7 @@ class ProductosController extends Controller
                 )
                 ->select(
                     'p.id_producto',
+                    'p.id_subcategoria',
                     'p.nombre',
                     'p.codigo_barras',
                     'p.precio_base',
@@ -288,6 +366,7 @@ class ProductosController extends Controller
                 ->where('p.id_producto', $idProducto)
                 ->groupBy(
                     'p.id_producto',
+                    'p.id_subcategoria',
                     'p.nombre',
                     'p.codigo_barras',
                     'p.precio_base',

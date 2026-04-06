@@ -5,6 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Modal,
+  TextInput,
   StatusBar,
   Alert,
   Platform,
@@ -25,7 +27,16 @@ import {
 } from 'lucide-react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { ApiError, getMe, MeResponse, logout } from '../../services/auth';
-import { getConfigStats, getConfigData, ConfigStats, EmpleadoListado } from '../../services/configuracion';
+import {
+  getConfigStats,
+  getConfigData,
+  getEmpleadoDetalle,
+  actualizarEmpleado,
+  eliminarEmpleado,
+  ConfigStats,
+  EmpleadoListado,
+  CatalogoSimple,
+} from '../../services/configuracion';
 import { clearToken, getToken, hydrateToken } from '../../services/storage';
 
 // ─── Color palette for chart bars ────────────────────────────────────────────
@@ -52,6 +63,21 @@ export default function Configuracion() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [showEmpleados, setShowEmpleados] = useState(false);
+  const [isEmployeeModalVisible, setIsEmployeeModalVisible] = useState(false);
+  const [isEmployeeLoading, setIsEmployeeLoading] = useState(false);
+  const [isEmployeeSaving, setIsEmployeeSaving] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<number | null>(null);
+  const [rolesCatalog, setRolesCatalog] = useState<CatalogoSimple[]>([]);
+  const [estatusCatalog, setEstatusCatalog] = useState<CatalogoSimple[]>([]);
+  const [employeeForm, setEmployeeForm] = useState({
+    nombre: '',
+    apellido_paterno: '',
+    apellido_materno: '',
+    telefono: '',
+    email: '',
+    id_rol: '',
+    id_estatus: '',
+  });
 
   const roleName = useMemo(() => {
     if (!profile?.rol) return 'Sin rol';
@@ -151,6 +177,102 @@ export default function Configuracion() {
     loadProfile();
     loadStats();
   }, [loadProfile, loadStats]);
+
+  const openEmployeeEditor = async (idEmpleado: number) => {
+    const token = await requireToken();
+    if (!token) return;
+
+    setIsEmployeeModalVisible(true);
+    setIsEmployeeLoading(true);
+    setSelectedEmployeeId(idEmpleado);
+
+    try {
+      const response = await getEmpleadoDetalle(token, idEmpleado);
+      setRolesCatalog(response.catalogos.roles);
+      setEstatusCatalog(response.catalogos.estatus);
+      setEmployeeForm({
+        nombre: response.empleado.nombre,
+        apellido_paterno: response.empleado.apellido_paterno,
+        apellido_materno: response.empleado.apellido_materno ?? '',
+        telefono: response.empleado.telefono,
+        email: response.empleado.email,
+        id_rol: String(response.empleado.id_rol),
+        id_estatus: String(response.empleado.id_estatus),
+      });
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        await clearToken();
+        Alert.alert('Sesión expirada', 'Inicia sesión nuevamente.');
+        goToLogin();
+        return;
+      }
+      Alert.alert('Error', error instanceof Error ? error.message : 'No se pudo cargar el empleado.');
+      setIsEmployeeModalVisible(false);
+    } finally {
+      setIsEmployeeLoading(false);
+    }
+  };
+
+  const saveEmployee = async () => {
+    if (!selectedEmployeeId) return;
+    const token = await requireToken();
+    if (!token) return;
+
+    setIsEmployeeSaving(true);
+    try {
+      await actualizarEmpleado(token, selectedEmployeeId, {
+        nombre: employeeForm.nombre.trim(),
+        apellido_paterno: employeeForm.apellido_paterno.trim(),
+        apellido_materno: employeeForm.apellido_materno.trim() || null,
+        telefono: employeeForm.telefono.trim(),
+        email: employeeForm.email.trim(),
+        id_rol: Number(employeeForm.id_rol),
+        id_estatus: Number(employeeForm.id_estatus),
+      });
+
+      Alert.alert('Listo', 'Empleado actualizado correctamente.');
+      setIsEmployeeModalVisible(false);
+      loadStats(false).catch(() => undefined);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        await clearToken();
+        Alert.alert('Sesión expirada', 'Inicia sesión nuevamente.');
+        goToLogin();
+        return;
+      }
+      Alert.alert('Error', error instanceof Error ? error.message : 'No se pudo actualizar el empleado.');
+    } finally {
+      setIsEmployeeSaving(false);
+    }
+  };
+
+  const removeEmployee = async (idEmpleado: number, nombre: string) => {
+    Alert.alert('Eliminar empleado', `¿Deseas eliminar a ${nombre}?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: async () => {
+          const token = await requireToken();
+          if (!token) return;
+
+          try {
+            await eliminarEmpleado(token, idEmpleado);
+            Alert.alert('Listo', 'Empleado eliminado correctamente.');
+            loadStats(false).catch(() => undefined);
+          } catch (error) {
+            if (error instanceof ApiError && error.status === 401) {
+              await clearToken();
+              Alert.alert('Sesión expirada', 'Inicia sesión nuevamente.');
+              goToLogin();
+              return;
+            }
+            Alert.alert('Error', error instanceof Error ? error.message : 'No se pudo eliminar el empleado.');
+          }
+        },
+      },
+    ]);
+  };
 
   // ─── Logout ────────────────────────────────────────────────────────────────
 
@@ -384,6 +506,15 @@ export default function Configuracion() {
                         {emp.estatus}
                       </Text>
                     </View>
+
+                    <View style={styles.employeeActionsRow}>
+                      <TouchableOpacity style={styles.employeeActionEdit} onPress={() => openEmployeeEditor(emp.id_usuario)}>
+                        <Text style={styles.employeeActionText}>Editar</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.employeeActionDelete} onPress={() => removeEmployee(emp.id_usuario, emp.nombre)}>
+                        <Text style={styles.employeeActionDeleteText}>Eliminar</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 </View>
               ))}
@@ -391,6 +522,83 @@ export default function Configuracion() {
           ) : null}
         </View>
       ) : null}
+
+      <Modal
+        animationType="slide"
+        transparent
+        visible={isEmployeeModalVisible}
+        onRequestClose={() => setIsEmployeeModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Editar Empleado</Text>
+              <TouchableOpacity onPress={() => setIsEmployeeModalVisible(false)}>
+                <Text style={styles.modalClose}>Cerrar</Text>
+              </TouchableOpacity>
+            </View>
+
+            {isEmployeeLoading ? (
+              <View style={styles.loadingCard}>
+                <ActivityIndicator size="large" color="#1C273F" />
+                <Text style={styles.loadingText}>Cargando empleado...</Text>
+              </View>
+            ) : (
+              <ScrollView>
+                <Text style={styles.label}>Nombre</Text>
+                <TextInput style={styles.input} value={employeeForm.nombre} onChangeText={(value) => setEmployeeForm((prev) => ({ ...prev, nombre: value }))} />
+
+                <Text style={styles.label}>Apellido paterno</Text>
+                <TextInput style={styles.input} value={employeeForm.apellido_paterno} onChangeText={(value) => setEmployeeForm((prev) => ({ ...prev, apellido_paterno: value }))} />
+
+                <Text style={styles.label}>Apellido materno</Text>
+                <TextInput style={styles.input} value={employeeForm.apellido_materno} onChangeText={(value) => setEmployeeForm((prev) => ({ ...prev, apellido_materno: value }))} />
+
+                <Text style={styles.label}>Telefono</Text>
+                <TextInput style={styles.input} value={employeeForm.telefono} onChangeText={(value) => setEmployeeForm((prev) => ({ ...prev, telefono: value }))} />
+
+                <Text style={styles.label}>Email</Text>
+                <TextInput style={styles.input} value={employeeForm.email} onChangeText={(value) => setEmployeeForm((prev) => ({ ...prev, email: value }))} />
+
+                <Text style={styles.label}>Rol</Text>
+                <View style={styles.pillsWrap}>
+                  {rolesCatalog.map((rol) => (
+                    <TouchableOpacity
+                      key={rol.id}
+                      style={[styles.pill, employeeForm.id_rol === String(rol.id) ? styles.pillActive : null]}
+                      onPress={() => setEmployeeForm((prev) => ({ ...prev, id_rol: String(rol.id) }))}
+                    >
+                      <Text style={[styles.pillText, employeeForm.id_rol === String(rol.id) ? styles.pillTextActive : null]}>{rol.nombre}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={styles.label}>Estatus</Text>
+                <View style={styles.pillsWrap}>
+                  {estatusCatalog.map((estatus) => (
+                    <TouchableOpacity
+                      key={estatus.id}
+                      style={[styles.pill, employeeForm.id_estatus === String(estatus.id) ? styles.pillActive : null]}
+                      onPress={() => setEmployeeForm((prev) => ({ ...prev, id_estatus: String(estatus.id) }))}
+                    >
+                      <Text style={[styles.pillText, employeeForm.id_estatus === String(estatus.id) ? styles.pillTextActive : null]}>{estatus.nombre}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <View style={styles.modalFooterRow}>
+                  <TouchableOpacity style={styles.secondaryBtn} onPress={() => setIsEmployeeModalVisible(false)}>
+                    <Text style={styles.secondaryBtnText}>Cancelar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.primaryBtn} onPress={saveEmployee} disabled={isEmployeeSaving}>
+                    {isEmployeeSaving ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.primaryBtnText}>Guardar</Text>}
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* ─── App info ──────────────────────────────────────────────────────── */}
       <View style={styles.infoCard}>
@@ -476,6 +684,11 @@ const styles = StyleSheet.create({
   rolBadgeText: { fontSize: 10, fontWeight: '600' },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
   statusBadgeText: { fontSize: 10, fontWeight: '600' },
+  employeeActionsRow: { flexDirection: 'row', gap: 6, marginTop: 8 },
+  employeeActionEdit: { backgroundColor: '#DBEAFE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  employeeActionDelete: { backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  employeeActionText: { fontSize: 10, color: '#1D4ED8', fontWeight: '700' },
+  employeeActionDeleteText: { fontSize: 10, color: '#B91C1C', fontWeight: '700' },
 
   // Info / Errors
   infoCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 16 },
@@ -493,6 +706,25 @@ const styles = StyleSheet.create({
   loadingCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 32, borderWidth: 1, borderColor: '#E5E7EB', marginBottom: 16, alignItems: 'center' },
   loadingText: { color: '#6B7280', marginTop: 12, fontSize: 13 },
   emptyText: { color: '#9CA3AF', fontSize: 13, textAlign: 'center', paddingVertical: 16 },
+
+  // Employee modal
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: '#FFF', width: '92%', maxHeight: '82%', borderRadius: 14, padding: 14 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#101828' },
+  modalClose: { color: '#334155', fontWeight: '600' },
+  label: { fontSize: 12, color: '#64748B', marginBottom: 4, marginTop: 8 },
+  input: { borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: '#101828' },
+  pillsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 },
+  pill: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#FFF' },
+  pillActive: { borderColor: '#1C273F', backgroundColor: '#1C273F' },
+  pillText: { fontSize: 12, color: '#334155', fontWeight: '600' },
+  pillTextActive: { color: '#FFF' },
+  modalFooterRow: { flexDirection: 'row', gap: 10, marginTop: 14, marginBottom: 8 },
+  secondaryBtn: { flex: 1, borderWidth: 1, borderColor: '#CBD5E1', borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingVertical: 10 },
+  secondaryBtnText: { color: '#334155', fontWeight: '600' },
+  primaryBtn: { flex: 1, backgroundColor: '#1C273F', borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingVertical: 10 },
+  primaryBtnText: { color: '#FFF', fontWeight: '700' },
 
   logoutBtn: { backgroundColor: '#DC2626', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 16, borderRadius: 12, gap: 10, elevation: 2 },
   logoutBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },

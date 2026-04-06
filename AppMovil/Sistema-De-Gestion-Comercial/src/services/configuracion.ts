@@ -40,6 +40,30 @@ export type ConfigData = {
   empleados: EmpleadoListado[];
 };
 
+export type EmpleadoDetalle = {
+  id_usuario: number;
+  id_persona: number;
+  id_rol: number;
+  id_estatus: number;
+  nombre: string;
+  apellido_paterno: string;
+  apellido_materno: string | null;
+  telefono: string;
+  email: string;
+  rol: string;
+  estatus: string;
+};
+
+export type CatalogoSimple = { id: number; nombre: string };
+
+export type EmpleadoDetalleResponse = {
+  empleado: EmpleadoDetalle;
+  catalogos: {
+    roles: CatalogoSimple[];
+    estatus: CatalogoSimple[];
+  };
+};
+
 // ─── API functions ───────────────────────────────────────────────────────────
 
 export async function getConfigStats(token: string): Promise<ConfigStats> {
@@ -89,3 +113,71 @@ export async function getConfigData(token: string): Promise<ConfigData> {
     })),
   };
 }
+
+export async function getEmpleadoDetalle(token: string, idEmpleado: number): Promise<EmpleadoDetalleResponse> {
+  const body = await apiRequest<Record<string, unknown>>(`/v1/configuracion/empleados/${idEmpleado}`, {
+    token,
+    fallbackError: 'No se pudo cargar el detalle del empleado.',
+  });
+
+  const empleadoRaw = (body?.empleado ?? {}) as Record<string, unknown>;
+  const catalogos = (body?.catalogos ?? {}) as Record<string, unknown>;
+
+  const mapCatalogo = (rows: unknown[]): CatalogoSimple[] => rows
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === 'object')
+    .map((item) => ({
+      id: Number(item.id_rol ?? item.id_estatus ?? 0),
+      nombre: String(item.nombre ?? ''),
+    }))
+    .filter((item) => item.id > 0);
+
+  return {
+    empleado: {
+      id_usuario: Number(empleadoRaw.id_usuario ?? 0),
+      id_persona: Number(empleadoRaw.id_persona ?? 0),
+      id_rol: Number(empleadoRaw.id_rol ?? 0),
+      id_estatus: Number(empleadoRaw.id_estatus ?? 0),
+      nombre: String(empleadoRaw.nombre ?? ''),
+      apellido_paterno: String(empleadoRaw.apellido_paterno ?? ''),
+      apellido_materno: empleadoRaw.apellido_materno ? String(empleadoRaw.apellido_materno) : null,
+      telefono: String(empleadoRaw.telefono ?? ''),
+      email: String(empleadoRaw.email ?? ''),
+      rol: String(empleadoRaw.rol ?? ''),
+      estatus: String(empleadoRaw.estatus ?? ''),
+    },
+    catalogos: {
+      roles: mapCatalogo(Array.isArray(catalogos.roles) ? catalogos.roles : []),
+      estatus: mapCatalogo(Array.isArray(catalogos.estatus) ? catalogos.estatus : []),
+    },
+  };
+}
+
+export async function actualizarEmpleado(
+  token: string,
+  idEmpleado: number,
+  payload: {
+    nombre: string;
+    apellido_paterno: string;
+    apellido_materno: string | null;
+    telefono: string;
+    email: string;
+    id_rol: number;
+    id_estatus: number;
+  },
+): Promise<void> {
+  await apiRequest(`/v1/configuracion/empleados/${idEmpleado}`, {
+    method: 'PUT',
+    token,
+    body: payload,
+    fallbackError: 'No se pudo actualizar el empleado.',
+  });
+}
+
+export async function eliminarEmpleado(token: string, idEmpleado: number): Promise<void> {
+  await apiRequest(`/v1/configuracion/empleados/${idEmpleado}`, {
+    method: 'DELETE',
+    token,
+    fallbackError: 'No se pudo eliminar el empleado.',
+  });
+}
+

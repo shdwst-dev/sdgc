@@ -56,9 +56,10 @@ class DashboardDataController extends Controller
     public function alertasStock(Request $request): JsonResponse
     {
         $assignedStoreId = $this->resolveUserStoreId($request);
+        $limit = max(1, min((int) $request->integer('limit', 5), 50));
 
         return response()->json([
-            'alertas_stock' => $this->stockAlerts(5, $assignedStoreId)->values(),
+            'alertas_stock' => $this->stockAlerts($limit, $assignedStoreId)->values(),
         ]);
     }
 
@@ -399,6 +400,94 @@ class DashboardDataController extends Controller
                 'carrito' => $carrito->values(),
                 'resumen' => $resumen,
             ],
+        ]);
+    }
+
+    public function ventasPeriodo(Request $request): JsonResponse
+    {
+        $assignedStoreId = $this->resolveUserStoreId($request);
+        [$monthStart, $monthEnd] = $this->resolveReportRange($request, $assignedStoreId);
+
+        $ventasByDay = DB::table('ventas as v')
+            ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'v.id_venta')
+            ->when($assignedStoreId && $this->tableHasStoreColumn('ventas'), fn ($query) => $query->where('v.id_tienda', $assignedStoreId))
+            ->whereBetween('v.fecha_hora', [$monthStart->toDateTimeString(), $monthEnd->toDateTimeString()])
+            ->select(
+                DB::raw('DATE(v.fecha_hora) as fecha'),
+                DB::raw('COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) as total')
+            )
+            ->groupBy(DB::raw('DATE(v.fecha_hora)'))
+            ->pluck('total', 'fecha');
+
+        $ventasByMetodo = DB::table('ventas as v')
+            ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'v.id_venta')
+            ->leftJoin('metodos_pago as mp', 'mp.id_metodo_pago', '=', 'v.id_metodo_pago')
+            ->when($assignedStoreId && $this->tableHasStoreColumn('ventas'), fn ($query) => $query->where('v.id_tienda', $assignedStoreId))
+            ->whereBetween('v.fecha_hora', [$monthStart->toDateTimeString(), $monthEnd->toDateTimeString()])
+            ->select(
+                DB::raw("COALESCE(mp.nombre, 'Sin método') as metodo_pago"),
+                DB::raw('COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) as total')
+            )
+            ->groupBy(DB::raw("COALESCE(mp.nombre, 'Sin método')"))
+            ->orderByDesc('total')
+            ->get();
+
+        $ventas = DB::table('ventas as v')
+            ->join('usuarios as u', 'u.id_usuario', '=', 'v.id_usuario')
+            ->join('personas as p', 'p.id_persona', '=', 'u.id_persona')
+            ->leftJoin('metodos_pago as mp', 'mp.id_metodo_pago', '=', 'v.id_metodo_pago')
+            ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'v.id_venta')
+            ->when($assignedStoreId && $this->tableHasStoreColumn('ventas'), fn ($query) => $query->where('v.id_tienda', $assignedStoreId))
+            ->whereBetween('v.fecha_hora', [$monthStart->toDateTimeString(), $monthEnd->toDateTimeString()])
+            ->select(
+                'v.id_venta',
+                'v.fecha_hora',
+                'v.id_metodo_pago',
+                'mp.nombre as metodo_pago',
+                DB::raw("CONCAT(p.nombre, ' ', p.apellido_paterno) as responsable"),
+                DB::raw('COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) as total')
+            )
+            ->groupBy('v.id_venta', 'v.fecha_hora', 'v.id_metodo_pago', 'mp.nombre', 'p.nombre', 'p.apellido_paterno')
+            ->orderByDesc('v.fecha_hora')
+            ->limit(20)
+            ->get()
+            ->map(fn ($venta) => [
+                'factura' => 'VTA-' . str_pad((string) $venta->id_venta, 4, '0', STR_PAD_LEFT),
+                'cliente' => 'Venta mostrador',
+                'responsable' => $venta->responsable,
+                'monto' => (float) $venta->total,
+                'fecha' => Carbon::parse($venta->fecha_hora)->toDateString(),
+                'metodo_pago' => $venta->metodo_pago ?? 'Sin método',
+            ]);
+
+        $labels = [];
+        $ventasDiarias = [];
+
+        foreach (CarbonPeriod::create($monthStart->copy()->startOfDay(), $monthEnd->copy()->startOfDay()) as $day) {
+            $dateKey = $day->toDateString();
+            $labels[] = $day->format('d M');
+            $ventasDiarias[] = (float) ($ventasByDay[$dateKey] ?? 0);
+        }
+
+        return response()->json([
+            'periodo_referencia' => [
+                'inicio' => $monthStart->toDateString(),
+                'fin' => $monthEnd->toDateString(),
+                'mes' => $this->buildPeriodLabel($monthStart, $monthEnd),
+            ],
+            'series' => [
+                'labels' => $labels,
+                'ventas_diarias' => $ventasDiarias,
+                'metodos_pago' => $ventasByMetodo->map(fn ($row) => [
+                    'nombre' => $row->metodo_pago,
+                    'total' => (float) $row->total,
+                ])->values(),
+            ],
+            'totales' => [
+                'ventas' => array_sum($ventasDiarias),
+                'transacciones' => $ventas->count(),
+            ],
+            'ventas' => $ventas->values(),
         ]);
     }
 

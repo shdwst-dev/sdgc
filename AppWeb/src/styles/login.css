@@ -76,10 +76,10 @@ body {
 
 .login-card {
   width: 100%;
-  max-width: 1100px;
+  max-width: 620px;
   background: #ffffff;
   border: 1px solid var(--border-soft);
-  padding: 50px;
+  padding: 42px 38px;
   box-shadow: var(--shadow-soft);
 }
 
@@ -232,7 +232,7 @@ body {
 
 @media (max-width: 900px) {
   .login-card {
-    max-width: 95%;
+    max-width: 520px;
     padding: 28px;
   }
 

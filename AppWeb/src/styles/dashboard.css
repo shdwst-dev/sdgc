@@ -346,6 +346,282 @@ body {
     linear-gradient(180deg, #ffffff 0%, var(--brand-050) 100%);
 }
 
+.invoice-preview-shell {
+  padding: 20px;
+}
+
+.invoice-preview-page {
+  width: 100%;
+  max-width: 980px;
+  margin: 0 auto;
+  border: 1px solid #c8d3e3;
+  background: #ffffff;
+  padding: 26px 28px 22px;
+  color: #1a1a1a;
+  box-shadow: 0 24px 54px rgba(15, 47, 111, 0.12);
+}
+
+.invoice-preview-band {
+  margin-bottom: 14px;
+  background: #0f4d85;
+  color: #ffffff;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 10px 16px;
+}
+
+.invoice-preview-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 12px;
+}
+
+.invoice-preview-brand {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 18px;
+  flex: 1;
+}
+
+.invoice-preview-logo {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+}
+
+.invoice-preview-brand h4 {
+  margin: 0 0 8px;
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.invoice-preview-brand p,
+.invoice-preview-folio p,
+.invoice-preview-folio span,
+.invoice-preview-folio small,
+.invoice-preview-stamps p,
+.invoice-preview-legend {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.invoice-preview-brand p {
+  font-size: 13px;
+}
+
+.invoice-preview-folio {
+  min-width: 220px;
+  text-align: right;
+  color: #0f4d85;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.invoice-preview-folio p,
+.invoice-preview-folio strong {
+  font-weight: 700;
+}
+
+.invoice-preview-folio strong {
+  font-size: 28px;
+  color: #d04a3c;
+}
+
+.invoice-preview-folio span {
+  color: #4b5f74;
+  font-size: 13px;
+}
+
+.invoice-preview-folio small {
+  font-size: 12px;
+  color: #1d3653;
+}
+
+.invoice-preview-meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid #7f9bb9;
+  border-bottom: 1px solid #7f9bb9;
+  margin-bottom: 18px;
+}
+
+.invoice-preview-meta div,
+.invoice-preview-totals div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.invoice-preview-meta span,
+.invoice-preview-totals span,
+.invoice-preview-note-grid span,
+.invoice-preview-party-grid span {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #4b5f74;
+}
+
+.invoice-preview-meta strong,
+.invoice-preview-totals strong,
+.invoice-preview-note-grid strong,
+.invoice-preview-party-grid strong {
+  font-size: 13px;
+  color: #121a24;
+}
+
+.invoice-preview-parties {
+  margin-bottom: 14px;
+}
+
+.invoice-preview-party-block {
+  border-top: 1px solid #7f9bb9;
+  border-bottom: 1px solid #7f9bb9;
+  padding: 14px 0;
+}
+
+.invoice-preview-section-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #0f4d85;
+  letter-spacing: 0.04em;
+}
+
+.invoice-preview-party-grid,
+.invoice-preview-note-grid {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 8px 14px;
+}
+
+.invoice-preview-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+
+.invoice-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.invoice-preview-table th,
+.invoice-preview-table td {
+  border: 1px solid #676f79;
+  padding: 10px 12px;
+  vertical-align: top;
+}
+
+.invoice-preview-table th {
+  background: #efefef;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #374151;
+}
+
+.invoice-preview-table td {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.invoice-preview-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 28px;
+  align-items: start;
+  margin-bottom: 18px;
+}
+
+.invoice-preview-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.invoice-preview-qr-section {
+  display: flex;
+  align-items: flex-start;
+}
+
+.invoice-preview-qr {
+  display: grid;
+  grid-template-columns: repeat(21, 6px);
+  grid-template-rows: repeat(21, 6px);
+  gap: 1px;
+  padding: 8px;
+  border: 1px solid #5e6c7d;
+  background: #ffffff;
+}
+
+.invoice-preview-qr-cell {
+  width: 6px;
+  height: 6px;
+  background: #ffffff;
+}
+
+.invoice-preview-qr-cell.is-filled {
+  background: #111111;
+}
+
+.invoice-preview-legend {
+  font-size: 12px;
+  color: #5a6470;
+}
+
+.invoice-preview-totals {
+  border-top: 2px solid #7f9bb9;
+  border-bottom: 2px solid #7f9bb9;
+}
+
+.invoice-preview-totals div {
+  padding: 8px 0;
+  border-bottom: 1px solid #ccd5df;
+}
+
+.invoice-preview-totals div:last-child {
+  border-bottom: 0;
+}
+
+.invoice-preview-total-row strong {
+  font-size: 18px;
+  color: #0f4d85;
+}
+
+.invoice-preview-stamps {
+  border-top: 1px solid #b9c7d8;
+  border-bottom: 1px solid #b9c7d8;
+  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.invoice-preview-stamps p:last-child,
+.invoice-preview-stamps p:nth-last-child(2) {
+  font-size: 11px;
+  color: #3c4754;
+  word-break: break-word;
+}
+
+.invoice-preview-bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 12px;
+  font-size: 12px;
+  color: #0f4d85;
+  font-weight: 700;
+}
+
 .detail-card-edit {
   background:
     radial-gradient(circle at top right, rgba(22, 149, 170, 0.16), transparent 30%),
@@ -596,6 +872,49 @@ body {
   .detail-card {
     border-radius: 18px;
     padding: 16px;
+  }
+
+  .invoice-preview-page {
+    padding: 18px 16px;
+  }
+
+  .invoice-preview-band {
+    font-size: 18px;
+  }
+
+  .invoice-preview-top,
+  .invoice-preview-footer,
+  .invoice-preview-bottom {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .invoice-preview-brand {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-preview-logo {
+    width: 84px;
+    height: 84px;
+  }
+
+  .invoice-preview-folio {
+    min-width: 0;
+    text-align: left;
+  }
+
+  .invoice-preview-meta {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-preview-party-grid,
+  .invoice-preview-note-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .invoice-preview-qr {
+    transform-origin: top left;
+    transform: scale(0.92);
   }
 
   .detail-card-header {

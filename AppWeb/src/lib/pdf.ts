@@ -19,6 +19,16 @@ type PdfRect = {
   lineWidth?: number;
 };
 
+const QR_SIZE = 21;
+const ISSUER_NAME = "PI GESTION (SDGC)";
+const ISSUER_RFC = "AAA010101AAA";
+const ISSUER_ADDRESS_LINE_1 = "Domicilio fiscal generico del proyecto";
+const ISSUER_ADDRESS_LINE_2 = "Villahermosa, Tabasco, Mexico C.P. 86000";
+const ISSUER_PHONE = "No disponible";
+const ISSUER_EMAIL = "soporte@pigestion.local";
+const RECEIVER_GENERIC_RFC = "XAXX010101000";
+const RECEIVER_GENERIC_ADDRESS = "Domicilio generico del receptor";
+
 function escapePdfText(value: string) {
   return value
     .replace(/\\/g, "\\\\")
@@ -152,76 +162,256 @@ function wrapText(value: string, maxLength: number, maxLines = 2) {
   ];
 }
 
+function buildFakeStamp(seed: string, length: number) {
+  const source = `${seed}ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789`;
+  let output = "";
+
+  while (output.length < length) {
+    output += source;
+  }
+
+  return output.slice(0, length);
+}
+
+function createQrMatrix(seed: string, size = QR_SIZE) {
+  const matrix = Array.from({ length: size }, () => Array.from({ length: size }, () => false));
+
+  const paintFinder = (startRow: number, startColumn: number) => {
+    for (let row = 0; row < 7; row += 1) {
+      for (let column = 0; column < 7; column += 1) {
+        const isBorder = row === 0 || row === 6 || column === 0 || column === 6;
+        const isCore = row >= 2 && row <= 4 && column >= 2 && column <= 4;
+        matrix[startRow + row][startColumn + column] = isBorder || isCore;
+      }
+    }
+  };
+
+  paintFinder(0, 0);
+  paintFinder(0, size - 7);
+  paintFinder(size - 7, 0);
+
+  let hash = 0;
+  const normalizedSeed = seed || "FACTURA";
+
+  for (let index = 0; index < normalizedSeed.length; index += 1) {
+    hash = ((hash << 5) - hash + normalizedSeed.charCodeAt(index)) >>> 0;
+  }
+
+  for (let row = 0; row < size; row += 1) {
+    for (let column = 0; column < size; column += 1) {
+      const inFinderZone =
+        (row < 7 && column < 7) ||
+        (row < 7 && column >= size - 7) ||
+        (row >= size - 7 && column < 7);
+
+      if (inFinderZone) {
+        continue;
+      }
+
+      hash = (hash * 1664525 + 1013904223) >>> 0;
+      matrix[row][column] = ((hash >> 28) & 1) === 1;
+    }
+  }
+
+  return matrix;
+}
+
+function getReceiverName(cliente: string) {
+  return cliente === "Venta mostrador" ? "PUBLICO EN GENERAL" : cliente;
+}
+
 export function downloadInvoicePdf(invoice: InvoicePdfData) {
+  const subtotal = invoice.detalles.reduce((accumulator, detail) => accumulator + detail.subtotal, 0);
+  const stampSeed = `${invoice.folio}${invoice.fecha}${invoice.total.toFixed(2)}`.replace(/[^A-Z0-9]/gi, "").toUpperCase();
+  const selloCfdi = buildFakeStamp(stampSeed, 220);
+  const cadenaOriginal = `||4.0|${invoice.folio}|${invoice.fecha}|${invoice.total.toFixed(2)}|MXN|PPD|99||`;
+  const qrMatrix = createQrMatrix(stampSeed);
+  const receiverName = getReceiverName(invoice.cliente);
   const rectangles: PdfRect[] = [
-    { x: 0, y: 708, width: 612, height: 84, color: [0.118, 0.165, 0.325] },
-    { x: 36, y: 612, width: 540, height: 86, color: [0.949, 0.961, 0.980] },
-    { x: 36, y: 568, width: 540, height: 28, color: [0.859, 0.898, 0.973] },
-    { x: 36, y: 112, width: 540, height: 72, color: [0.949, 0.961, 0.980] },
+    { x: 28, y: 764, width: 556, height: 24, color: [0.055, 0.302, 0.522] },
+    { x: 28, y: 680, width: 96, height: 72, color: [0.965, 0.972, 0.988], strokeColor: [0.055, 0.302, 0.522], lineWidth: 1 },
+    { x: 28, y: 638, width: 556, height: 1, color: [0.412, 0.565, 0.714] },
+    { x: 28, y: 522, width: 556, height: 20, color: [0.925, 0.925, 0.925], strokeColor: [0.48, 0.48, 0.48], lineWidth: 0.8 },
+    { x: 28, y: 206, width: 556, height: 1, color: [0.412, 0.565, 0.714] },
+    { x: 28, y: 96, width: 112, height: 112, color: [1, 1, 1], strokeColor: [0.25, 0.25, 0.25], lineWidth: 1 },
   ];
 
   const lines: PdfTextLine[] = [
-    { text: "PI GESTION", x: 40, y: 756, size: 10, font: "F2", color: [0.741, 0.827, 0.996] },
-    { text: "Simulacion de factura", x: 40, y: 726, size: 24, font: "F2", color: [1, 1, 1] },
-    { text: invoice.folio, x: 458, y: 738, size: 16, font: "F2", color: [1, 1, 1] },
-    { text: `Fecha de emision: ${invoice.fecha}`, x: 414, y: 718, size: 10, color: [0.875, 0.906, 0.965] },
-    { text: "Datos de la factura", x: 48, y: 675, size: 12, font: "F2", color: [0.118, 0.165, 0.325] },
-    { text: "Cliente", x: 48, y: 650, size: 9, font: "F2", color: [0.392, 0.451, 0.584] },
-    { text: fitText(invoice.cliente, 34), x: 48, y: 632, size: 13, font: "F2" },
-    { text: "Estado", x: 320, y: 650, size: 9, font: "F2", color: [0.392, 0.451, 0.584] },
-    { text: invoice.estado, x: 320, y: 632, size: 13, font: "F2" },
-    { text: "Producto", x: 48, y: 577, size: 10, font: "F2", color: [0.118, 0.165, 0.325] },
-    { text: "Cant.", x: 330, y: 577, size: 10, font: "F2", color: [0.118, 0.165, 0.325] },
-    { text: "P. Unit.", x: 395, y: 577, size: 10, font: "F2", color: [0.118, 0.165, 0.325] },
-    { text: "Subtotal", x: 490, y: 577, size: 10, font: "F2", color: [0.118, 0.165, 0.325] },
+    { text: "FACTURA ELECTRONICA 4.0 (CFDI)", x: 145, y: 771, size: 13, font: "F2", color: [1, 1, 1] },
+    { text: "CFDI", x: 48, y: 710, size: 20, font: "F2", color: [0.082, 0.2, 0.62] },
+    { text: ISSUER_NAME, x: 150, y: 742, size: 18, font: "F2", color: [0.12, 0.12, 0.12] },
+    { text: `RFC: ${ISSUER_RFC}`, x: 132, y: 710, size: 9 },
+    { text: ISSUER_ADDRESS_LINE_1, x: 132, y: 696, size: 9 },
+    { text: ISSUER_ADDRESS_LINE_2, x: 132, y: 684, size: 9 },
+    { text: `Tel: ${ISSUER_PHONE}`, x: 132, y: 670, size: 9 },
+    { text: `E-mail: ${ISSUER_EMAIL}`, x: 132, y: 658, size: 9 },
+    { text: "FACTURA:", x: 500, y: 714, size: 10, font: "F2", color: [0.055, 0.302, 0.522] },
+    { text: invoice.folio, x: 478, y: 698, size: 12, font: "F2", color: [0.859, 0.267, 0.235] },
+    { text: "Serie del certificado CSD:", x: 426, y: 672, size: 8, font: "F2", color: [0.055, 0.302, 0.522] },
+    { text: "00001000000500000000", x: 450, y: 660, size: 8 },
+    { text: "Fecha y hora de emision:", x: 446, y: 644, size: 8, font: "F2", color: [0.055, 0.302, 0.522] },
+    { text: invoice.fecha, x: 490, y: 632, size: 8 },
+    { text: "LUGAR DE EXPEDICION:", x: 28, y: 624, size: 8, font: "F2" },
+    { text: "86000", x: 122, y: 624, size: 8 },
+    { text: "TIPO DE COMPROBANTE:", x: 184, y: 624, size: 8, font: "F2" },
+    { text: "I - Ingreso", x: 296, y: 624, size: 8 },
+    { text: "ESTADO:", x: 430, y: 624, size: 8, font: "F2" },
+    { text: invoice.estado, x: 472, y: 624, size: 8 },
+    { text: "RECEPTOR:", x: 28, y: 606, size: 8, font: "F2" },
+    { text: fitText(receiverName, 48), x: 92, y: 606, size: 9, font: "F2" },
+    { text: "RFC CLIENTE:", x: 28, y: 592, size: 8, font: "F2" },
+    { text: RECEIVER_GENERIC_RFC, x: 92, y: 592, size: 8 },
+    { text: "DOMICILIO:", x: 28, y: 578, size: 8, font: "F2" },
+    { text: fitText(RECEIVER_GENERIC_ADDRESS, 64), x: 92, y: 578, size: 8 },
+    { text: "USO CFDI:", x: 28, y: 564, size: 8, font: "F2" },
+    { text: "S01 - Sin efectos fiscales", x: 92, y: 564, size: 8 },
+    { text: "CANTIDAD", x: 34, y: 528, size: 8, font: "F2" },
+    { text: "UNIDAD", x: 112, y: 528, size: 8, font: "F2" },
+    { text: "CLAVE", x: 174, y: 528, size: 8, font: "F2" },
+    { text: "DESCRIPCION", x: 264, y: 528, size: 8, font: "F2" },
+    { text: "P. UNITARIO", x: 444, y: 528, size: 8, font: "F2" },
+    { text: "IMPORTE", x: 529, y: 528, size: 8, font: "F2" },
   ];
 
-  let currentY = 540;
+  let currentY = 506;
 
-  invoice.detalles.slice(0, 14).forEach((detalle, index) => {
-    const wrappedProduct = wrapText(detalle.producto, 34, 2);
-    const rowHeight = wrappedProduct.length > 1 ? 34 : 24;
-    const rowBottom = currentY - 6;
+  invoice.detalles.slice(0, 10).forEach((detalle) => {
+    const wrappedProduct = wrapText(detalle.producto, 28, 4);
+    const rowHeight = Math.max(36, wrappedProduct.length * 12 + 18);
+    const rowBottom = currentY - rowHeight + 12;
 
     rectangles.push({
       x: 36,
       y: rowBottom,
-      width: 540,
+      width: 58,
       height: rowHeight,
-      color: index % 2 === 0 ? [1, 1, 1] : [0.976, 0.984, 0.996],
+      color: [1, 1, 1],
+      strokeColor: [0.48, 0.48, 0.48],
+      lineWidth: 0.7,
+    });
+    rectangles.push({
+      x: 94,
+      y: rowBottom,
+      width: 54,
+      height: rowHeight,
+      color: [1, 1, 1],
+      strokeColor: [0.48, 0.48, 0.48],
+      lineWidth: 0.7,
+    });
+    rectangles.push({
+      x: 148,
+      y: rowBottom,
+      width: 68,
+      height: rowHeight,
+      color: [1, 1, 1],
+      strokeColor: [0.48, 0.48, 0.48],
+      lineWidth: 0.7,
+    });
+    rectangles.push({
+      x: 216,
+      y: rowBottom,
+      width: 214,
+      height: rowHeight,
+      color: [1, 1, 1],
+      strokeColor: [0.48, 0.48, 0.48],
+      lineWidth: 0.7,
+    });
+    rectangles.push({
+      x: 430,
+      y: rowBottom,
+      width: 76,
+      height: rowHeight,
+      color: [1, 1, 1],
+      strokeColor: [0.48, 0.48, 0.48],
+      lineWidth: 0.7,
+    });
+    rectangles.push({
+      x: 506,
+      y: rowBottom,
+      width: 78,
+      height: rowHeight,
+      color: [1, 1, 1],
+      strokeColor: [0.48, 0.48, 0.48],
+      lineWidth: 0.7,
     });
 
     wrappedProduct.forEach((line, lineIndex) => {
       lines.push({
         text: line,
-        x: 48,
+        x: 222,
         y: currentY - (lineIndex * 12),
-        size: 10,
+        size: 8,
       });
     });
 
     lines.push(
-      { text: `${detalle.cantidad}`, x: 334, y: currentY, size: 10 },
-      { text: formatMoney(detalle.precio_unitario), x: 395, y: currentY, size: 10 },
-      { text: formatMoney(detalle.subtotal), x: 490, y: currentY, size: 10, font: "F2" },
+      { text: detalle.cantidad.toFixed(2), x: 42, y: currentY, size: 8 },
+      { text: "Pieza", x: 105, y: currentY, size: 8 },
+      { text: "H87", x: 170, y: currentY, size: 8 },
+      { text: formatMoney(detalle.precio_unitario), x: 438, y: currentY, size: 8 },
+      { text: formatMoney(detalle.subtotal), x: 514, y: currentY, size: 8, font: "F2" },
     );
 
     currentY -= rowHeight;
   });
 
   lines.push(
-    { text: `Conceptos facturados: ${invoice.detalles.length}`, x: 48, y: 160, size: 12, font: "F2", color: [0.118, 0.165, 0.325] },
-    { text: "Total a pagar", x: 406, y: 152, size: 10, font: "F2", color: [0.392, 0.451, 0.584] },
-    { text: formatMoney(invoice.total), x: 406, y: 132, size: 18, font: "F2", color: [0.118, 0.165, 0.325] },
-    { text: "Documento generado desde el modulo de facturacion.", x: 36, y: 68, size: 9, color: [0.392, 0.451, 0.584] },
+    { text: "Datos fiscales complementarios", x: 206, y: 196, size: 9, font: "F2", color: [0.055, 0.302, 0.522] },
+    { text: "FORMA DE PAGO :", x: 206, y: 182, size: 8, font: "F2" },
+    { text: "99 - Por definir", x: 284, y: 182, size: 8 },
+    { text: "REGIMEN FISCAL :", x: 206, y: 168, size: 8, font: "F2" },
+    { text: "601 - General de Ley Personas Morales", x: 292, y: 168, size: 8 },
+    { text: "MONEDA :", x: 206, y: 148, size: 8, font: "F2" },
+    { text: "MXN - Peso Mexicano", x: 250, y: 148, size: 8 },
+    { text: "METODO PAGO :", x: 206, y: 134, size: 8, font: "F2" },
+    { text: "PPD - Pago en parcialidades o diferido", x: 272, y: 134, size: 8 },
+    { text: "SUBTOTAL", x: 450, y: 180, size: 9, font: "F2" },
+    { text: formatMoney(subtotal), x: 522, y: 180, size: 9 },
+    { text: "IVA", x: 450, y: 164, size: 9, font: "F2" },
+    { text: "No desg.", x: 520, y: 164, size: 9 },
+    { text: "TOTAL", x: 450, y: 144, size: 10, font: "F2" },
+    { text: formatMoney(invoice.total), x: 514, y: 144, size: 10, font: "F2" },
+    { text: "Sello Digital del CFDI", x: 28, y: 82, size: 9, font: "F2" },
+    { text: fitText(selloCfdi, 118), x: 28, y: 70, size: 6 },
+    { text: fitText(selloCfdi.slice(118), 118), x: 28, y: 60, size: 6 },
+    { text: "Cadena Original", x: 28, y: 46, size: 9, font: "F2" },
+    { text: fitText(cadenaOriginal, 118), x: 28, y: 34, size: 6 },
+    { text: "No de Serie del Certificado del SAT: 000010000005280994", x: 28, y: 18, size: 7, font: "F2", color: [0.055, 0.302, 0.522] },
+    { text: `Fecha y hora de certificacion: ${invoice.fecha}`, x: 342, y: 18, size: 7, font: "F2", color: [0.055, 0.302, 0.522] },
   );
 
-  if (invoice.detalles.length > 14) {
+  rectangles.push(
+    { x: 430, y: 136, width: 154, height: 1, color: [0.48, 0.48, 0.48] },
+    { x: 430, y: 156, width: 154, height: 1, color: [0.48, 0.48, 0.48] },
+    { x: 430, y: 172, width: 154, height: 1, color: [0.48, 0.48, 0.48] },
+  );
+
+  const qrCellSize = 4.5;
+  const qrOriginX = 33;
+  const qrOriginY = 101;
+
+  qrMatrix.forEach((row, rowIndex) => {
+    row.forEach((cell, columnIndex) => {
+      if (!cell) {
+        return;
+      }
+
+      rectangles.push({
+        x: qrOriginX + (columnIndex * qrCellSize),
+        y: qrOriginY + ((QR_SIZE - 1 - rowIndex) * qrCellSize),
+        width: qrCellSize,
+        height: qrCellSize,
+        color: [0.05, 0.05, 0.05],
+      });
+    });
+  });
+
+  if (invoice.detalles.length > 10) {
     lines.push({
-      text: `Se muestran 14 de ${invoice.detalles.length} conceptos en este PDF.`,
-      x: 48,
-      y: 118,
-      size: 9,
+      text: `Se muestran 10 de ${invoice.detalles.length} conceptos en este PDF.`,
+      x: 28,
+      y: 116,
+      size: 8,
       color: [0.584, 0.318, 0.118],
     });
   }

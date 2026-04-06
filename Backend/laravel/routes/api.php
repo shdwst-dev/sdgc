@@ -17,20 +17,21 @@ Route::prefix('v1')->group(function () {
     Route::post('/usuarios/registrar', [UsuariosController::class, 'registrar']);
 
     Route::middleware('auth:sanctum')->group(function () {
-        // ─── Auth (accesible a todos los roles autenticados) ─────────
+        // Auth for all authenticated roles.
         Route::get('/auth/me', [AuthController::class, 'me']);
         Route::put('/auth/profile', [AuthController::class, 'updateProfile']);
         Route::put('/auth/temporary-password', [AuthController::class, 'replaceTemporaryPassword']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
 
-        // ─── Productos (accesible a Admin y Comprador) ───────────────
+        // Read-only products are used by multiple roles.
         Route::get('/productos', [ProductosController::class, 'listar']);
         Route::get('/productos/{idProducto}', [ProductosController::class, 'leer'])->whereNumber('idProducto');
 
-        // ─── Ventas: registrar (Comprador + Admin) ───────────────────
-        Route::post('/ventas/registrar', [VentasController::class, 'registrar']);
+        Route::middleware('role:Administrador,Super Admin,Vendedor,Comprador')->group(function () {
+            Route::post('/ventas/registrar', [VentasController::class, 'registrar']);
+        });
 
-        // ─── Rutas exclusivas de Admin ───────────────────────────────
+        // Admin-only routes.
         Route::middleware('admin')->group(function () {
             Route::get('/graficas/ingresos-vs-gastos', [DashboardDataController::class, 'graficaIngresosVsGastos']);
             Route::get('/graficas/productos-mas-vendidos', [DashboardDataController::class, 'graficaProductosMasVendidos']);
@@ -62,20 +63,32 @@ Route::prefix('v1')->group(function () {
     });
 });
 
-// ─── Rutas sin prefijo /v1 (consumidas por AppWeb) ───────────────────────────
-Route::middleware(['auth:sanctum', 'admin'])->group(function () {
-    Route::get('/dashboard', [DashboardDataController::class, 'dashboard']);
-    Route::get('/dashboard/ventas-recientes', [DashboardDataController::class, 'ventasRecientes']);
-    Route::get('/dashboard/alertas-stock', [DashboardDataController::class, 'alertasStock']);
-    Route::get('/dashboard/top-productos', [DashboardDataController::class, 'topProductos']);
-    Route::get('/inventario', [DashboardDataController::class, 'inventario']);
-    Route::get('/compras', [DashboardDataController::class, 'compras']);
-    Route::get('/ventas', [DashboardDataController::class, 'ventas']);
-    Route::get('/proveedores', [DashboardDataController::class, 'proveedores']);
-    Route::get('/clientes', [DashboardDataController::class, 'clientes']);
-    Route::get('/facturacion', [DashboardDataController::class, 'facturacion']);
-    Route::get('/reportes', [DashboardDataController::class, 'reportes']);
-    Route::get('/configuracion', [DashboardDataController::class, 'configuracion']);
-    Route::get('/configuracion/stats', [DashboardDataController::class, 'configuracionStats']);
-    Route::put('/configuracion', [DashboardDataController::class, 'actualizarConfiguracion']);
+// Routes without /v1 consumed by AppWeb.
+Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware('admin')->group(function () {
+        Route::get('/dashboard', [DashboardDataController::class, 'dashboard']);
+        Route::get('/dashboard/ventas-recientes', [DashboardDataController::class, 'ventasRecientes']);
+        Route::get('/dashboard/alertas-stock', [DashboardDataController::class, 'alertasStock']);
+        Route::get('/dashboard/top-productos', [DashboardDataController::class, 'topProductos']);
+        Route::get('/compras', [DashboardDataController::class, 'compras']);
+        Route::get('/proveedores', [DashboardDataController::class, 'proveedores']);
+        Route::get('/clientes', [DashboardDataController::class, 'clientes']);
+        Route::get('/facturacion', [DashboardDataController::class, 'facturacion']);
+        Route::get('/configuracion', [DashboardDataController::class, 'configuracion']);
+        Route::get('/configuracion/stats', [DashboardDataController::class, 'configuracionStats']);
+        Route::put('/configuracion', [DashboardDataController::class, 'actualizarConfiguracion']);
+    });
+
+    Route::middleware('role:Administrador,Super Admin,Vendedor')->group(function () {
+        Route::get('/reportes', [DashboardDataController::class, 'reportes']);
+    });
+
+    Route::middleware('role:Administrador,Super Admin,Vendedor,Comprador')->group(function () {
+        Route::get('/ventas', [DashboardDataController::class, 'ventas']);
+    });
+
+    Route::middleware('role:Administrador,Super Admin,Comprador')->group(function () {
+        Route::get('/inventario', [DashboardDataController::class, 'inventario']);
+    });
 });
+

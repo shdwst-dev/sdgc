@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Layout from "./layout";
 import "../styles/dashboard.css";
 import { useApiData } from "../hooks/useApiData";
 import { deleteApi, fetchApi, putApi } from "../lib/api";
+import { GoogleChart } from "../components/GoogleChart";
 
 type EmpleadoListado = {
   id_usuario: number;
@@ -43,6 +44,12 @@ type EmpleadoResponse = {
   };
 };
 
+type ConfiguracionStatsData = {
+  total_empleados: number;
+  empleados_por_rol: (string | number)[][];
+  empleados_por_estatus: (string | number)[][];
+};
+
 const initialEditable = {
   nombre: "",
   apellido_paterno: "",
@@ -74,6 +81,23 @@ export default function Configuracion() {
     },
     empleados: [],
   });
+  const {
+    data: stats,
+    loading: statsLoading,
+    error: statsError,
+  } = useApiData<ConfiguracionStatsData>(`/configuracion/stats?refresh=${reloadKey}`, {
+    total_empleados: 0,
+    empleados_por_rol: [["Rol", "Cantidad"]],
+    empleados_por_estatus: [["Estatus", "Cantidad"]],
+  });
+
+  const chartDataByStatus = useMemo(() => {
+    if (stats.empleados_por_estatus.length > 0) {
+      return stats.empleados_por_estatus;
+    }
+
+    return [["Estatus", "Cantidad"]];
+  }, [stats.empleados_por_estatus]);
 
   const limpiarMensajes = () => {
     setAccionError(null);
@@ -219,6 +243,34 @@ export default function Configuracion() {
               <h4>Empleados dados de alta</h4>
             </div>
           </div>
+
+          <section className="panel">
+            <p className="detail-section-label">Grafica administrativa</p>
+            <h4>Distribucion de empleados por estatus</h4>
+            <p>Total de empleados: {stats.total_empleados}</p>
+            {statsLoading ? <p className="form-message">Cargando grafica...</p> : null}
+            {statsError ? <p className="form-message form-message-error">Error al cargar grafica: {statsError}</p> : null}
+            {!statsLoading && !statsError ? (
+              <GoogleChart
+                type="BarChart"
+                data={chartDataByStatus}
+                className="google-chart google-chart-small"
+                options={{
+                  backgroundColor: "transparent",
+                  chartArea: { left: 120, right: 24, top: 24, bottom: 42, width: "100%", height: "72%" },
+                  colors: ["#2563eb"],
+                  legend: { position: "none" },
+                  hAxis: {
+                    minValue: 0,
+                    textStyle: { color: "#64748b", fontSize: 11 },
+                    gridlines: { color: "#e2e8f0" },
+                  },
+                  vAxis: { textStyle: { color: "#334155", fontSize: 12 } },
+                  bars: "horizontal",
+                }}
+              />
+            ) : null}
+          </section>
 
           {accionError ? <p className="form-message form-message-error">{accionError}</p> : null}
           {accionSuccess ? <p className="form-message form-message-success">{accionSuccess}</p> : null}

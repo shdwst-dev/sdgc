@@ -1,10 +1,27 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
-import { Minus, Plus, Trash2, ShoppingBag } from 'lucide-react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, Modal } from 'react-native';
+import { Minus, Plus, Trash2, ShoppingBag, X } from 'lucide-react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { getCarritoLocal, saveCarritoLocal, CartItem, checkout } from '../../services/comprador';
 import { ApiError } from '../../services/auth';
 import { getToken, hydrateToken, clearToken } from '../../services/storage';
+
+const imageMap: { [key: string]: string } = {
+  'Smartphone Samsung Galaxy A54': 'https://i.postimg.cc/Snz3Kn0D/A54.png',
+  'Laptop HP Pavilion 15': 'https://i.postimg.cc/PLscvdTG/HP.png',
+  'Audífonos Bluetooth JBL': 'https://i.postimg.cc/v83LYzZ9/Whats-App-Image-2026-04-06-at-6-27-52-PM.jpg',
+  'Manzanas Red Delicious': 'https://i.postimg.cc/06R3K9Pk/Manzana.png',
+  'Lechuga Romana': 'https://i.postimg.cc/8FQ3fTNT/Lechuga.png',
+  'Coca Cola 2L': 'https://i.postimg.cc/xXbhdXDV/Coca-cola.png',
+  'Jugo Jumex Naranja 1L': 'https://i.postimg.cc/XZShBn40/Jumex.png',
+  'Detergente Ariel 1kg': 'https://i.postimg.cc/XrymvrSn/Ariel.png',
+  'Escritorio de Oficina': 'https://i.postimg.cc/mPFJrPx0/Escritorio.png',
+  'Cuaderno Profesional 100 hojas': 'https://i.postimg.cc/tsVwgs0K/Cuaderno.png',
+};
+
+const getProductImage = (nombre: string): string => {
+  return imageMap[nombre] || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200';
+};
 
 export default function Carrito() {
   const navigation = useNavigation();
@@ -12,6 +29,9 @@ export default function Carrito() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<CartItem | null>(null);
+  const [productQuantity, setProductQuantity] = useState(1);
 
   const goToLogin = useCallback(() => {
     navigation.reset({ index: 0, routes: [{ name: 'InicioSesion' as never }] });
@@ -129,13 +149,22 @@ export default function Carrito() {
 
         <View style={styles.itemsList}>
           {cart.map((item) => (
-            <View key={item.id} style={styles.cartCard}>
+            <TouchableOpacity 
+              key={item.id} 
+              style={styles.cartCard}
+              activeOpacity={0.7}
+              onPress={() => {
+                setSelectedProduct(item);
+                setProductQuantity(1);
+                setShowProductModal(true);
+              }}
+            >
               <View style={styles.productRow}>
-                {item.imagen_url ? (
-                  <Image source={{ uri: item.imagen_url }} style={styles.productImage} />
+                {getProductImage(item.nombre) ? (
+                  <Image source={{ uri: getProductImage(item.nombre) }} style={styles.productImage} />
                 ) : (
-                  <View style={[styles.productImage, { backgroundColor: '#F3F4F6', justifyContent: 'center', alignItems: 'center' }]}>
-                    <ShoppingBag size={32} color="#D1D5DB" />
+                  <View style={[styles.productImage, { backgroundColor: '#f3f7ff', justifyContent: 'center', alignItems: 'center' }]}>
+                    <ShoppingBag size={32} color="#b5c4d1" />
                   </View>
                 )}
                 <View style={styles.productDetails}>
@@ -165,7 +194,7 @@ export default function Carrito() {
                   </View>
                 </View>
               </View>
-            </View>
+            </TouchableOpacity>
           ))}
         </View>
       </ScrollView>
@@ -196,6 +225,76 @@ export default function Carrito() {
           )}
         </TouchableOpacity>
       </View>
+
+      {/* Product Detail Modal */}
+      <Modal
+        visible={showProductModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowProductModal(false)}
+      >
+        <View style={styles.productDetailContainer}>
+          <TouchableOpacity 
+            style={styles.closeButton} 
+            onPress={() => setShowProductModal(false)}
+          >
+            <X size={24} color="#1C3A5C" />
+          </TouchableOpacity>
+
+          {selectedProduct && (
+            <ScrollView 
+              style={styles.detailContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Product Image */}
+              <View style={styles.detailImageContainer}>
+                {getProductImage(selectedProduct.nombre) ? (
+                  <Image 
+                    source={{ uri: getProductImage(selectedProduct.nombre) }} 
+                    style={styles.detailImage} 
+                  />
+                ) : (
+                  <View style={[styles.detailImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#f3f7ff' }]}>
+                    <Text style={{ fontSize: 60 }}>📦</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Product Info */}
+              <View style={styles.detailInfo}>
+                <Text style={styles.detailName}>{selectedProduct.nombre}</Text>
+
+                {/* Price */}
+                <View style={styles.priceContainer}>
+                  <Text style={styles.detailPrice}>
+                    ${selectedProduct.precio_unitario.toLocaleString('es-MX')}
+                  </Text>
+                </View>
+
+                {/* Current Quantity in Cart */}
+                <View style={styles.detailSection}>
+                  <Text style={styles.sectionTitle}>En tu carrito</Text>
+                  <View style={styles.sectionContent}>
+                    <Text style={styles.sectionText}>
+                      Cantidad actual: {selectedProduct.cantidad} unidad{selectedProduct.cantidad > 1 ? 'es' : ''}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Summary */}
+                <View style={[styles.detailSection, { borderBottomWidth: 0 }]}>
+                  <Text style={styles.sectionTitle}>Subtotal</Text>
+                  <View style={styles.sectionContent}>
+                    <Text style={styles.sectionText}>
+                      ${(selectedProduct.precio_unitario * selectedProduct.cantidad).toLocaleString('es-MX')}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -230,5 +329,78 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#1C3A5C', marginTop: 20 },
   emptySubtitle: { fontSize: 14, color: '#5e728f', textAlign: 'center', marginTop: 8, marginBottom: 24 },
   primaryBtn: { backgroundColor: '#0f2f6f', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12 },
-  primaryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '600' }
+  primaryBtnText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
+
+  // Product Detail Modal Styles
+  productDetailContainer: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    paddingTop: 40,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 45,
+    right: 16,
+    zIndex: 10,
+    padding: 8,
+  },
+  detailContent: {
+    flex: 1,
+    paddingTop: 32,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  detailImageContainer: {
+    width: '100%',
+    height: 300,
+    backgroundColor: '#f3f7ff',
+    borderRadius: 12,
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  detailImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'contain',
+  },
+  detailInfo: {
+    paddingBottom: 20,
+  },
+  detailName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1C3A5C',
+    marginBottom: 12,
+  },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  detailPrice: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#0f2f6f',
+  },
+  detailSection: {
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#cfdaea',
+    paddingBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1C3A5C',
+    marginBottom: 10,
+  },
+  sectionContent: {
+    paddingHorizontal: 8,
+  },
+  sectionText: {
+    fontSize: 13,
+    color: '#5e728f',
+    lineHeight: 20,
+  }
 });

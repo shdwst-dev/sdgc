@@ -65,11 +65,14 @@ Desde la raíz del repo:
 ```bash
 cd AppMovil/Sistema-De-Gestion-Comercial
 npm install
+cp .env.example .env
 ```
 
 ## Variables de entorno (`.env`)
 
 Archivo: `AppMovil/Sistema-De-Gestion-Comercial/.env`
+
+Puedes generarlo copiando `AppMovil/Sistema-De-Gestion-Comercial/.env.example`.
 
 Ejemplo:
 

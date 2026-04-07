@@ -1,5 +1,11 @@
-# sdgc
-Repositorio del proyecto integrador Sistema De Gestión Comercial (SDGC)
+# SDGC
+
+Repositorio del proyecto integrador Sistema de Gestion Comercial (SDGC).
+
+Este repo contiene:
+- `AppWeb` (React + Vite)
+- `AppMovil/Sistema-De-Gestion-Comercial` (Expo + React Native)
+- `Backend/laravel` (API)
 
 ## Estructura del proyecto
 
@@ -76,3 +82,73 @@ sdgc/
 	├── creacion.sql
 	└── poblarBD.sql
 ```
+
+## Requisitos generales
+
+- Node.js 20+
+- npm 10+
+- Backend Laravel corriendo (API disponible)
+
+## Inicio rapido despues de clonar
+
+### 1) Backend (referencia)
+
+Sigue `Backend/README_BACKEND.md` para levantar Laravel.
+
+### 2) App Web
+
+```bash
+cd AppWeb
+npm install
+cp .env.example .env
+npm run dev
+```
+
+### 3) App Movil
+
+```bash
+cd AppMovil/Sistema-De-Gestion-Comercial
+npm install
+cp .env.example .env
+npm run web
+```
+
+Tambien puedes usar:
+
+```bash
+cd AppMovil/Sistema-De-Gestion-Comercial
+npm run android
+npm run ios
+```
+
+## Variables de entorno minimas
+
+- Web (`AppWeb/.env`):
+
+```dotenv
+VITE_API_BASE_URL=http://localhost:8000/api
+```
+
+- Movil (`AppMovil/Sistema-De-Gestion-Comercial/.env`):
+
+```dotenv
+EXPO_PUBLIC_API_URL=http://localhost:8000/api/v1
+```
+
+## Validacion recomendada
+
+```bash
+cd AppWeb
+npm run build
+```
+
+```bash
+cd AppMovil/Sistema-De-Gestion-Comercial
+npx tsc --noEmit
+```
+
+## Guias por modulo
+
+- Web: `AppWeb/README_WEB.md`
+- Movil: `AppMovil/README_MOVIL.md`
+

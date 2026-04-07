@@ -6,7 +6,7 @@ import { useApiData } from "../hooks/useApiData";
 import { formatCurrency, formatDate } from "../lib/format";
 import { GoogleChart } from "../components/GoogleChart";
 import { clearSession, getStoredUser, getToken, updateStoredUser } from "../lib/auth";
-import { putApi } from "../lib/api";
+import { postApi, putApi } from "../lib/api";
 
 type SessionUser = {
   id_usuario?: number;
@@ -171,18 +171,8 @@ export default function Dashboard() {
 
   const cerrarSesion = async () => {
     try {
-      const token = getToken();
-      const currentHost = window.location.hostname;
-      const API_URL = `http://${currentHost}:8000/api/v1/auth/logout`;
-
-      if (token) {
-        await fetch(API_URL, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        });
+      if (getToken()) {
+        await postApi<{ message?: string }>("/v1/auth/logout", {});
       }
     } catch (submitError) {
       console.error("Error al cerrar sesión en el servidor:", submitError);

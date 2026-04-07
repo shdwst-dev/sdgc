@@ -163,7 +163,7 @@ function createMultiPagePdfDocument(pageStreams: string[]) {
     encodePdfString(`<< /Type /Pages /Kids [${pageObjectRefs}] /Count ${pageStreams.length} >>`),
   ];
 
-  pageStreams.forEach((stream, index) => {
+  pageStreams.forEach((_, index) => {
     const contentObjectRef = `${contentObjectStart + index} 0 R`;
     objects.push(
       encodePdfString(

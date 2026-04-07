@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, Dimensions, Alert, ActivityIndicator } from 'react-native';
-import { Search, SlidersHorizontal, X } from 'lucide-react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, Dimensions, Alert, ActivityIndicator, ScrollView, Modal } from 'react-native';
+import { Search, SlidersHorizontal, X, Minus, Plus } from 'lucide-react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { Image } from 'react-native';
 import { ApiError } from '../../services/auth';
@@ -9,6 +9,23 @@ import { clearToken, getToken, hydrateToken } from '../../services/storage';
 
 const { width } = Dimensions.get('window');
 const columnWidth = (width - 40) / 2;
+
+const imageMap: { [key: string]: string } = {
+  'Smartphone Samsung Galaxy A54': 'https://i.postimg.cc/Snz3Kn0D/A54.png',
+  'Laptop HP Pavilion 15': 'https://i.postimg.cc/PLscvdTG/HP.png',
+  'Audífonos Bluetooth JBL': 'https://i.postimg.cc/v83LYzZ9/Whats-App-Image-2026-04-06-at-6-27-52-PM.jpg',
+  'Manzanas Red Delicious': 'https://i.postimg.cc/06R3K9Pk/Manzana.png',
+  'Lechuga Romana': 'https://i.postimg.cc/8FQ3fTNT/Lechuga.png',
+  'Coca Cola 2L': 'https://i.postimg.cc/xXbhdXDV/Coca-cola.png',
+  'Jugo Jumex Naranja 1L': 'https://i.postimg.cc/XZShBn40/Jumex.png',
+  'Detergente Ariel 1kg': 'https://i.postimg.cc/XrymvrSn/Ariel.png',
+  'Escritorio de Oficina': 'https://i.postimg.cc/mPFJrPx0/Escritorio.png',
+  'Cuaderno Profesional 100 hojas': 'https://i.postimg.cc/tsVwgs0K/Cuaderno.png',
+};
+
+const getProductImage = (nombre: string): string => {
+  return imageMap[nombre] || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200';
+};
 
 const categories = [
   { name: 'Electrónica', icon: '📱' },
@@ -29,6 +46,9 @@ export default function Buscar() {
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState('relevance');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
+  const [productQuantity, setProductQuantity] = useState(1);
 
   const goToLogin = useCallback(() => {
     navigation.dispatch(
@@ -122,12 +142,20 @@ export default function Buscar() {
   };
 
   const renderProduct = ({ item }: { item: Producto }) => (
-    <View style={styles.productCard}>
+    <TouchableOpacity 
+      style={styles.productCard}
+      activeOpacity={0.7}
+      onPress={() => {
+        setSelectedProduct(item);
+        setProductQuantity(1);
+        setShowProductModal(true);
+      }}
+    >
       <View style={styles.imageContainer}>
-        {item.imagen_url ? (
-          <Image source={{ uri: item.imagen_url }} style={styles.productImage} />
+        {getProductImage(item.nombre) ? (
+          <Image source={{ uri: getProductImage(item.nombre) }} style={styles.productImage} />
         ) : (
-          <View style={[styles.productImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#F3F4F6' }]}>
+          <View style={[styles.productImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#f3f7ff' }]}>
             <Text style={{ fontSize: 24 }}>📦</Text>
           </View>
         )}
@@ -138,19 +166,15 @@ export default function Buscar() {
         <Text style={styles.productPrice}>${item.precio_unitario.toLocaleString('es-MX')}</Text>
         <TouchableOpacity 
           style={styles.addButton}
-          onPress={async () => {
-            try {
-              await addToCarritoLocal(item, 1);
-              Alert.alert("¡Éxito!", `${item.nombre} agregado al carrito`);
-            } catch (error) {
-              Alert.alert("Error", "No se pudo agregar al carrito");
-            }
+          onPress={(e) => {
+            e.stopPropagation();
+            addToCarritoLocal(item, 1);
           }}
         >
           <Text style={styles.addButtonText}>Agregar</Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   return (
@@ -250,6 +274,154 @@ export default function Buscar() {
           )}
         </>
       )}
+
+      {/* Product Detail Modal */}
+      <Modal
+        visible={showProductModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowProductModal(false)}
+      >
+        <View style={styles.productDetailContainer}>
+          <TouchableOpacity 
+            style={styles.closeButton} 
+            onPress={() => setShowProductModal(false)}
+          >
+            <X size={24} color="#1C3A5C" />
+          </TouchableOpacity>
+
+          {selectedProduct && (
+            <ScrollView 
+              style={styles.detailContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Product Image */}
+              <View style={styles.detailImageContainer}>
+                {getProductImage(selectedProduct.nombre) ? (
+                  <Image 
+                    source={{ uri: getProductImage(selectedProduct.nombre) }} 
+                    style={styles.detailImage} 
+                  />
+                ) : (
+                  <View style={[styles.detailImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#f3f7ff' }]}>
+                    <Text style={{ fontSize: 60 }}>📦</Text>
+                  </View>
+                )}
+              </View>
+
+              {/* Product Info */}
+              <View style={styles.detailInfo}>
+                <Text style={styles.detailCategory}>{selectedProduct.categoria}</Text>
+                <Text style={styles.detailName}>{selectedProduct.nombre}</Text>
+
+                {/* Price */}
+                <View style={styles.priceContainer}>
+                  <Text style={styles.detailPrice}>
+                    ${selectedProduct.precio_unitario.toLocaleString('es-MX')}
+                  </Text>
+                  
+                  {/* Stock Badge */}
+                  <View style={[
+                    styles.stockBadge,
+                    {
+                      backgroundColor: selectedProduct.stock_actual > 10 
+                        ? '#d4edda' 
+                        : selectedProduct.stock_actual > 0 
+                        ? '#fff3cd' 
+                        : '#f8d7da'
+                    }
+                  ]}>
+                    <Text style={[
+                      styles.stockText,
+                      {
+                        color: selectedProduct.stock_actual > 10 
+                          ? '#155724' 
+                          : selectedProduct.stock_actual > 0 
+                          ? '#856404' 
+                          : '#721c24'
+                      }
+                    ]}>
+                      {selectedProduct.stock_actual > 0 
+                        ? `Stock: ${selectedProduct.stock_actual}` 
+                        : 'Agotado'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Availability Section */}
+                <View style={styles.detailSection}>
+                  <Text style={styles.sectionTitle}>Disponibilidad</Text>
+                  <View style={styles.sectionContent}>
+                    <Text style={styles.sectionText}>
+                      {selectedProduct.stock_actual > 10 
+                        ? '✓ Disponible - Entrega rápida' 
+                        : selectedProduct.stock_actual > 0 
+                        ? `⚠ Solo ${selectedProduct.stock_actual} disponibles` 
+                        : '✗ Sin stock actualmente'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Quantity Section */}
+                <View style={styles.detailSection}>
+                  <Text style={styles.sectionTitle}>Cantidad</Text>
+                  <View style={styles.quantitySelector}>
+                    <TouchableOpacity 
+                      style={styles.qtySelectorBtn}
+                      onPress={() => setProductQuantity(Math.max(1, productQuantity - 1))}
+                      disabled={selectedProduct.stock_actual === 0}
+                    >
+                      <Minus size={18} color={selectedProduct.stock_actual === 0 ? '#ccc' : '#1C3A5C'} />
+                    </TouchableOpacity>
+                    <Text style={styles.qtyDisplay}>{productQuantity}</Text>
+                    <TouchableOpacity 
+                      style={styles.qtySelectorBtn}
+                      onPress={() => setProductQuantity(
+                        Math.min(selectedProduct.stock_actual, productQuantity + 1)
+                      )}
+                      disabled={productQuantity >= selectedProduct.stock_actual}
+                    >
+                      <Plus size={18} color={productQuantity >= selectedProduct.stock_actual ? '#ccc' : '#1C3A5C'} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Add to Cart Button */}
+                <TouchableOpacity 
+                  style={[
+                    styles.detailAddButton,
+                    selectedProduct.stock_actual === 0 && styles.detailAddButtonDisabled
+                  ]}
+                  onPress={async () => {
+                    if (selectedProduct.stock_actual === 0) return;
+                    
+                    try {
+                      for (let i = 0; i < productQuantity; i++) {
+                        await addToCarritoLocal(selectedProduct, 1);
+                      }
+                      Alert.alert(
+                        "¡Éxito!",
+                        `${selectedProduct.nombre} agregado al carrito`,
+                        [{ text: "OK", onPress: () => {
+                          setShowProductModal(false);
+                          setProductQuantity(1);
+                        }}]
+                      );
+                    } catch (error) {
+                      Alert.alert("Error", "No se pudo agregar al carrito");
+                    }
+                  }}
+                  disabled={selectedProduct.stock_actual === 0}
+                >
+                  <Text style={styles.detailAddButtonText}>
+                    {selectedProduct.stock_actual === 0 ? 'Sin stock' : 'Agregar al Carrito'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -285,4 +457,126 @@ const styles = StyleSheet.create({
   addButtonText: { color: '#fff', fontSize: 11, fontWeight: '600' },
   loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
+
+  // Product Detail Modal Styles
+  productDetailContainer: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    paddingTop: 40,
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 45,
+    right: 16,
+    zIndex: 10,
+    padding: 8,
+  },
+  detailContent: {
+    flex: 1,
+    paddingTop: 32,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+  },
+  detailImageContainer: {
+    width: '100%',
+    height: 300,
+    backgroundColor: '#f3f7ff',
+    borderRadius: 12,
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  detailImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'contain',
+  },
+  detailInfo: {
+    paddingBottom: 20,
+  },
+  detailCategory: {
+    fontSize: 12,
+    color: '#7a8ba5',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+  detailName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1C3A5C',
+    marginBottom: 12,
+  },
+  priceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  detailPrice: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#0f2f6f',
+  },
+  stockBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  stockText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  detailSection: {
+    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#cfdaea',
+    paddingBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1C3A5C',
+    marginBottom: 10,
+  },
+  sectionContent: {
+    paddingHorizontal: 8,
+  },
+  sectionText: {
+    fontSize: 13,
+    color: '#5e728f',
+    lineHeight: 20,
+  },
+  quantitySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f3f7ff',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  qtySelectorBtn: {
+    padding: 8,
+  },
+  qtyDisplay: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#1C3A5C',
+    minWidth: 40,
+    textAlign: 'center',
+  },
+  detailAddButton: {
+    backgroundColor: '#0f2f6f',
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  detailAddButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  detailAddButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
 });

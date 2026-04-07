@@ -170,7 +170,6 @@ export default function InicioSesion() {
                 <Text style={styles.buttonPrimaryText}>Entrar</Text>
               )}
             </TouchableOpacity>
-
           </View>
           <View style={styles.registerContainer}>
             <Text style={styles.termsText}>¿No tienes cuenta? </Text>
@@ -204,7 +203,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   title: {
-    color: '#1C273F',
+    color: '#0f2f6f',
     fontSize: 34,
     fontWeight: 'bold',
     textAlign: 'center',
@@ -255,12 +254,12 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   forgotPasswordText: {
-    color: '#1C273F',
+    color: '#0f2f6f',
     fontSize: 14,
     fontWeight: '600',
   },
   buttonPrimary: {
-    backgroundColor: '#1C273F',
+    backgroundColor: '#0f2f6f',
     padding: 15,
     borderRadius: 8,
     alignItems: 'center',
@@ -281,6 +280,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   termsLink: {
-    color: '#1C273F',
+    color: '#0f2f6f',
   },
 });

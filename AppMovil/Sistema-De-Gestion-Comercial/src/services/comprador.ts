@@ -11,8 +11,6 @@ import type { MeResponse } from './auth';
 
 export { ApiError };
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
 export type ProductoDestacado = {
   id: number;
   nombre: string;
@@ -57,15 +55,9 @@ export type DashboardCompradorData = {
   comprasHoy: number;
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 function toText(value: unknown): string | null {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
+  if (typeof value !== 'string') return null;
   const normalized = value.trim();
-
   return normalized.length > 0 ? normalized : null;
 }
 
@@ -82,14 +74,10 @@ function mapProducto(raw: Record<string, unknown>): Producto {
 
 function extractDataArray(body: unknown): unknown[] {
   if (Array.isArray(body)) return body;
-
   const asObj = body as { data?: unknown[] } | null;
-  if (Array.isArray(asObj?.data)) return asObj!.data;
-
+  if (Array.isArray(asObj?.data)) return asObj.data;
   return [];
 }
-
-// ─── Productos ───────────────────────────────────────────────────────────────
 
 export async function getProductosDestacados(token: string): Promise<Producto[]> {
   const body = await apiRequest<unknown>('/productos?limit=10', {
@@ -102,9 +90,7 @@ export async function getProductosDestacados(token: string): Promise<Producto[]>
 
 export async function buscarProductos(token: string, query: string): Promise<Producto[]> {
   const params = new URLSearchParams();
-  if (query.trim()) {
-    params.append('search', query.trim());
-  }
+  if (query.trim()) params.append('search', query.trim());
 
   const body = await apiRequest<unknown>(`/productos?${params.toString()}`, {
     token,
@@ -114,14 +100,11 @@ export async function buscarProductos(token: string, query: string): Promise<Pro
   return extractDataArray(body).map((raw) => mapProducto(raw as Record<string, unknown>));
 }
 
-// ─── Dashboard Comprador ─────────────────────────────────────────────────────
-
 export async function getDashboardCompradorData(
   token: string,
   userInfo: MeResponse,
 ): Promise<DashboardCompradorData> {
   const productosDestacados = await getProductosDestacados(token);
-
   return {
     usuario: userInfo,
     productosDestacados,
@@ -129,8 +112,6 @@ export async function getDashboardCompradorData(
     comprasHoy: 0,
   };
 }
-
-// ─── Carrito local (AsyncStorage) ────────────────────────────────────────────
 
 export async function getCarritoLocal(): Promise<CartItem[]> {
   try {
@@ -174,22 +155,17 @@ export async function clearCarritoLocal(): Promise<void> {
   await AsyncStorage.removeItem('@carrito');
 }
 
-// ─── Métodos de pago ─────────────────────────────────────────────────────────
-
 export async function getMetodosPago(token: string): Promise<MetodoPago[]> {
   try {
-    // /api/ventas (sin v1) devuelve { catalogos: { metodos_pago: [...] }, ... }
     const { getApiRootUrl } = await import('./apiClient');
-
     const body = await apiRequest<Record<string, unknown>>('/ventas', {
       token,
       baseUrl: getApiRootUrl(),
       fallbackError: 'No se pudieron cargar los métodos de pago.',
     });
 
-    // metodos_pago está dentro de catalogos
     const catalogos = (body?.catalogos ?? {}) as Record<string, unknown>;
-    const items = Array.isArray(catalogos?.metodos_pago) ? catalogos.metodos_pago : [];
+    const items = Array.isArray(catalogos.metodos_pago) ? catalogos.metodos_pago : [];
 
     return items.map((raw: Record<string, unknown>) => ({
       id: Number(raw.id_metodo_pago ?? raw.id ?? 0),
@@ -197,7 +173,6 @@ export async function getMetodosPago(token: string): Promise<MetodoPago[]> {
       nombre: String(raw.nombre ?? ''),
     }));
   } catch {
-    // Fallback: devolver métodos de pago por defecto
     return [
       { id: 1, id_metodo_pago: 1, nombre: 'Efectivo' },
       { id: 2, id_metodo_pago: 2, nombre: 'Tarjeta de Crédito' },
@@ -252,15 +227,11 @@ export async function saveDireccionLocal(direccion: Direccion): Promise<Direccio
 
   if (direccion.id === 0) {
     direccion.id = Date.now();
-    if (direcciones.length === 0) {
-      direccion.esPrincipal = true;
-    }
+    if (direcciones.length === 0) direccion.esPrincipal = true;
     direcciones.push(direccion);
   } else {
     const index = direcciones.findIndex((d) => d.id === direccion.id);
-    if (index >= 0) {
-      direcciones[index] = direccion;
-    }
+    if (index >= 0) direcciones[index] = direccion;
   }
 
   await AsyncStorage.setItem('@direcciones', JSON.stringify(direcciones));
@@ -272,16 +243,11 @@ export async function deleteDireccionLocal(id: number): Promise<Direccion[]> {
   const deleted = direcciones.find((d) => d.id === id);
 
   direcciones = direcciones.filter((d) => d.id !== id);
-
-  if (deleted?.esPrincipal && direcciones.length > 0) {
-    direcciones[0].esPrincipal = true;
-  }
+  if (deleted?.esPrincipal && direcciones.length > 0) direcciones[0].esPrincipal = true;
 
   await AsyncStorage.setItem('@direcciones', JSON.stringify(direcciones));
   return direcciones;
 }
-
-// ─── Checkout (CORREGIDO: ahora usa POST /api/v1/ventas/registrar) ───────────
 
 export async function checkout(
   token: string,
@@ -307,8 +273,7 @@ export async function checkout(
     fallbackError: 'No se pudo procesar la compra.',
   });
 
-  // Limpiar carrito local después de checkout exitoso
   await clearCarritoLocal();
-
   return result;
 }
+

@@ -1,9 +1,12 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import logo from "/src/assets/LogoPI.png";
+import { clearSession, getToken } from "../lib/auth";
+import { postApi } from "../lib/api";
 
 const menuItems = [
   { to: "/dashboard", label: "Inicio" },
   { to: "/inventario", label: "Inventario / Almacen" },
+  { to: "/compras", label: "Compras a proveedor" },
   { to: "/compras-cliente", label: "Compras" },
   { to: "/ventas", label: "Ventas" },
   { to: "/clientes", label: "Clientes" },
@@ -13,6 +16,7 @@ const menuItems = [
 ];
 
 export default function Sidebar() {
+  const navigate = useNavigate();
   const rolUsuario = localStorage.getItem("rolUsuario");
 
   const menuVisible =
@@ -50,6 +54,25 @@ export default function Sidebar() {
               Configuracion
             </NavLink>
           ) : null}
+
+          <button
+            type="button"
+            className="sidebar-action sidebar-action-danger"
+            onClick={async () => {
+              try {
+                if (getToken()) {
+                  await postApi<{ message?: string }>("/v1/auth/logout", {});
+                }
+              } catch (submitError) {
+                console.error("Error al cerrar sesión en el servidor:", submitError);
+              } finally {
+                clearSession();
+                navigate("/");
+              }
+            }}
+          >
+            Cerrar sesion
+          </button>
         </div>
       </nav>
     </aside>

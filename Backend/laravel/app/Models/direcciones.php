@@ -9,10 +9,11 @@ class direcciones extends Model
     //
     protected $table = 'direcciones';
     protected $primaryKey = 'id_direccion';
+    public $timestamps = false;
     protected $fillable = [
         'id_calle',
-        'numero_int',
-        'numero_ext',
+        'num_int',
+        'num_ext',
     ];
 
     public function calle()

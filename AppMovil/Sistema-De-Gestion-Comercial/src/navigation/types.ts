@@ -1,5 +1,11 @@
 export type RootStackParamList = {
-  InicioSesion: undefined;
+  RoleSelect: undefined;
+  LoginComprador: undefined;
+  LoginAdmin: undefined;
+  Registro: undefined;
   'dashboard-ad': undefined;
   'dashboard-cm': undefined;
+  MisPedidos: undefined;
+  DetallePedido: { idVenta: number };
+  DetalleProducto: { idProducto: number };
 };

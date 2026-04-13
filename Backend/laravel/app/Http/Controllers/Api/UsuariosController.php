@@ -16,28 +16,39 @@ class UsuariosController extends Controller
             'apellido_paterno' => 'required|string|max:100',
             'apellido_materno' => 'nullable|string|max:100',
             'telefono' => 'required|string|max:20',
-            'id_direccion' => 'required|integer|exists:direcciones,id_direccion',
             'email' => 'required|email|max:100',
             'contrasena' => 'required|string|min:8',
             'id_rol' => 'nullable|integer|exists:roles,id_rol',
             'id_estatus' => 'nullable|integer|exists:estatus,id_estatus',
+            // Campos de dirección (requeridos)
+            'estado' => 'required|string|max:100',
+            'municipio' => 'required|string|max:100',
+            'colonia' => 'required|string|max:100',
+            'cp' => 'nullable|integer',
+            'calle' => 'required|string|max:100',
+            'num_ext' => 'required|integer|min:1',
+            'num_int' => 'nullable|integer|min:0',
         ]);
 
         try {
-            DB::statement(
-                'CALL pa_registrar_usuario(?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                [
-                    $data['nombre'],
-                    $data['apellido_paterno'],
-                    $data['apellido_materno'] ?? null,
-                    $data['telefono'],
-                    $data['id_direccion'],
-                    $data['email'],
-                    $data['contrasena'],
-                    $data['id_rol'] ?? 2,
-                    $data['id_estatus'] ?? 1,
-                ]
-            );
+            DB::transaction(function () use ($data) {
+                $direccionId = $this->resolveAddressId($data);
+
+                DB::statement(
+                    'CALL pa_registrar_usuario(?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    [
+                        $data['nombre'],
+                        $data['apellido_paterno'],
+                        $data['apellido_materno'] ?? null,
+                        $data['telefono'],
+                        $direccionId,
+                        $data['email'],
+                        $data['contrasena'],
+                        $data['id_rol'] ?? 2,
+                        $data['id_estatus'] ?? 1,
+                    ]
+                );
+            });
 
             return response()->json([
                 'message' => 'Usuario registrado correctamente.'
@@ -50,4 +61,81 @@ class UsuariosController extends Controller
         }
     }
 
+    private function resolveAddressId(array $data): int
+    {
+        $paisId = DB::table('paises')->where('nombre', 'México')->value('id_pais');
+
+        if (!$paisId) {
+            $paisId = DB::table('paises')->insertGetId(['nombre' => 'México'], 'id_pais');
+        }
+
+        $estadoId = DB::table('estados')->where([
+            'id_pais' => $paisId,
+            'nombre' => $data['estado'],
+        ])->value('id_estado');
+
+        if (!$estadoId) {
+            $estadoId = DB::table('estados')->insertGetId([
+                'id_pais' => $paisId,
+                'nombre' => $data['estado'],
+            ], 'id_estado');
+        }
+
+        $municipioId = DB::table('municipios')->where([
+            'id_estado' => $estadoId,
+            'nombre' => $data['municipio'],
+        ])->value('id_municipio');
+
+        if (!$municipioId) {
+            $municipioId = DB::table('municipios')->insertGetId([
+                'id_estado' => $estadoId,
+                'nombre' => $data['municipio'],
+            ], 'id_municipio');
+        }
+
+        $coloniaId = DB::table('colonias')->where([
+            'id_municipio' => $municipioId,
+            'nombre' => $data['colonia'],
+        ])->value('id_colonia');
+
+        if (!$coloniaId) {
+            $coloniaId = DB::table('colonias')->insertGetId([
+                'id_municipio' => $municipioId,
+                'nombre' => $data['colonia'],
+                'cp' => $data['cp'] ?? null,
+            ], 'id_colonia');
+        } elseif (isset($data['cp'])) {
+            DB::table('colonias')
+                ->where('id_colonia', $coloniaId)
+                ->update(['cp' => $data['cp']]);
+        }
+
+        $calleId = DB::table('calles')->where([
+            'id_colonia' => $coloniaId,
+            'nombre' => $data['calle'],
+        ])->value('id_calle');
+
+        if (!$calleId) {
+            $calleId = DB::table('calles')->insertGetId([
+                'id_colonia' => $coloniaId,
+                'nombre' => $data['calle'],
+            ], 'id_calle');
+        }
+
+        $direccionId = DB::table('direcciones')->where([
+            'id_calle' => $calleId,
+            'num_ext' => $data['num_ext'],
+            'num_int' => $data['num_int'] ?? null,
+        ])->value('id_direccion');
+
+        if (!$direccionId) {
+            $direccionId = DB::table('direcciones')->insertGetId([
+                'id_calle' => $calleId,
+                'num_ext' => $data['num_ext'],
+                'num_int' => $data['num_int'] ?? null,
+            ], 'id_direccion');
+        }
+
+        return $direccionId;
+    }
 }

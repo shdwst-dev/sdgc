@@ -22,7 +22,7 @@ class ventas extends Model
     }
 
     public function metodo_pago () {
-        return $this->belongsTo(metodos_pagos::class, 'id_metodo_pago');
+        return $this->belongsTo(metodos_pago::class, 'id_metodo_pago');
     }
 
     public function sesion () {
@@ -34,6 +34,6 @@ class ventas extends Model
     }
 
     public function detalles_venta () {
-        return $this->hasMany(detalles_venta::class);
+        return $this->hasMany(detalle_ventas::class, 'venta_id');
     }
 }

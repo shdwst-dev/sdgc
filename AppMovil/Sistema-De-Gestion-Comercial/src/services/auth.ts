@@ -95,3 +95,33 @@ export async function getMe(token: string): Promise<MeResponse> {
 
   return body;
 }
+
+// ─── Register (Self-registration Comprador) ──────────────────────────────────
+
+export type RegisterData = {
+  nombre: string;
+  apellido_paterno: string;
+  apellido_materno?: string;
+  telefono: string;
+  email: string;
+  contrasena: string;
+  estado: string;
+  municipio: string;
+  colonia: string;
+  cp?: number;
+  calle: string;
+  num_ext: number;
+  num_int?: number;
+};
+
+export async function register(data: RegisterData): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/usuarios/registrar', {
+    method: 'POST',
+    body: {
+      ...data,
+      id_rol: 2,
+      id_estatus: 1,
+    },
+    fallbackError: 'No se pudo completar el registro. Intenta nuevamente.',
+  });
+}

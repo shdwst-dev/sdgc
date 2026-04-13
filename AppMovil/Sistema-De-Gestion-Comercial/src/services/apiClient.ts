@@ -150,6 +150,8 @@ export type RequestOptions = {
   retries?: number;
   /** Mensaje de error fallback si no se puede extraer uno del body */
   fallbackError?: string;
+  /** Tipo de respuesta esperada. Default = 'json' */
+  responseType?: 'json' | 'text';
 };
 
 /**
@@ -172,14 +174,27 @@ export async function apiRequest<T = unknown>(
     timeoutMs = DEFAULT_TIMEOUT_MS,
     retries = 1,
     fallbackError = 'Ocurrió un error inesperado. Intenta de nuevo.',
+    responseType = 'json',
   } = opts;
 
-  const url = `${baseUrl}${path}`;
+  const baseUrlFinal = `${baseUrl}${path}`;
+  const isGet = method.toUpperCase() === 'GET';
+  const url = isGet 
+    ? `${baseUrlFinal}${baseUrlFinal.includes('?') ? '&' : '?'}cb=${Date.now()}` 
+    : baseUrlFinal;
+
+  const isFormData = body instanceof FormData;
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
-    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    Pragma: 'no-cache',
+    Expires: '0',
   };
+
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (token) {
     headers.Authorization = `Bearer ${token}`;
@@ -188,7 +203,8 @@ export async function apiRequest<T = unknown>(
   const fetchOptions: RequestInit = {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: isFormData ? (body as any) : (body !== undefined ? JSON.stringify(body) : undefined),
+    cache: 'no-store',
   };
 
   let lastError: unknown;
@@ -200,8 +216,13 @@ export async function apiRequest<T = unknown>(
       let responseBody: T | ApiErrorBody | null = null;
 
       try {
-        responseBody = (await response.json()) as T;
-      } catch {
+        if (responseType === 'text') {
+          responseBody = (await response.text()) as unknown as T;
+        } else {
+          responseBody = (await response.json()) as T;
+        }
+      } catch (e) {
+        console.warn('API parsing error:', e);
         responseBody = null;
       }
 

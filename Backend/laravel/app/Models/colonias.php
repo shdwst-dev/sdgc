@@ -9,6 +9,7 @@ class colonias extends Model
     //
     protected $table = 'colonias';
     protected $primaryKey = 'id_colonia';
+    public $timestamps = false;
     protected $fillable = [
         'id_municipio',
         'nombre',

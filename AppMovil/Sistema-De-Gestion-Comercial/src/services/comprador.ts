@@ -56,8 +56,8 @@ export type MetodoPago = {
 export type Direccion = {
   id: number;
   calle: string;
-  numero_exterior: number;
-  numero_interior?: number;
+  numero_exterior: string;
+  numero_interior?: string;
   colonia: string;
   ciudad: string;
   estado: string;
@@ -288,7 +288,81 @@ export async function getDireccionesLocal(): Promise<Direccion[]> {
   }
 }
 
+/**
+ * SERVICIOS NUBE (Cloud Sync)
+ */
+
+export async function getDireccionesCloud(token: string): Promise<Direccion[]> {
+  try {
+    const body = await apiRequest<Direccion[]>('/auth/direcciones', {
+      token,
+      fallbackError: 'No se pudieron sincronizar las direcciones.',
+    });
+    const addresses = Array.isArray(body) ? body : [];
+    // Guardar una copia local para modo offline
+    await AsyncStorage.setItem('@direcciones', JSON.stringify(addresses));
+    return addresses;
+  } catch (error) {
+    console.warn('Usando caché local de direcciones');
+    return getDireccionesLocal();
+  }
+}
+
+export async function saveDireccionCloud(token: string, direccion: Direccion): Promise<Direccion[]> {
+  // 1. Enviar a la nube
+  await apiRequest<any>('/auth/direcciones', {
+    method: 'POST',
+    token,
+    body: {
+      ...direccion,
+      // Mapear campos si es necesario (el controlador soporta los nombres de la interfaz)
+    },
+    fallbackError: 'Error al guardar dirección en la nube.',
+  });
+
+  // 2. Refrescar lista completa desde la nube
+  return getDireccionesCloud(token);
+}
+
+export async function deleteDireccionCloud(token: string, id: number): Promise<Direccion[]> {
+  await apiRequest<any>(`/auth/direcciones/${id}`, {
+    method: 'DELETE',
+    token,
+    fallbackError: 'Error al eliminar dirección en la nube.',
+  });
+
+  return getDireccionesCloud(token);
+}
+
+/**
+ * Migración Automática: Sube direcciones locales no existentes en la nube.
+ */
+export async function synchronizeDirecciones(token: string): Promise<void> {
+  const local = await getDireccionesLocal();
+  if (local.length === 0) return;
+
+  const cloud = await getDireccionesCloud(token);
+  
+  // Si la nube está vacía pero hay locales, las subimos todas
+  if (cloud.length === 0) {
+    for (const dir of local) {
+      try {
+        await apiRequest('/auth/direcciones', {
+          method: 'POST',
+          token,
+          body: dir
+        });
+      } catch (e) { /* ignore */ }
+    }
+    // Una vez sincronizado, podemos limpiar el storage local si queremos, 
+    // pero getDireccionesCloud ya lo sobrescribe con la versión oficial.
+  }
+}
+
+// Mantener compatibilidad con nombres antiguos pero apuntando a la lógica híbrida
 export async function saveDireccionLocal(direccion: Direccion): Promise<Direccion[]> {
+  // Este se usará solo cuando no hay token (proceso de registro?), 
+  // pero usualmente las direcciones se guardan ya logueado.
   const direcciones = await getDireccionesLocal();
 
   if (direccion.id === 0) {
@@ -378,4 +452,5 @@ export async function getDetallePedido(token: string, idVenta: number): Promise<
 
   return data;
 }
+
 

@@ -9,6 +9,7 @@ class estados extends Model
     //
     protected $table = 'estados';
     protected $primaryKey = 'id_estado';
+    public $timestamps = false;
     protected $fillable = [
         'id_pais',
         'nombre',

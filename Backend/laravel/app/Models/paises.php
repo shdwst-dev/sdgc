@@ -9,6 +9,7 @@ class paises extends Model
     //
     protected $table = 'paises';
     protected $primaryKey = 'id_pais';
+    public $timestamps = false;
     protected $fillable = [
         'nombre',
     ];

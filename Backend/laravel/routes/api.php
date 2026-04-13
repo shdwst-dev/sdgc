@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\ProductosController;
 use App\Http\Controllers\Api\ProveedoresController;
 use App\Http\Controllers\Api\UsuariosController;
 use App\Http\Controllers\Api\VentasController;
+use App\Http\Controllers\Api\DireccionController;
+use App\Http\Controllers\Api\ComprobanteController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -22,6 +24,11 @@ Route::prefix('v1')->group(function () {
         Route::put('/auth/profile', [AuthController::class, 'updateProfile']);
         Route::put('/auth/temporary-password', [AuthController::class, 'replaceTemporaryPassword']);
         Route::post('/auth/logout', [AuthController::class, 'logout']);
+        
+        // Address management for Compradores
+        Route::get('/auth/direcciones', [DireccionController::class, 'index']);
+        Route::post('/auth/direcciones', [DireccionController::class, 'store']);
+        Route::delete('/auth/direcciones/{id}', [DireccionController::class, 'destroy'])->whereNumber('id');
 
         // Read-only products are used by multiple roles.
         Route::get('/productos', [ProductosController::class, 'listar']);
@@ -31,6 +38,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/ventas', [VentasController::class, 'listar']);
             Route::get('/ventas/{idVenta}', [VentasController::class, 'ver'])->whereNumber('idVenta');
             Route::post('/ventas/registrar', [VentasController::class, 'registrar']);
+            
+            // Comprobantes (Factura/Recibo)
+            Route::get('/ventas/{idVenta}/factura', [ComprobanteController::class, 'getFacturaHtml'])->whereNumber('idVenta');
+            Route::get('/ventas/{idVenta}/recibo', [ComprobanteController::class, 'getReciboHtml'])->whereNumber('idVenta');
         });
 
         // Admin-only routes.

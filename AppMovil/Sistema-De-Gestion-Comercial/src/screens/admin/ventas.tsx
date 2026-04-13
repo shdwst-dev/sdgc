@@ -7,6 +7,8 @@ import { ApiError } from '../../services/apiClient';
 import { clearToken, getToken, hydrateToken } from '../../services/storage';
 import { GoogleChartView } from '../../components/GoogleChartView';
 import { exportSaleReceiptPdf } from '../../lib/pdf';
+import * as Print from 'expo-print';
+import { getFacturaHtml } from '../../services/comprobantes';
 import { useToast } from '../../components/Toast';
 
 const { width } = Dimensions.get('window');
@@ -83,6 +85,7 @@ export default function Ventas() {
       setVentasPeriodo(data);
       setVentas(
         data.ventas.map((venta) => ({
+          id_venta: venta.id_venta,
           factura: venta.factura,
           cliente: venta.cliente,
           responsable: venta.responsable,
@@ -113,15 +116,18 @@ export default function Ventas() {
 
     try {
       setIsExportingPdf(true);
-      await exportSaleReceiptPdf({
-        factura: selectedVenta.factura,
-        cliente: selectedVenta.cliente,
-        responsable: selectedVenta.responsable,
-        monto: selectedVenta.monto,
-        fecha: selectedVenta.fecha,
-        metodoPago: selectedVenta.metodo_pago || (ventasPeriodo?.series.metodos_pago[0]?.nombre || 'Efectivo'),
-        periodo: ventasPeriodo?.periodo_referencia.mes || '',
-      });
+      
+      const token = await requireToken();
+      if (!token) return;
+
+      const html = await getFacturaHtml(token, selectedVenta.id_venta);
+      
+      if (!html || typeof html !== 'string' || html.length < 10) {
+        throw new Error('El servidor devolvió un documento vacío o inválido.');
+      }
+
+      await Print.printAsync({ html });
+
     } catch (exportError) {
       showToast({ message: exportError instanceof Error ? exportError.message : 'No se pudo exportar el PDF.', type: 'error' });
     } finally {
@@ -388,7 +394,7 @@ export default function Ventas() {
                   {isExportingPdf ? (
                     <ActivityIndicator size="small" color="#FFF" />
                   ) : (
-                    <Text style={styles.primaryBtnText}>Descargar Recibo (PDF)</Text>
+                    <Text style={styles.primaryBtnText}>Descargar Factura (Oficial)</Text>
                   )}
                 </TouchableOpacity>
               </ScrollView>

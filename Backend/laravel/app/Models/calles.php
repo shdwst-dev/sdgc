@@ -9,6 +9,7 @@ class calles extends Model
     //
     protected $table = 'calles';
     protected $primaryKey = 'id_calle';
+    public $timestamps = false;
     protected $fillable = [
         'id_colonia',
         'nombre',

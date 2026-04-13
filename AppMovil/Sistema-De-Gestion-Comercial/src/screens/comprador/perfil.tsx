@@ -1,24 +1,42 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch, StatusBar, Platform, ActivityIndicator, Modal, TextInput, FlatList } from 'react-native';
-import { User, Package, MapPin, CreditCard, LogOut, ChevronRight, X, Edit2, Trash2 } from 'lucide-react-native';
+import { User, Package, MapPin, CreditCard, LogOut, ChevronRight, X, Edit2, Trash2, Bell, Shield, Heart, HelpCircle } from 'lucide-react-native';
 import { useNavigation, CommonActions, useFocusEffect } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { ApiError, getMe, logout, MeResponse } from '../../services/auth';
 import { clearToken, getToken, hydrateToken } from '../../services/storage';
-import { getDireccionesLocal, saveDireccionLocal, deleteDireccionLocal, getMetodosPagoLocal, getFavoritePaymentMethodLocal, setFavoritePaymentMethodLocal, Direccion, MetodoPago } from '../../services/comprador';
+import { 
+  getDireccionesLocal,
+  getDireccionesCloud, 
+  saveDireccionCloud, 
+  deleteDireccionCloud, 
+  getMetodosPagoLocal, 
+  getFavoritePaymentMethodLocal, 
+  setFavoritePaymentMethodLocal, 
+  synchronizeDirecciones,
+  Direccion, 
+  MetodoPago 
+} from '../../services/comprador';
 import { useToast } from '../../components/Toast';
 
 export default function Perfil() {
   const navigation = useNavigation();
   const { showToast } = useToast();
+  
+  // States
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [profileData, setProfileData] = useState<MeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [direcciones, setDirecciones] = useState<Direccion[]>([]);
   const [metodoPagos, setMetodoPagos] = useState<MetodoPago[]>([]);
   const [metodoPagoFavorito, setMetodoPagoFavorito] = useState<number | null>(null);
+  
+  // Modal States
   const [showDireccionModal, setShowDireccionModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editingDireccion, setEditingDireccion] = useState<Direccion | null>(null);
+  
+  // Forms
   const [formData, setFormData] = useState({
     calle: '',
     numero_exterior: '',
@@ -30,26 +48,12 @@ export default function Perfil() {
   });
 
   const goToLogin = useCallback(() => {
-    navigation.dispatch(
-      CommonActions.reset({
-        index: 0,
-        routes: [{ name: 'RoleSelect' as never }],
-      }),
-    );
+    navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'RoleSelect' as never }] }));
   }, [navigation]);
 
   const loadProfile = useCallback(async () => {
-    let token = getToken();
-
-    if (!token) {
-      token = await hydrateToken();
-    }
-
-    if (!token) {
-      await clearToken();
-      goToLogin();
-      return;
-    }
+    let token = getToken() || await hydrateToken();
+    if (!token) { await clearToken(); goToLogin(); return; }
 
     try {
       setIsLoading(true);
@@ -58,734 +62,386 @@ export default function Perfil() {
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
         await clearToken();
-        Alert.alert('Sesión expirada', 'Inicia sesión nuevamente.');
         goToLogin();
         return;
       }
-
-      const message = requestError instanceof Error
-        ? requestError.message
-        : 'No se pudo cargar el perfil.';
-      
-      showToast({ message, type: 'error' });
+      showToast({ message: 'Error al cargar perfil', type: 'error' });
     } finally {
       setIsLoading(false);
     }
-  }, [goToLogin]);
+  }, [goToLogin, showToast]);
 
-  useEffect(() => {
-    loadProfile();
-  }, [loadProfile]);
+  useEffect(() => { loadProfile(); }, [loadProfile]);
 
   useFocusEffect(
     useCallback(() => {
-      loadDirecciones();
-      loadMetodosPago();
+      const loadExtras = async () => {
+        let token = getToken() || await hydrateToken();
+        if (token) {
+          try {
+            await synchronizeDirecciones(token);
+          } catch (e) { /* silent sync fail */ }
+        }
+
+        const [dirs, methods, fav] = await Promise.all([
+          token ? getDireccionesCloud(token) : getDireccionesLocal(),
+          getMetodosPagoLocal(),
+          getFavoritePaymentMethodLocal()
+        ]);
+        setDirecciones(dirs);
+        setMetodoPagos(methods);
+        setMetodoPagoFavorito(fav);
+      };
+      loadExtras();
     }, [])
   );
 
-  const loadDirecciones = async () => {
-    try {
-      const dirs = await getDireccionesLocal();
-      setDirecciones(dirs);
-    } catch (error) {
-      console.error('Error loading direcciones:', error);
-    }
-  };
-
-  const loadMetodosPago = async () => {
-    try {
-      const metodos = await getMetodosPagoLocal();
-      setMetodoPagos(metodos);
-      const favorito = await getFavoritePaymentMethodLocal();
-      setMetodoPagoFavorito(favorito);
-    } catch (error) {
-      console.error('Error loading payment methods:', error);
-    }
-  };
-
   const handleSaveDireccion = async () => {
-    const requiredFields = [
-      formData.calle,
-      formData.numero_exterior,
-      formData.colonia,
-      formData.ciudad,
-      formData.estado,
-      formData.codigoPostal,
-    ];
-
-    if (requiredFields.some((value) => !value.trim())) {
-      showToast({ message: 'Por favor completa todos los campos obligatorios', type: 'error' });
-      return;
-    }
-
-    const numeroExterior = Number.parseInt(formData.numero_exterior, 10);
-    if (Number.isNaN(numeroExterior)) {
-      showToast({ message: 'El número exterior debe ser válido', type: 'error' });
-      return;
-    }
-
-    const numeroInterior = formData.numero_interior.trim()
-      ? Number.parseInt(formData.numero_interior, 10)
-      : undefined;
-
-    if (formData.numero_interior.trim() && Number.isNaN(numeroInterior)) {
-      showToast({ message: 'El número interior debe ser válido', type: 'error' });
+    if (!formData.calle || !formData.numero_exterior || !formData.colonia || !formData.ciudad || !formData.estado || !formData.codigoPostal) {
+      showToast({ message: 'Completa los campos obligatorios', type: 'error' });
       return;
     }
 
     try {
-      const nuevaDireccion: Direccion = {
-        id: editingDireccion?.id || 0,
-        calle: formData.calle.trim(),
-        numero_exterior: numeroExterior,
-        numero_interior: numeroInterior,
-        colonia: formData.colonia.trim(),
-        ciudad: formData.ciudad.trim(),
-        estado: formData.estado.trim(),
-        codigoPostal: formData.codigoPostal.trim(),
-      };
+      let token = getToken() || await hydrateToken();
+      if (!token) throw new Error('Sesión expirada');
 
-      await saveDireccionLocal(nuevaDireccion);
-      await loadDirecciones();
+      const updated = await saveDireccionCloud(token, {
+        id: editingDireccion?.id || 0,
+        calle: formData.calle,
+        numero_exterior: formData.numero_exterior,
+        numero_interior: formData.numero_interior || undefined,
+        colonia: formData.colonia,
+        ciudad: formData.ciudad,
+        estado: formData.estado,
+        codigoPostal: formData.codigoPostal,
+      } as Direccion);
+
+      setDirecciones(updated);
       setShowDireccionModal(false);
       setEditingDireccion(null);
       setFormData({ calle: '', numero_exterior: '', numero_interior: '', colonia: '', ciudad: '', estado: '', codigoPostal: '' });
-      showToast({ message: editingDireccion ? 'Dirección actualizada' : 'Dirección agregada', type: 'success' });
+      showToast({ message: 'Dirección sincronizada', type: 'success' });
     } catch (error) {
-      showToast({ message: 'No se pudo guardar la dirección', type: 'error' });
+      const msg = error instanceof Error ? error.message : 'Error al guardar';
+      // Como estamos dentro de un Modal, el Toast no se ve. Usamos Alert.
+      Alert.alert('Error', msg);
     }
-  };
-
-  const handleDeleteDireccion = (id: number) => {
-    Alert.alert('Eliminar', '¿Estás seguro de eliminar esta dirección?', [
-      { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteDireccionLocal(id);
-            await loadDirecciones();
-            showToast({ message: 'Dirección eliminada', type: 'success' });
-          } catch (error) {
-            showToast({ message: 'No se pudo eliminar la dirección', type: 'error' });
-          }
-        }
-      }
-    ]);
-  };
-
-  const handleEditDireccion = (dir: Direccion) => {
-    setEditingDireccion(dir);
-    setFormData({
-      calle: dir.calle,
-      numero_exterior: dir.numero_exterior.toString(),
-      numero_interior: dir.numero_interior?.toString() || '',
-      colonia: dir.colonia,
-      ciudad: dir.ciudad,
-      estado: dir.estado,
-      codigoPostal: dir.codigoPostal,
-    });
-    setShowDireccionModal(true);
-  };
-
-  const handleSelectPaymentMethod = async (methodId: number) => {
-    try {
-      await setFavoritePaymentMethodLocal(methodId);
-      setMetodoPagoFavorito(methodId);
-      showToast({ message: 'Método de pago actualizado', type: 'success' });
-      setShowPaymentModal(false);
-    } catch (error) {
-      showToast({ message: 'No se pudo cambiar el método de pago', type: 'error' });
-    }
-  };
-
-  const getDisplayName = () => {
-    if (!profileData?.persona) return 'Usuario';
-    
-    const { nombre, apellido_paterno, apellido_materno } = profileData.persona;
-    const fullName = [nombre, apellido_paterno, apellido_materno]
-      .filter(Boolean)
-      .join(' ')
-      .trim();
-
-    return fullName || 'Usuario';
-  };
-
-  const getRolName = () => {
-    if (!profileData?.rol) return 'Sin rol';
-    if (typeof profileData.rol === 'string') return profileData.rol;
-    return profileData.rol.nombre ?? 'Sin rol';
-  };
-
-  const menuItems = [
-    {
-      icon: Package,
-      label: 'Mis Pedidos',
-      subtitle: 'Ver historial de compras',
-      onClick: () => navigation.navigate('MisPedidos' as never),
-    },
-    {
-      icon: MapPin,
-      label: 'Direcciones',
-      subtitle: direcciones.length > 0 ? `${direcciones.length} dirección${direcciones.length > 1 ? 'es' : ''}` : 'Agregar dirección',
-      onClick: () => setShowDireccionModal(true),
-    },
-    {
-      icon: CreditCard,
-      label: 'Métodos de Pago',
-      subtitle: metodoPagoFavorito ? `Favorito: ${metodoPagos.find(m => m.id === metodoPagoFavorito)?.nombre}` : 'Seleccionar método',
-      onClick: () => setShowPaymentModal(true),
-    },
-  ];
-
-  const performLogout = async () => {
-    const token = getToken();
-    if (token) {
-      try {
-        await logout(token);
-      } catch (err) {
-        console.error("Error cierre sesión remoto:", err);
-      }
-    }
-    
-    await clearToken();
-    goToLogin();
   };
 
   const handleLogout = () => {
-    if (Platform.OS === 'web') {
-      const confirm = window.confirm("¿Estás seguro de que deseas cerrar sesión?");
-      if (confirm) {
-        performLogout();
-      }
-    } else {
-      Alert.alert(
-        "Cerrar Sesión",
-        "¿Estás seguro de que deseas cerrar sesión?",
-        [
-          { text: "Cancelar", style: "cancel" },
-          { 
-            text: "Salir", 
-            style: "destructive", 
-            onPress: performLogout
-          }
-        ]
-      );
-    }
+    Alert.alert("Cerrar Sesión", "¿Estás seguro?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Salir", style: "destructive", onPress: async () => {
+        await clearToken();
+        goToLogin();
+      }}
+    ]);
   };
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color="#1C273F" />
-        <Text style={{ marginTop: 10, color: '#6B7280' }}>Cargando perfil...</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0f2f6f" />
       </View>
     );
   }
 
+  const userFullName = `${profileData?.persona?.nombre || ''} ${profileData?.persona?.apellido_paterno || ''}`.trim() || 'Usuario';
+
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <StatusBar barStyle="dark-content" />
-
-      <View style={styles.header}>
-        <View style={styles.avatarContainer}>
-          <User size={40} color="#FFF" />
-        </View>
-        <View>
-          <Text style={styles.userName}>{getDisplayName()}</Text>
-          <Text style={styles.userEmail}>{profileData?.email}</Text>
-          <Text style={styles.userRole}>{getRolName()}</Text>
-        </View>
-      </View>
-
-      <View style={styles.content}>
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Mi Cuenta</Text>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+        
+        {/* Premium Profile Header */}
+        <LinearGradient
+          colors={['#0f2f6f', '#1c3a5c', '#2c5282']}
+          style={styles.header}
+        >
+          <View style={styles.headerContent}>
+            <View style={styles.avatarWrapper}>
+              <View style={styles.avatar}>
+                <User size={40} color="#0f2f6f" />
+              </View>
+              <TouchableOpacity style={styles.editAvatarBtn}>
+                <Edit2 size={16} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.userName}>{userFullName}</Text>
+            <Text style={styles.userEmail}>{profileData?.email}</Text>
           </View>
-          <View style={styles.menuList}>
-            {menuItems.map((item, index) => (
-              <TouchableOpacity 
-                key={index} 
-                style={[styles.menuItem, index === menuItems.length - 1 && { borderBottomWidth: 0 }]}
-                onPress={item.onClick}
-              >
+        </LinearGradient>
+
+        <View style={styles.content}>
+          {/* Main Account Settings */}
+          <Text style={styles.sectionTtl}>Mi Cuenta</Text>
+          <View style={styles.menuGroup}>
+            {[
+              { icon: Package, label: 'Mis Pedidos', sub: 'Historial de compras', on: () => navigation.navigate('MisPedidos' as never) },
+              { icon: MapPin, label: 'Direcciones', sub: `${direcciones.length} guardadas`, on: () => setShowDireccionModal(true) },
+              { icon: CreditCard, label: 'Método de Pago', sub: metodoPagos.find(m => m.id === metodoPagoFavorito)?.nombre || 'Seleccionar', on: () => setShowPaymentModal(true) },
+            ].map((item, idx) => (
+              <TouchableOpacity key={idx} style={styles.menuItem} onPress={item.on}>
                 <View style={styles.iconCircle}>
-                  <item.icon size={20} color="#1C273F" />
+                  <item.icon size={20} color="#0f2f6f" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.menuLabel}>{item.label}</Text>
-                  <Text style={styles.menuSubtitle}>{item.subtitle}</Text>
+                  <Text style={styles.menuSub}>{item.sub}</Text>
                 </View>
-                <ChevronRight size={20} color="#9CA3AF" />
+                <ChevronRight size={18} color="#CBD5E1" />
               </TouchableOpacity>
             ))}
           </View>
-        </View>
 
-        <View style={styles.sectionCard}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Preferencias</Text>
-          </View>
-          <View style={styles.preferenceRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.menuLabel}>Notificaciones</Text>
-              <Text style={styles.menuSubtitle}>Recibir ofertas y promociones</Text>
+          {/* Preferences */}
+          <Text style={styles.sectionTtl}>Preferencias</Text>
+          <View style={styles.menuGroup}>
+            <View style={styles.prefRow}>
+              <View style={styles.iconCircle}>
+                <Bell size={20} color="#0f2f6f" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.menuLabel}>Notificaciones</Text>
+                <Text style={styles.menuSub}>Alertas de ofertas</Text>
+              </View>
+              <Switch 
+                value={notificationsEnabled} 
+                onValueChange={setNotificationsEnabled}
+                trackColor={{ false: '#E2E8F0', true: '#0f2f6f' }}
+                thumbColor="#FFF"
+              />
             </View>
-            <Switch
-              trackColor={{ false: "#D1D5DB", true: "#1C273F" }}
-              thumbColor="#FFF"
-              onValueChange={setNotificationsEnabled}
-              value={notificationsEnabled}
-            />
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <View style={styles.logoutIconBox}>
-            <LogOut size={20} color="#DC2626" />
-          </View>
-          <Text style={styles.logoutText}>Cerrar Sesión</Text>
-          <ChevronRight size={20} color="#FECACA" />
-        </TouchableOpacity>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Tienda Departamental</Text>
-          <Text style={styles.footerText}>Versión 1.0.0</Text>
-          <Text style={styles.footerSubtext}>Conectado a BD</Text>
-        </View>
-      </View>
-      <View style={{ height: 40 }} />
-
-      {/* Modal Direcciones */}
-      <Modal
-        visible={showDireccionModal}
-        animationType="slide"
-        onRequestClose={() => setShowDireccionModal(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{editingDireccion ? 'Editar' : 'Nueva'} Dirección</Text>
-            <TouchableOpacity onPress={() => setShowDireccionModal(false)}>
-              <X size={24} color="#101828" />
+            <TouchableOpacity style={styles.menuItem}>
+              <View style={styles.iconCircle}>
+                <Shield size={20} color="#0f2f6f" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.menuLabel}>Privacidad</Text>
+                <Text style={styles.menuSub}>Datos y seguridad</Text>
+              </View>
+              <ChevronRight size={18} color="#CBD5E1" />
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalContent}>
-            {!editingDireccion ? (
-              <View style={styles.direccionList}>
-                <Text style={styles.listTitle}>Direcciones Guardadas</Text>
-                {direcciones.length === 0 ? (
-                  <Text style={styles.emptyText}>No hay direcciones guardadas</Text>
-                ) : (
-                  <>
-                    {direcciones.map((item) => (
-                      <View style={styles.direccionItem} key={item.id.toString()}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.direccionCalle}>{item.calle} {item.numero_exterior}</Text>
-                          <Text style={styles.direccionDetails}>{item.colonia}, {item.ciudad}</Text>
-                          <Text style={styles.direccionDetails}>{item.estado} {item.codigoPostal}</Text>
-                          {item.esPrincipal && <Text style={styles.principal}>Dirección principal</Text>}
-                        </View>
-                        <View style={styles.direccionActions}>
-                          <TouchableOpacity onPress={() => handleEditDireccion(item)} style={styles.actionBtn}>
-                            <Edit2 size={18} color="#1C273F" />
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => handleDeleteDireccion(item.id)} style={[styles.actionBtn, { backgroundColor: '#FEE2E2' }]}>
-                            <Trash2 size={18} color="#DC2626" />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    ))}
-                  </>
-                )}
-              </View>
-            ) : null}
+          {/* Actions */}
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <LinearGradient
+              colors={['#FEF2F2', '#FEE2E2']}
+              style={styles.logoutGradient}
+            >
+              <LogOut size={20} color="#DC2626" />
+              <Text style={styles.logoutText}>Cerrar Sesión</Text>
+            </LinearGradient>
+          </TouchableOpacity>
 
-            <View style={styles.formSection}>
-              <Text style={styles.formTitle}>{editingDireccion ? 'Editar' : 'Agregar Nueva'} Dirección</Text>
+          <View style={styles.footer}>
+            <Text style={styles.footerVer}>Versión 2.0.0 - Premium Edition</Text>
+            <Text style={styles.footerBrand}>Powered by Antigravity Design System</Text>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* ADRESS MODAL REFACTOR */}
+      <Modal visible={showDireccionModal} animationType="slide">
+        <View style={styles.modalFull}>
+          <LinearGradient colors={['#0f2f6f', '#1c3a5c']} style={styles.modalHeader}>
+            <Text style={styles.modalTtl}>Direcciones</Text>
+            <TouchableOpacity onPress={() => { setShowDireccionModal(false); setEditingDireccion(null); }}>
+              <X size={24} color="#FFF" />
+            </TouchableOpacity>
+          </LinearGradient>
+
+          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+            {direcciones.length > 0 && !editingDireccion && (
+              <View style={styles.listSection}>
+                <Text style={styles.listSectionTtl}>Guardadas</Text>
+                {direcciones.map(dir => (
+                  <View key={dir.id} style={styles.dirCard}>
+                    <View style={styles.dirIcon}>
+                      <MapPin size={20} color="#0f2f6f" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.dirName}>{dir.calle} {dir.numero_exterior}</Text>
+                      <Text style={styles.dirSub}>{dir.colonia}, {dir.ciudad}</Text>
+                    </View>
+                    <View style={styles.dirActions}>
+                      <TouchableOpacity onPress={() => { setEditingDireccion(dir); setFormData({ ...dir, numero_exterior: dir.numero_exterior.toString(), numero_interior: dir.numero_interior?.toString() || '', codigoPostal: dir.codigoPostal || '' } as any); }}>
+                        <Edit2 size={18} color="#64748B" />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={async () => { 
+                        try {
+                          let token = getToken() || await hydrateToken();
+                          if (token) {
+                            const updated = await deleteDireccionCloud(token, dir.id);
+                            setDirecciones(updated);
+                            showToast({ message: 'Dirección eliminada', type: 'success' });
+                          }
+                        } catch (error) {
+                          Alert.alert('Error', 'No se pudo eliminar la dirección de la nube.');
+                        }
+                      }}>
+                        <Trash2 size={18} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <View style={styles.formContainer}>
+              <Text style={styles.listSectionTtl}>{editingDireccion ? 'Editar Dirección' : 'Nueva Dirección'}</Text>
               
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Calle *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nombre de la calle"
-                  value={formData.calle}
-                  onChangeText={(text) => setFormData({ ...formData, calle: text })}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Calle *</Text>
+                <TextInput 
+                  style={styles.input} 
+                  value={formData.calle} 
+                  onChangeText={t => setFormData({...formData, calle: t})}
                 />
               </View>
 
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Número Exterior *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="No."
-                    keyboardType="number-pad"
-                    value={formData.numero_exterior}
-                    onChangeText={(text) => setFormData({ ...formData, numero_exterior: text })}
+              <View style={styles.row}>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.inputLabel}>Num Ext *</Text>
+                  <TextInput 
+                    style={styles.input} 
+                    keyboardType="numeric"
+                    value={formData.numero_exterior} 
+                    onChangeText={t => setFormData({...formData, numero_exterior: t})}
                   />
                 </View>
-                <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Número Interior</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Apto/Local"
-                    keyboardType="number-pad"
-                    value={formData.numero_interior}
-                    onChangeText={(text) => setFormData({ ...formData, numero_interior: text })}
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.inputLabel}>CP *</Text>
+                  <TextInput 
+                    style={styles.input} 
+                    keyboardType="numeric"
+                    value={formData.codigoPostal} 
+                    onChangeText={t => setFormData({...formData, codigoPostal: t})}
                   />
                 </View>
               </View>
 
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Colonia *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Colonia"
-                  value={formData.colonia}
-                  onChangeText={(text) => setFormData({ ...formData, colonia: text })}
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Colonia *</Text>
+                <TextInput 
+                  style={styles.input} 
+                  value={formData.colonia} 
+                  onChangeText={t => setFormData({...formData, colonia: t})}
                 />
               </View>
 
-              <View style={{ flexDirection: 'row', gap: 12 }}>
-                <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Ciudad *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Ciudad"
-                    value={formData.ciudad}
-                    onChangeText={(text) => setFormData({ ...formData, ciudad: text })}
+              <View style={styles.row}>
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.inputLabel}>Ciudad *</Text>
+                  <TextInput 
+                    style={styles.input} 
+                    value={formData.ciudad} 
+                    onChangeText={t => setFormData({...formData, ciudad: t})}
                   />
                 </View>
-                <View style={[styles.formGroup, { flex: 1 }]}>
-                  <Text style={styles.label}>Estado *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Estado"
-                    value={formData.estado}
-                    onChangeText={(text) => setFormData({ ...formData, estado: text })}
+                <View style={[styles.inputGroup, { flex: 1 }]}>
+                  <Text style={styles.inputLabel}>Estado *</Text>
+                  <TextInput 
+                    style={styles.input} 
+                    value={formData.estado} 
+                    onChangeText={t => setFormData({...formData, estado: t})}
                   />
                 </View>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.label}>Código Postal *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="00000"
-                  keyboardType="number-pad"
-                  value={formData.codigoPostal}
-                  onChangeText={(text) => setFormData({ ...formData, codigoPostal: text })}
-                />
               </View>
 
               <TouchableOpacity style={styles.saveBtn} onPress={handleSaveDireccion}>
-                <Text style={styles.saveBtnText}>{editingDireccion ? 'Actualizar' : 'Guardar'} Dirección</Text>
+                <Text style={styles.saveBtnText}>Guardar Dirección</Text>
               </TouchableOpacity>
-
-              {editingDireccion && (
-                <TouchableOpacity 
-                  style={[styles.saveBtn, { backgroundColor: '#F3F4F6' }]} 
-                  onPress={() => {
-                    setEditingDireccion(null);
-                    setFormData({ calle: '', numero_exterior: '', numero_interior: '', colonia: '', ciudad: '', estado: '', codigoPostal: '' });
-                  }}
-                >
-                  <Text style={[styles.saveBtnText, { color: '#6B7280' }]}>Cancelar</Text>
-                </TouchableOpacity>
-              )}
             </View>
           </ScrollView>
         </View>
       </Modal>
 
-      {/* Modal Métodos de Pago */}
-      <Modal
-        visible={showPaymentModal}
-        animationType="slide"
-        onRequestClose={() => setShowPaymentModal(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Métodos de Pago</Text>
-            <TouchableOpacity onPress={() => setShowPaymentModal(false)}>
-              <X size={24} color="#101828" />
-            </TouchableOpacity>
-          </View>
-
-          <FlatList
-            data={metodoPagos}
-            keyExtractor={(item) => item.id.toString()}
-            style={styles.modalContent}
-            renderItem={({ item }) => (
-              <TouchableOpacity 
-                style={[styles.paymentOption, metodoPagoFavorito === item.id && styles.paymentOptionSelected]}
-                onPress={() => handleSelectPaymentMethod(item.id)}
-              >
-                <View style={styles.paymentRadio}>
-                  {metodoPagoFavorito === item.id && <View style={styles.radioFilled} />}
-                </View>
-                <Text style={styles.paymentLabel}>{item.nombre}</Text>
-                {metodoPagoFavorito === item.id && <Text style={styles.favoriteBadge}>Favorito</Text>}
+      {/* PAYMENT MODAL REFACTOR */}
+      <Modal visible={showPaymentModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.paymentModal}>
+            <View style={styles.paymentHeader}>
+              <Text style={styles.paymentTtl}>Pago Predeterminado</Text>
+              <TouchableOpacity onPress={() => setShowPaymentModal(false)}>
+                <X size={20} color="#64748B" />
               </TouchableOpacity>
-            )}
-          />
+            </View>
+            <FlatList
+              data={metodoPagos}
+              keyExtractor={m => m.id.toString()}
+              renderItem={({ item }) => (
+                <TouchableOpacity 
+                  style={[styles.paymentItem, metodoPagoFavorito === item.id && styles.paymentItemActive]}
+                  onPress={async () => { await setFavoritePaymentMethodLocal(item.id); setMetodoPagoFavorito(item.id); setShowPaymentModal(false); }}
+                >
+                  <CreditCard size={20} color={metodoPagoFavorito === item.id ? '#0f2f6f' : '#94A3B8'} />
+                  <Text style={[styles.paymentLabel, metodoPagoFavorito === item.id && styles.paymentLabelActive]}>{item.nombre}</Text>
+                  {metodoPagoFavorito === item.id && <View style={styles.paymentCheck} />}
+                </TouchableOpacity>
+              )}
+              style={styles.paymentList}
+            />
+          </View>
         </View>
       </Modal>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#e6f3fb' },
-  header: { 
-    backgroundColor: '#FFF', 
-    padding: 24, 
-    paddingTop: 60, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#cfdaea'
-  },
-  avatarContainer: { 
-    width: 80, 
-    height: 80, 
-    borderRadius: 40, 
-    backgroundColor: '#0f2f6f', 
-    justifyContent: 'center', 
-    alignItems: 'center' 
-  },
-  userName: { fontSize: 20, fontWeight: 'bold', color: '#1C3A5C' },
-  userEmail: { fontSize: 14, color: '#5e728f' },
-  userRole: { fontSize: 12, color: '#7a8ba5', marginTop: 4 },
-  content: { padding: 16, gap: 16 },
-  sectionCard: { 
-    backgroundColor: '#FFF', 
-    borderRadius: 12, 
-    borderWidth: 1, 
-    borderColor: '#cfdaea', 
-    overflow: 'hidden' 
-  },
-  sectionHeader: { 
-    backgroundColor: '#f3f7ff', 
-    paddingHorizontal: 16, 
-    paddingVertical: 12, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#cfdaea' 
-  },
-  sectionTitle: { fontSize: 14, fontWeight: 'bold', color: '#1C3A5C' },
-  menuList: { },
-  menuItem: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    padding: 16, 
-    gap: 16, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#f3f7ff' 
-  },
-  iconCircle: { 
-    width: 40, 
-    height: 40, 
-    borderRadius: 8, 
-    backgroundColor: 'rgba(15, 47, 111, 0.1)', 
-    justifyContent: 'center', 
-    alignItems: 'center' 
-  },
-  menuLabel: { fontSize: 15, fontWeight: '600', color: '#1C3A5C' },
-  menuSubtitle: { fontSize: 12, color: '#5e728f' },
-  preferenceRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    padding: 16 
-  },
-  logoutBtn: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#FFF', 
-    padding: 16, 
-    borderRadius: 12, 
-    borderWidth: 1, 
-    borderColor: '#cfdaea', 
-    gap: 16 
-  },
-  logoutIconBox: { 
-    width: 40, 
-    height: 40, 
-    borderRadius: 8, 
-    backgroundColor: '#FEE2E2', 
-    justifyContent: 'center', 
-    alignItems: 'center' 
-  },
-  logoutText: { flex: 1, fontSize: 15, fontWeight: '600', color: '#dc2626' },
-  footer: { marginTop: 8, alignItems: 'center' },
-  footerText: { fontSize: 12, color: '#7a8ba5' },
-  footerSubtext: { fontSize: 11, color: '#b5c4d1', marginTop: 4 },
-  // Modal styles
-  modalContainer: { 
-    flex: 1, 
-    backgroundColor: '#e6f3fb', 
-    paddingTop: 20 
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#cfdaea'
-  },
-  modalTitle: { 
-    fontSize: 18, 
-    fontWeight: 'bold', 
-    color: '#1C3A5C' 
-  },
-  modalContent: { 
-    padding: 16 
-  },
-  direccionList: {
-    marginBottom: 24
-  },
-  listTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1C3A5C',
-    marginBottom: 12
-  },
-  emptyText: {
-    fontSize: 13,
-    color: '#5e728f',
-    textAlign: 'center',
-    paddingVertical: 20
-  },
-  direccionItem: {
-    backgroundColor: '#FFF',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#cfdaea',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  direccionCalle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1C3A5C',
-    marginBottom: 4
-  },
-  direccionDetails: {
-    fontSize: 12,
-    color: '#5e728f',
-    marginBottom: 2
-  },
-  principal: {
-    fontSize: 11,
-    color: '#1C7F4A',
-    fontWeight: 'bold',
-    marginTop: 4
-  },
-  direccionActions: {
-    flexDirection: 'row',
-    gap: 8
-  },
-  actionBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 6,
-    backgroundColor: '#f3f7ff',
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  formSection: {
-    marginBottom: 24
-  },
-  formTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1C3A5C',
-    marginBottom: 16
-  },
-  formGroup: {
-    marginBottom: 16
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1C3A5C',
-    marginBottom: 6
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#cfdaea',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 14,
-    color: '#1C3A5C',
-    backgroundColor: '#FFF'
-  },
-  saveBtn: {
-    backgroundColor: '#0f2f6f',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginBottom: 12
-  },
-  saveBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: 'bold'
-  },
-  paymentOption: {
-    backgroundColor: '#FFF',
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    marginBottom: 12,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#cfdaea'
-  },
-  paymentOptionSelected: {
-    borderColor: '#0f2f6f',
-    backgroundColor: 'rgba(15, 47, 111, 0.05)'
-  },
-  paymentRadio: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#cfdaea',
-    marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center'
-  },
-  radioFilled: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#0f2f6f'
-  },
-  paymentLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1C3A5C',
-    flex: 1
-  },
-  favoriteBadge: {
-    fontSize: 11,
-    color: '#FFF',
-    backgroundColor: '#0f2f6f',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    fontWeight: 'bold'
-  }
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { paddingBottom: 40, borderBottomLeftRadius: 40, borderBottomRightRadius: 40 },
+  headerContent: { paddingTop: Platform.OS === 'ios' ? 75 : 55, alignItems: 'center' },
+  avatarWrapper: { marginBottom: 16, position: 'relative' },
+  avatar: { width: 90, height: 90, borderRadius: 30, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', elevation: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
+  editAvatarBtn: { position: 'absolute', bottom: -4, right: -4, width: 32, height: 32, borderRadius: 12, backgroundColor: '#4F46E5', justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#0f2f6f' },
+  userName: { fontSize: 22, fontWeight: '800', color: '#FFF' },
+  userEmail: { fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 },
+  content: { padding: 24, paddingTop: 32 },
+  sectionTtl: { fontSize: 13, fontWeight: '800', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 16 },
+  menuGroup: { backgroundColor: '#FFF', borderRadius: 24, paddingVertical: 8, marginBottom: 28, elevation: 2, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10 },
+  menuItem: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 16 },
+  iconCircle: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
+  menuLabel: { fontSize: 15, fontWeight: '700', color: '#1E293B' },
+  menuSub: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
+  prefRow: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 16 },
+  logoutBtn: { borderRadius: 20, overflow: 'hidden', marginTop: 10 },
+  logoutGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 18, gap: 10 },
+  logoutText: { fontSize: 16, fontWeight: '700', color: '#DC2626' },
+  footer: { marginTop: 40, alignItems: 'center' },
+  footerVer: { fontSize: 12, fontWeight: '700', color: '#CBD5E1' },
+  footerBrand: { fontSize: 11, color: '#E2E8F0', marginTop: 4 },
+  // Modals
+  modalFull: { flex: 1, backgroundColor: '#F8FAFC' },
+  modalHeader: { paddingTop: Platform.OS === 'ios' ? 70 : 50, paddingBottom: 20, paddingHorizontal: 24, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  modalTtl: { fontSize: 20, fontWeight: '800', color: '#FFF' },
+  modalBody: { flex: 1, padding: 24 },
+  listSection: { marginBottom: 32 },
+  listSectionTtl: { fontSize: 16, fontWeight: '800', color: '#1E293B', marginBottom: 16 },
+  dirCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 12, elevation: 2 },
+  dirIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
+  dirName: { fontSize: 14, fontWeight: '700', color: '#1E293B' },
+  dirSub: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
+  dirActions: { flexDirection: 'row', gap: 12 },
+  formContainer: { paddingBottom: 60 },
+  inputGroup: { marginBottom: 16 },
+  inputLabel: { fontSize: 13, fontWeight: '700', color: '#64748B', marginBottom: 8 },
+  input: { backgroundColor: '#FFF', borderRadius: 16, borderWidth: 1.5, borderColor: '#E2E8F0', padding: 14, fontSize: 15, color: '#1E293B' },
+  row: { flexDirection: 'row', gap: 12 },
+  saveBtn: { backgroundColor: '#0f2f6f', paddingVertical: 18, borderRadius: 20, alignItems: 'center', marginTop: 20, elevation: 4 },
+  saveBtnText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.5)', justifyContent: 'center', alignItems: 'center' },
+  paymentModal: { backgroundColor: '#FFF', width: '85%', borderRadius: 28, overflow: 'hidden' },
+  paymentHeader: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  paymentTtl: { fontSize: 17, fontWeight: '800', color: '#1E293B' },
+  paymentList: { padding: 12 },
+  paymentItem: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 16, gap: 14, marginBottom: 4 },
+  paymentItemActive: { backgroundColor: 'rgba(15, 47, 111, 0.05)' },
+  paymentLabel: { fontSize: 15, fontWeight: '600', color: '#64748B', flex: 1 },
+  paymentLabelActive: { color: '#0f2f6f', fontWeight: '700' },
+  paymentCheck: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#0f2f6f' }
 });

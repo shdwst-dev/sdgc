@@ -31,6 +31,7 @@ export type TopProducto = {
 };
 
 export type VentaReciente = {
+  id_venta: number;
   factura: string;
   cliente: string;
   responsable: string;
@@ -52,6 +53,7 @@ export type VentaPeriodoMetodoPago = {
 };
 
 export type VentaPeriodo = {
+  id_venta: number;
   factura: string;
   cliente: string;
   responsable: string;
@@ -138,6 +140,7 @@ export async function getVentasRecientes(token: string): Promise<VentaReciente[]
   const items = Array.isArray(body?.ventas_recientes) ? body.ventas_recientes : [];
 
   return items.map((raw: Record<string, unknown>) => ({
+    id_venta: Number(raw.id_venta ?? 0),
     factura: String(raw.factura ?? ''),
     cliente: String(raw.cliente ?? 'Venta mostrador'),
     responsable: String(raw.responsable ?? ''),
@@ -210,6 +213,7 @@ export async function getVentasPeriodo(
       transacciones: Number(totales.transacciones ?? 0),
     },
     ventas: ventas.map((raw: Record<string, unknown>) => ({
+      id_venta: Number(raw.id_venta ?? 0),
       factura: String(raw.factura ?? ''),
       cliente: String(raw.cliente ?? 'Venta mostrador'),
       responsable: String(raw.responsable ?? ''),

@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, Dimensions, Alert, ActivityIndicator, ScrollView } from 'react-native';
-import { Search, SlidersHorizontal, X } from 'lucide-react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, Dimensions, Alert, ActivityIndicator, ScrollView, StatusBar, Platform } from 'react-native';
+import { Search, SlidersHorizontal, X, ChevronRight, ShoppingCart, Filter } from 'lucide-react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../navigation/types';
@@ -9,27 +9,10 @@ import { ApiError } from '../../services/auth';
 import { buscarProductos, Producto, addToCarritoLocal } from '../../services/comprador';
 import { clearToken, getToken, hydrateToken } from '../../services/storage';
 import { useToast } from '../../components/Toast';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
-const columnWidth = (width - 40) / 2;
-
-const imageMap: { [key: string]: string } = {
-  'Smartphone Samsung Galaxy A54': 'https://i.postimg.cc/Snz3Kn0D/A54.png',
-  'Laptop HP Pavilion 15': 'https://i.postimg.cc/PLscvdTG/HP.png',
-  'Audífonos Bluetooth JBL': 'https://i.postimg.cc/v83LYzZ9/Whats-App-Image-2026-04-06-at-6-27-52-PM.jpg',
-  'Manzanas Red Delicious': 'https://i.postimg.cc/06R3K9Pk/Manzana.png',
-  'Lechuga Romana': 'https://i.postimg.cc/8FQ3fTNT/Lechuga.png',
-  'Coca Cola 2L': 'https://i.postimg.cc/xXbhdXDV/Coca-cola.png',
-  'Jugo Jumex Naranja 1L': 'https://i.postimg.cc/XZShBn40/Jumex.png',
-  'Detergente Ariel 1kg': 'https://i.postimg.cc/XrymvrSn/Ariel.png',
-  'Escritorio de Oficina': 'https://i.postimg.cc/mPFJrPx0/Escritorio.png',
-  'Cuaderno Profesional 100 hojas': 'https://i.postimg.cc/tsVwgs0K/Cuaderno.png',
-};
-
-const getProductImage = (nombre: string, imagenUrl?: string | null): string => {
-  if (imagenUrl && imagenUrl.includes('http')) return imagenUrl;
-  return imageMap[nombre] || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=200';
-};
+const columnWidth = (width - 48) / 2;
 
 const categories = [
   { name: 'Electrónica', icon: '📱' },
@@ -42,18 +25,23 @@ const categories = [
   { name: 'Deportes', icon: '⚽' },
 ];
 
+const getProductImage = (nombre: string, imagenUrl?: string | null): string => {
+  if (imagenUrl && imagenUrl.includes('http')) return imagenUrl;
+  return 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800';
+};
+
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function Buscar() {
   const navigation = useNavigation<NavigationProp>();
   const { showToast } = useToast();
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [productos, setProductos] = useState<Producto[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState('relevance');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [displayCount, setDisplayCount] = useState(20);
 
   const goToLogin = useCallback(() => {
     navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'RoleSelect' as never }] }));
@@ -86,7 +74,7 @@ export default function Buscar() {
   useEffect(() => {
     const timer = setTimeout(() => {
         if (searchQuery.trim() || selectedCategory) performSearch(searchQuery);
-        else setProductos([]);
+        else if (!selectedCategory) setProductos([]);
     }, 400);
     return () => clearTimeout(timer);
   }, [searchQuery, selectedCategory, sortBy, performSearch]);
@@ -94,29 +82,32 @@ export default function Buscar() {
   const renderProduct = ({ item }: { item: Producto }) => (
     <TouchableOpacity 
       style={styles.productCard}
-      activeOpacity={0.7}
+      activeOpacity={0.9}
       onPress={() => navigation.navigate('DetalleProducto', { idProducto: item.id })}
     >
       <View style={styles.imageContainer}>
         <Image source={{ uri: getProductImage(item.nombre, item.imagen_url) }} style={styles.productImage} />
+        <View style={styles.priceTag}>
+          <Text style={styles.priceTagText}>${item.precio_unitario.toLocaleString()}</Text>
+        </View>
       </View>
-      <View style={styles.productInfo}>
+      <View style={styles.productContent}>
         <Text style={styles.productName} numberOfLines={2}>{item.nombre}</Text>
         <Text style={styles.productCategory}>{item.categoria}</Text>
-        <Text style={styles.productPrice}>${item.precio_unitario.toLocaleString('es-MX')}</Text>
         <TouchableOpacity 
-          style={styles.addButton}
+          style={styles.productAddBtn}
           onPress={async (e) => {
             e.stopPropagation();
             try {
               await addToCarritoLocal(item, 1);
-              showToast({ message: `${item.nombre} agregado`, type: 'success' });
+              showToast({ message: `📦 ${item.nombre} añadido`, type: 'success' });
             } catch {
               showToast({ message: 'Error', type: 'error' });
             }
           }}
         >
-          <Text style={styles.addButtonText}>Agregar</Text>
+          <ShoppingCart size={14} color="#FFF" />
+          <Text style={styles.productAddText}>Añadir</Text>
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
@@ -124,89 +115,178 @@ export default function Buscar() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.searchHeader}>
-        <View style={styles.searchBar}>
-          <Search size={20} color="#9CA3AF" />
+      <StatusBar barStyle="dark-content" />
+      
+      {/* Premium Header Search */}
+      <View style={styles.header}>
+        <View style={styles.searchBarWrapper}>
+          <Search size={20} color="#64748B" />
           <TextInput
-            placeholder="Buscar productos..."
+            placeholder="Encuentra lo que buscas..."
             value={searchQuery}
             onChangeText={setSearchQuery}
             style={styles.searchInput}
-            placeholderTextColor="#9CA3AF"
+            placeholderTextColor="#94A3B8"
           />
-          {searchQuery !== '' && <TouchableOpacity onPress={() => setSearchQuery('')}><X size={20} color="#9CA3AF" /></TouchableOpacity>}
+          {searchQuery !== '' && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <X size={20} color="#64748B" />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
+      {/* Control Bar */}
       <View style={styles.controlBar}>
-        <TouchableOpacity style={[styles.controlBtn, showFilters && styles.controlBtnActive]} onPress={() => setShowFilters(!showFilters)}>
-          <SlidersHorizontal size={18} color={showFilters ? "#FFF" : "#101828"} />
+        <TouchableOpacity 
+          style={[styles.controlBtn, showFilters && styles.controlBtnActive]} 
+          onPress={() => setShowFilters(!showFilters)}
+        >
+          <Filter size={18} color={showFilters ? "#FFF" : "#0f2f6f"} />
           <Text style={[styles.controlBtnText, showFilters && { color: "#FFF" }]}>Filtros</Text>
         </TouchableOpacity>
+        
         <TouchableOpacity style={styles.sortBtn} onPress={() => {
-            Alert.alert("Ordenar", "Selecciona una opción", [
-                { text: "Relevancia", onPress: () => setSortBy('relevance') },
-                { text: "Precio ↓", onPress: () => setSortBy('price-low') },
-                { text: "Precio ↑", onPress: () => setSortBy('price-high') },
-                { text: "Cancelar", style: "cancel" }
+            Alert.alert("Ordenar por", "", [
+                { text: "💎 Relevancia", onPress: () => setSortBy('relevance') },
+                { text: "📈 Menor Precio", onPress: () => setSortBy('price-low') },
+                { text: "📉 Mayor Precio", onPress: () => setSortBy('price-high') },
+                { text: "Cerrar", style: "cancel" }
             ]);
         }}>
-          <Text style={styles.sortBtnText}>{sortBy === 'relevance' ? 'Relevancia' : sortBy === 'price-low' ? 'Precio ↓' : 'Precio ↑'}</Text>
+          <Text style={styles.sortBtnText}>
+            {sortBy === 'relevance' ? 'Relevancia' : sortBy === 'price-low' ? 'Menor Precio' : 'Mayor Precio'}
+          </Text>
+          <ChevronRight size={16} color="#0f2f6f" style={{ transform: [{ rotate: '90deg' }] }} />
         </TouchableOpacity>
       </View>
 
-      {showFilters && (
-        <View style={styles.filtersPanel}>
-          <View style={styles.catList}>
-            {categories.map((cat, i) => (
-              <TouchableOpacity key={i} style={[styles.catBtn, selectedCategory === cat.name && styles.catBtnActive]} onPress={() => setSelectedCategory(selectedCategory === cat.name ? null : cat.name)}>
-                <Text style={[styles.catBtnText, selectedCategory === cat.name && { color: '#FFF' }]}>{cat.icon} {cat.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      )}
+      {/* Categories Horizontal Shell */}
+      <View style={styles.catsContainer}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16 }}>
+          {categories.map((cat, i) => (
+            <TouchableOpacity 
+              key={i} 
+              style={[styles.catChip, selectedCategory === cat.name && styles.catChipActive]} 
+              onPress={() => setSelectedCategory(selectedCategory === cat.name ? null : cat.name)}
+            >
+              <Text style={styles.catIcon}>{cat.icon}</Text>
+              <Text style={[styles.catLabel, selectedCategory === cat.name && { color: '#FFF' }]}>{cat.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
-      {isLoading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color="#0f2f6f" /></View>
-      ) : (
-        <FlatList
-          data={productos}
-          renderItem={renderProduct}
-          keyExtractor={item => item.id.toString()}
-          numColumns={2}
-          contentContainerStyle={{ padding: 16 }}
-          ListEmptyComponent={<View style={styles.center}><Text style={{ color: '#9CA3AF' }}>{searchQuery ? 'Sin resultados' : 'Escribe para buscar'}</Text></View>}
-        />
-      )}
+      {/* Content */}
+      <View style={styles.resultArea}>
+        {isLoading ? (
+          <View style={styles.center}><ActivityIndicator size="large" color="#0f2f6f" /></View>
+        ) : (
+          <FlatList
+            data={productos}
+            renderItem={renderProduct}
+            keyExtractor={item => item.id.toString()}
+            numColumns={2}
+            contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+            columnWrapperStyle={{ justifyContent: 'space-between' }}
+            ListEmptyComponent={
+              <View style={styles.emptyResults}>
+                <View style={styles.emptyCircle}>
+                  <Search size={40} color="#CBD5E1" />
+                </View>
+                <Text style={styles.emptyTitle}>
+                  {searchQuery ? 'Sin coincidencias' : 'Explora productos'}
+                </Text>
+                <Text style={styles.emptySub}>
+                  {searchQuery ? 'Intenta con otro término o categoría' : 'Busca por nombre o filtra por categoría'}
+                </Text>
+              </View>
+            }
+          />
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
-  searchHeader: { padding: 16, marginTop: 40, borderBottomWidth: 1, borderBottomColor: '#f3f7ff' },
-  searchBar: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#cfdaea', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
-  searchInput: { flex: 1, marginHorizontal: 8, fontSize: 14, color: '#1C3A5C' },
-  controlBar: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
-  controlBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#cfdaea', borderRadius: 8, paddingVertical: 10, gap: 6 },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  header: { 
+    backgroundColor: '#FFF', 
+    paddingTop: Platform.OS === 'ios' ? 70 : 50, 
+    paddingHorizontal: 16, 
+    paddingBottom: 16 
+  },
+  searchBarWrapper: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#F1F5F9', 
+    borderRadius: 18, 
+    paddingHorizontal: 16, 
+    height: 52,
+    gap: 12
+  },
+  searchInput: { flex: 1, fontSize: 15, color: '#1E293B', fontWeight: '500' },
+  controlBar: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 12, gap: 12 },
+  controlBtn: { 
+    flex: 1, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    backgroundColor: '#FFF',
+    borderWidth: 1, 
+    borderColor: '#E2E8F0', 
+    borderRadius: 14, 
+    paddingVertical: 12, 
+    gap: 8,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 5
+  },
   controlBtnActive: { backgroundColor: '#0f2f6f', borderColor: '#0f2f6f' },
-  controlBtnText: { fontSize: 14, color: '#1C3A5C', fontWeight: '600' },
-  sortBtn: { flex: 1, borderWidth: 1, borderColor: '#cfdaea', borderRadius: 8, justifyContent: 'center', alignItems: 'center', paddingVertical: 10 },
-  sortBtnText: { fontSize: 14, color: '#1C3A5C', fontWeight: '600' },
-  filtersPanel: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#f3f7ff' },
-  catList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  catBtn: { paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#cfdaea', borderRadius: 6 },
-  catBtnActive: { backgroundColor: '#0f2f6f', borderColor: '#0f2f6f' },
-  catBtnText: { fontSize: 12, color: '#1C3A5C' },
-  productCard: { width: columnWidth, backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#f3f7ff', marginBottom: 16, overflow: 'hidden' },
-  imageContainer: { width: '100%', height: 120, backgroundColor: '#f3f7ff' },
+  controlBtnText: { fontSize: 13, color: '#0f2f6f', fontWeight: '700' },
+  sortBtn: { 
+    flex: 1, 
+    flexDirection: 'row',
+    backgroundColor: '#FFF',
+    borderWidth: 1, 
+    borderColor: '#E2E8F0', 
+    borderRadius: 14, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    paddingVertical: 12,
+    gap: 6
+  },
+  sortBtnText: { fontSize: 13, color: '#0f2f6f', fontWeight: '700' },
+  catsContainer: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', backgroundColor: '#FFF' },
+  catChip: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    backgroundColor: '#F1F5F9', 
+    paddingHorizontal: 14, 
+    paddingVertical: 8, 
+    borderRadius: 12, 
+    marginRight: 10,
+    gap: 6
+  },
+  catChipActive: { backgroundColor: '#0f2f6f' },
+  catIcon: { fontSize: 16 },
+  catLabel: { fontSize: 13, fontWeight: '600', color: '#64748B' },
+  resultArea: { flex: 1 },
+  productCard: { width: columnWidth, backgroundColor: '#FFF', borderRadius: 24, marginBottom: 20, elevation: 4, shadowColor: '#0F172A', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.08, shadowRadius: 12, overflow: 'hidden' },
+  imageContainer: { width: '100%', height: 160, position: 'relative' },
   productImage: { width: '100%', height: '100%' },
-  productInfo: { padding: 10 },
-  productName: { fontSize: 13, color: '#1C3A5C', height: 35 },
-  productCategory: { fontSize: 11, color: '#7a8ba5', marginBottom: 4 },
-  productPrice: { fontSize: 15, fontWeight: 'bold', color: '#1C3A5C', marginVertical: 8 },
-  addButton: { backgroundColor: '#0f2f6f', padding: 8, borderRadius: 6, alignItems: 'center' },
-  addButtonText: { color: '#fff', fontSize: 11, fontWeight: '600' },
+  priceTag: { position: 'absolute', bottom: 12, right: 12, backgroundColor: 'rgba(15, 47, 111, 0.9)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+  priceTagText: { color: '#FFF', fontSize: 13, fontWeight: '800' },
+  productContent: { padding: 14 },
+  productName: { fontSize: 14, fontWeight: '700', color: '#1E293B', height: 40 },
+  productCategory: { fontSize: 11, color: '#94A3B8', marginTop: 2, marginBottom: 12 },
+  productAddBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#0f2f6f', paddingVertical: 8, borderRadius: 10, gap: 6 },
+  productAddText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
+  emptyResults: { flex: 1, marginTop: 100, alignItems: 'center', paddingHorizontal: 40 },
+  emptyCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+  emptyTitle: { fontSize: 18, fontWeight: '800', color: '#1E293B' },
+  emptySub: { fontSize: 14, color: '#94A3B8', textAlign: 'center', marginTop: 10, lineHeight: 20 }
 });

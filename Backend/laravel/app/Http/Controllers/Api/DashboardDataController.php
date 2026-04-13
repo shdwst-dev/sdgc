@@ -456,6 +456,7 @@ class DashboardDataController extends Controller
             ->limit(20)
             ->get()
             ->map(fn ($venta) => [
+                'id_venta' => (int) $venta->id_venta,
                 'factura' => 'VTA-' . str_pad((string) $venta->id_venta, 4, '0', STR_PAD_LEFT),
                 'cliente' => 'Venta mostrador',
                 'responsable' => $venta->responsable,
@@ -1307,6 +1308,7 @@ class DashboardDataController extends Controller
             ->limit($limit)
             ->get()
             ->map(fn ($venta) => [
+                'id_venta' => (int) $venta->id_venta,
                 'factura' => 'FAC-' . str_pad((string) $venta->factura, 4, '0', STR_PAD_LEFT),
                 'cliente' => 'Venta mostrador',
                 'responsable' => $venta->responsable,

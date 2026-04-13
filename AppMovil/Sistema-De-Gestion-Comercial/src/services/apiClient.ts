@@ -150,6 +150,8 @@ export type RequestOptions = {
   retries?: number;
   /** Mensaje de error fallback si no se puede extraer uno del body */
   fallbackError?: string;
+  /** Tipo de respuesta esperada. Default = 'json' */
+  responseType?: 'json' | 'text';
 };
 
 /**
@@ -172,6 +174,7 @@ export async function apiRequest<T = unknown>(
     timeoutMs = DEFAULT_TIMEOUT_MS,
     retries = 1,
     fallbackError = 'Ocurrió un error inesperado. Intenta de nuevo.',
+    responseType = 'json',
   } = opts;
 
   const baseUrlFinal = `${baseUrl}${path}`;
@@ -213,8 +216,13 @@ export async function apiRequest<T = unknown>(
       let responseBody: T | ApiErrorBody | null = null;
 
       try {
-        responseBody = (await response.json()) as T;
-      } catch {
+        if (responseType === 'text') {
+          responseBody = (await response.text()) as unknown as T;
+        } else {
+          responseBody = (await response.json()) as T;
+        }
+      } catch (e) {
+        console.warn('API parsing error:', e);
         responseBody = null;
       }
 

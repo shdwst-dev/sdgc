@@ -105,21 +105,45 @@ export default function Perfil() {
   };
 
   const handleSaveDireccion = async () => {
-    if (!formData.calle || !formData.numero_exterior || !formData.colonia) {
-      showToast({ message: 'Por favor completa los campos obligatorios', type: 'error' });
+    const requiredFields = [
+      formData.calle,
+      formData.numero_exterior,
+      formData.colonia,
+      formData.ciudad,
+      formData.estado,
+      formData.codigoPostal,
+    ];
+
+    if (requiredFields.some((value) => !value.trim())) {
+      showToast({ message: 'Por favor completa todos los campos obligatorios', type: 'error' });
+      return;
+    }
+
+    const numeroExterior = Number.parseInt(formData.numero_exterior, 10);
+    if (Number.isNaN(numeroExterior)) {
+      showToast({ message: 'El número exterior debe ser válido', type: 'error' });
+      return;
+    }
+
+    const numeroInterior = formData.numero_interior.trim()
+      ? Number.parseInt(formData.numero_interior, 10)
+      : undefined;
+
+    if (formData.numero_interior.trim() && Number.isNaN(numeroInterior)) {
+      showToast({ message: 'El número interior debe ser válido', type: 'error' });
       return;
     }
 
     try {
       const nuevaDireccion: Direccion = {
         id: editingDireccion?.id || 0,
-        calle: formData.calle,
-        numero_exterior: parseInt(formData.numero_exterior),
-        numero_interior: formData.numero_interior ? parseInt(formData.numero_interior) : undefined,
-        colonia: formData.colonia,
-        ciudad: formData.ciudad,
-        estado: formData.estado,
-        codigoPostal: formData.codigoPostal,
+        calle: formData.calle.trim(),
+        numero_exterior: numeroExterior,
+        numero_interior: numeroInterior,
+        colonia: formData.colonia.trim(),
+        ciudad: formData.ciudad.trim(),
+        estado: formData.estado.trim(),
+        codigoPostal: formData.codigoPostal.trim(),
       };
 
       await saveDireccionLocal(nuevaDireccion);
@@ -199,8 +223,8 @@ export default function Perfil() {
     {
       icon: Package,
       label: 'Mis Pedidos',
-      subtitle: 'No tienes historial de pedidos',
-      onClick: () => showToast({ message: 'No tienes historial de pedidos' }),
+      subtitle: 'Ver historial de compras',
+      onClick: () => navigation.navigate('MisPedidos' as never),
     },
     {
       icon: MapPin,

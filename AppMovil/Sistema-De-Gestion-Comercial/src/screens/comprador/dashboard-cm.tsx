@@ -184,7 +184,7 @@ export default function Inicio() {
           style={styles.addButton}
           onPress={(e) => {
             e.stopPropagation();
-            addToCarritoLocal(item, 1);
+            handleAddToCart(item);
           }}
         >
           <Text style={styles.addButtonText}>Agregar al Carrito</Text>

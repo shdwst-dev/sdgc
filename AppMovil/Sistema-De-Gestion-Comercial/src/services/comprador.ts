@@ -28,6 +28,7 @@ export type CartItem = {
   precio_unitario: number;
   cantidad: number;
   imagen_url: string | null;
+  stock_maximo?: number;
 };
 
 export type MetodoPago = {
@@ -55,6 +56,14 @@ export type DashboardCompradorData = {
   comprasHoy: number;
 };
 
+export type PedidoResumen = {
+  id: number;
+  fecha: string | null;
+  total: number;
+  estado: string;
+  metodo_pago: string;
+};
+
 function toText(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim();
@@ -77,6 +86,53 @@ function extractDataArray(body: unknown): unknown[] {
   const asObj = body as { data?: unknown[] } | null;
   if (Array.isArray(asObj?.data)) return asObj.data;
   return [];
+}
+
+function getStockLimit(producto: { stock_actual?: number }): number {
+  const stock = Number(producto.stock_actual ?? 0);
+  return Number.isFinite(stock) && stock > 0 ? stock : 0;
+}
+
+function resolvePedidoFecha(raw: Record<string, unknown>): string | null {
+  const candidates = [raw.fecha_venta, raw.created_at, raw.fecha, raw.updated_at];
+
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string' && typeof candidate !== 'number') continue;
+
+    const date = new Date(candidate);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toISOString();
+    }
+  }
+
+  return null;
+}
+
+function resolvePedidoEstado(raw: Record<string, unknown>): string {
+  const estado = toText(raw.estatus) ?? toText(raw.estado);
+  if (estado) return estado;
+
+  const idEstatus = Number(raw.id_estatus ?? 0);
+  if (idEstatus === 1) return 'Completado';
+  if (idEstatus === 2) return 'Procesando';
+  if (idEstatus === 3) return 'Cancelado';
+
+  return 'Pendiente';
+}
+
+function resolveMetodoPago(raw: Record<string, unknown>): string {
+  const metodoPago = raw.metodo_pago as Record<string, unknown> | string | undefined;
+  if (typeof metodoPago === 'string') {
+    const text = metodoPago.trim();
+    if (text.length > 0) return text;
+  }
+
+  if (metodoPago && typeof metodoPago === 'object') {
+    const nombre = toText((metodoPago as Record<string, unknown>).nombre);
+    if (nombre) return nombre;
+  }
+
+  return toText(raw.nombre_metodo_pago) ?? 'Efectivo';
 }
 
 export async function getProductosDestacados(token: string): Promise<Producto[]> {
@@ -132,11 +188,22 @@ export async function saveCarritoLocal(cart: CartItem[]): Promise<void> {
 }
 
 export async function addToCarritoLocal(producto: Producto, cantidad: number = 1): Promise<CartItem[]> {
+  const stockLimit = getStockLimit(producto);
+  if (stockLimit <= 0) {
+    throw new ApiError('Este producto no tiene stock disponible.', 400);
+  }
+
   const cart = await getCarritoLocal();
   const existingItem = cart.find((item) => item.id === producto.id);
+  const currentQty = existingItem?.cantidad ?? 0;
+  const requestedQty = currentQty + cantidad;
+
+  if (requestedQty > stockLimit) {
+    throw new ApiError(`Solo hay ${stockLimit} unidades disponibles de ${producto.nombre}.`, 400);
+  }
 
   if (existingItem) {
-    existingItem.cantidad += cantidad;
+    existingItem.cantidad = requestedQty;
   } else {
     cart.push({
       id: producto.id,
@@ -144,6 +211,7 @@ export async function addToCarritoLocal(producto: Producto, cantidad: number = 1
       precio_unitario: producto.precio_unitario,
       cantidad,
       imagen_url: producto.imagen_url,
+      stock_maximo: stockLimit,
     });
   }
 
@@ -153,33 +221,6 @@ export async function addToCarritoLocal(producto: Producto, cantidad: number = 1
 
 export async function clearCarritoLocal(): Promise<void> {
   await AsyncStorage.removeItem('@carrito');
-}
-
-export async function getMetodosPago(token: string): Promise<MetodoPago[]> {
-  try {
-    const { getApiRootUrl } = await import('./apiClient');
-    const body = await apiRequest<Record<string, unknown>>('/ventas', {
-      token,
-      baseUrl: getApiRootUrl(),
-      fallbackError: 'No se pudieron cargar los métodos de pago.',
-    });
-
-    const catalogos = (body?.catalogos ?? {}) as Record<string, unknown>;
-    const items = Array.isArray(catalogos.metodos_pago) ? catalogos.metodos_pago : [];
-
-    return items.map((raw: Record<string, unknown>) => ({
-      id: Number(raw.id_metodo_pago ?? raw.id ?? 0),
-      id_metodo_pago: Number(raw.id_metodo_pago ?? raw.id ?? 0),
-      nombre: String(raw.nombre ?? ''),
-    }));
-  } catch {
-    return [
-      { id: 1, id_metodo_pago: 1, nombre: 'Efectivo' },
-      { id: 2, id_metodo_pago: 2, nombre: 'Tarjeta de Crédito' },
-      { id: 3, id_metodo_pago: 3, nombre: 'Tarjeta de Débito' },
-      { id: 4, id_metodo_pago: 4, nombre: 'Transferencia' },
-    ];
-  }
 }
 
 export async function getMetodosPagoLocal(): Promise<MetodoPago[]> {
@@ -275,5 +316,23 @@ export async function checkout(
 
   await clearCarritoLocal();
   return result;
+}
+
+export async function getMisPedidos(token: string): Promise<PedidoResumen[]> {
+  const body = await apiRequest<any>('/ventas', {
+    token,
+    fallbackError: 'No se pudo cargar el historial de pedidos.',
+  });
+
+  const ventas = Array.isArray(body?.data) ? body.data : 
+                 (Array.isArray(body) ? body : []);
+                 
+  return ventas.map((v: any) => ({
+    id: v.id_venta ?? v.id ?? 0,
+    fecha: resolvePedidoFecha(v as Record<string, unknown>),
+    total: Number(v.total_venta || v.total || 0),
+    estado: resolvePedidoEstado(v as Record<string, unknown>),
+    metodo_pago: resolveMetodoPago(v as Record<string, unknown>),
+  }));
 }
 

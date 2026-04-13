@@ -5,4 +5,5 @@ export type RootStackParamList = {
   Registro: undefined;
   'dashboard-ad': undefined;
   'dashboard-cm': undefined;
+  MisPedidos: undefined;
 };

@@ -114,23 +114,20 @@ export default function Buscar() {
     }
   }, [goToLogin, sortBy, selectedCategory]);
 
+  // Búsqueda con debounce para evitar llamadas duplicadas
   useEffect(() => {
+    const term = searchQuery.trim();
+    // Siempre disparamos la búsqueda si hay término o categoría seleccionada
     const timer = setTimeout(() => {
-      if (searchQuery.trim().length > 0 || selectedCategory) {
-        performSearch(searchQuery);
+      if (term.length > 0 || selectedCategory) {
+        performSearch(term);
       } else {
         setProductos([]);
       }
-    }, 500);
+    }, 400); // 400ms debounce
 
     return () => clearTimeout(timer);
-  }, [searchQuery, performSearch, selectedCategory]);
-
-  useEffect(() => {
-    if (searchQuery.trim().length > 0 || selectedCategory) {
-      performSearch(searchQuery);
-    }
-  }, [sortBy, selectedCategory, searchQuery, performSearch]);
+  }, [searchQuery, selectedCategory, sortBy, performSearch]);
 
   const handleSortPress = () => {
     Alert.alert(

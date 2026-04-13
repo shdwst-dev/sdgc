@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, Modal } from 'react-native';
 import { Minus, Plus, Trash2, ShoppingBag, X } from 'lucide-react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
-import { getCarritoLocal, saveCarritoLocal, CartItem, checkout } from '../../services/comprador';
+import { getCarritoLocal, saveCarritoLocal, CartItem, checkout, getFavoritePaymentMethodLocal } from '../../services/comprador';
 import { ApiError } from '../../services/auth';
 import { getToken, hydrateToken, clearToken } from '../../services/storage';
 import { useToast } from '../../components/Toast';
@@ -35,6 +35,13 @@ export default function Carrito() {
   const [selectedProduct, setSelectedProduct] = useState<CartItem | null>(null);
   const [productQuantity, setProductQuantity] = useState(1);
 
+  const getStockMaxSafe = useCallback((item: CartItem) => {
+    const stock = Number(item.stock_maximo ?? item.cantidad);
+    return Number.isFinite(stock) && stock > 0 ? stock : item.cantidad;
+  }, []);
+
+  const selectedStockMax = selectedProduct ? getStockMaxSafe(selectedProduct) : 1;
+
   const goToLogin = useCallback(() => {
     navigation.reset({ index: 0, routes: [{ name: 'RoleSelect' as never }] });
   }, [navigation]);
@@ -57,15 +64,19 @@ export default function Carrito() {
     }
   };
 
-  const updateQuantity = useCallback(async (id: number, newQty: number) => {
+  const updateQuantity = useCallback(async (id: number, newQty: number, stockMax: number) => {
     if (newQty < 1) return;
+    if (newQty > stockMax) {
+      showToast({ message: `Solo hay ${stockMax} disponibles en esta tienda`, type: 'error' });
+      return;
+    }
     
     const updatedCart = cart.map(item =>
       item.id === id ? { ...item, cantidad: newQty } : item
     );
     setCart(updatedCart);
     await saveCarritoLocal(updatedCart);
-  }, [cart]);
+  }, [cart, showToast]);
 
   const removeFromCart = useCallback((id: number) => {
     Alert.alert('Eliminar', '¿Quitar este producto del carrito?', [
@@ -95,7 +106,17 @@ export default function Carrito() {
       }
 
       setIsCheckingOut(true);
-      await checkout(token, cart);
+      const invalidItem = cart.find((item) => item.cantidad > getStockMaxSafe(item));
+      if (invalidItem) {
+        showToast({
+          message: `La cantidad de ${invalidItem.nombre} supera el stock disponible. Ajusta el carrito antes de continuar.`,
+          type: 'error',
+        });
+        return;
+      }
+
+      const favMethodId = await getFavoritePaymentMethodLocal();
+      await checkout(token, cart, favMethodId || 1);
       
       await saveCarritoLocal([]);
       setCart([]);
@@ -114,7 +135,7 @@ export default function Carrito() {
     } finally {
       setIsCheckingOut(false);
     }
-  }, [cart, goToLogin, navigation]);
+  }, [cart, getStockMaxSafe, goToLogin, navigation, showToast]);
 
   if (isLoading) {
     return (
@@ -172,14 +193,14 @@ export default function Carrito() {
                   <View style={styles.controlsRow}>
                     <View style={styles.quantitySelector}>
                       <TouchableOpacity 
-                        onPress={() => updateQuantity(item.id, item.cantidad - 1)}
+                        onPress={() => updateQuantity(item.id, item.cantidad - 1, getStockMaxSafe(item))}
                         style={styles.qtyBtn}
                       >
                         <Minus size={16} color="#101828" />
                       </TouchableOpacity>
                       <Text style={styles.qtyText}>{item.cantidad}</Text>
                       <TouchableOpacity 
-                        onPress={() => updateQuantity(item.id, item.cantidad + 1)}
+                        onPress={() => updateQuantity(item.id, item.cantidad + 1, getStockMaxSafe(item))}
                         style={styles.qtyBtn}
                       >
                         <Plus size={16} color="#101828" />
@@ -269,13 +290,22 @@ export default function Carrito() {
                   </Text>
                 </View>
 
-                {/* Current Quantity in Cart */}
                 <View style={styles.detailSection}>
-                  <Text style={styles.sectionTitle}>En tu carrito</Text>
-                  <View style={styles.sectionContent}>
-                    <Text style={styles.sectionText}>
-                      Cantidad actual: {selectedProduct.cantidad} unidad{selectedProduct.cantidad > 1 ? 'es' : ''}
-                    </Text>
+                  <Text style={styles.sectionTitle}>Cantidad</Text>
+                  <View style={styles.quantitySelector}>
+                    <TouchableOpacity
+                      style={styles.qtySelectorBtn}
+                      onPress={() => productQuantity > 1 && setProductQuantity(productQuantity - 1)}
+                    >
+                      <Text style={styles.qtySelectorText}>−</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.qtyDisplay}>{productQuantity}</Text>
+                    <TouchableOpacity
+                      style={styles.qtySelectorBtn}
+                      onPress={() => productQuantity < selectedStockMax && setProductQuantity(productQuantity + 1)}
+                    >
+                      <Text style={styles.qtySelectorText}>+</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
 
@@ -313,6 +343,9 @@ const styles = StyleSheet.create({
   quantitySelector: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#cfdaea', borderRadius: 8, overflow: 'hidden' },
   qtyBtn: { padding: 8, backgroundColor: '#f3f7ff' },
   qtyText: { paddingHorizontal: 12, fontSize: 14, fontWeight: '600', color: '#1C3A5C' },
+  qtySelectorBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f3f7ff' },
+  qtySelectorText: { fontSize: 18, fontWeight: 'bold', color: '#0f2f6f' },
+  qtyDisplay: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '600', color: '#1C3A5C', minWidth: 40 },
   summaryFooter: { backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#cfdaea', padding: 16, paddingBottom: 24 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   summaryLabel: { fontSize: 14, color: '#5e728f' },

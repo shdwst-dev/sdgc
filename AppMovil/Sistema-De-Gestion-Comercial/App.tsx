@@ -9,6 +9,7 @@ import LoginAdmin from './src/screens/LoginAdmin';
 import Registro from './src/screens/Registro';
 import { AdminTabs } from './src/screens/admin/AdminTabs';
 import { CompradorTabs } from './src/screens/comprador/CompradorTabs';
+import MisPedidos from './src/screens/comprador/MisPedidos';
 import { RootStackParamList } from './src/navigation/types';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -27,6 +28,7 @@ export default function App() {
           <Stack.Screen name="Registro" component={Registro} />
           <Stack.Screen name="dashboard-ad" component={AdminTabs} />
           <Stack.Screen name="dashboard-cm" component={CompradorTabs} />
+          <Stack.Screen name="MisPedidos" component={MisPedidos} />
         </Stack.Navigator>
         <StatusBar style="auto" />
       </NavigationContainer>

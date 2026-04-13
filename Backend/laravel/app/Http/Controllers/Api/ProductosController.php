@@ -24,6 +24,26 @@ class ProductosController extends Controller
                     }),
                     fn ($query) => $query->leftJoin('stock as st', 'st.id_producto', '=', 'p.id_producto')
                 )
+                // --- Filtros ---
+                ->when($request->search, function ($query, $search) {
+                    $query->where(function ($q) use ($search) {
+                        $q->where('p.nombre', 'ilike', "%{$search}%")
+                            ->orWhere('p.codigo_barras', 'ilike', "%{$search}%");
+                    });
+                })
+                ->when($request->subcategoria, function ($query, $subId) {
+                    $query->where('p.id_subcategoria', $subId);
+                })
+                ->when($request->categoria, function ($query, $catId) {
+                    $query->where('s.id_categoria', $catId);
+                })
+                ->when($request->min_price, function ($query, $min) {
+                    $query->where('p.precio_unitario', '>=', $min);
+                })
+                ->when($request->max_price, function ($query, $max) {
+                    $query->where('p.precio_unitario', '<=', $max);
+                })
+                // --- Fin Filtros ---
                 ->select(
                     'p.id_producto',
                     'p.id_subcategoria',
@@ -32,6 +52,7 @@ class ProductosController extends Controller
                     'p.precio_base',
                     'p.precio_unitario',
                     'p.id_estatus',
+                    'p.imagen_url',
                     's.nombre as categoria',
                     DB::raw('COALESCE(SUM(st.stock_actual), 0) as stock_actual'),
                     DB::raw('MIN(st.stock_minimo) as stock_minimo')
@@ -44,6 +65,7 @@ class ProductosController extends Controller
                     'p.precio_base',
                     'p.precio_unitario',
                     'p.id_estatus',
+                    'p.imagen_url',
                     's.nombre'
                 )
                 ->orderBy('p.id_producto', 'desc')
@@ -72,12 +94,24 @@ class ProductosController extends Controller
             'precio_unitario' => 'required|numeric|min:0.01',
             'codigo_barras' => 'nullable|string|max:50',
             'imagen_url' => 'nullable|string',
+            'imagen' => 'nullable|image|max:2048', // Soporte para archivo real
             'id_tienda' => 'nullable|integer|exists:tiendas,id_tienda',
             'id_estatus' => 'nullable|integer|exists:estatus,id_estatus',
         ]);
 
         try {
-            DB::transaction(function () use ($request, $data) {
+            $imageUrl = $data['imagen_url'] ?? null;
+
+            if ($request->hasFile('imagen')) {
+                $file = $request->file('imagen');
+                $filename = 'prod_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $file->move(public_path('productos'), $filename);
+                // Usamos ruta absoluta para que el móvil la vea siempre
+                $baseUrl = $request->getSchemeAndHttpHost();
+                $imageUrl = $baseUrl . '/productos/' . $filename;
+            }
+
+            DB::transaction(function () use ($request, $data, $imageUrl) {
                 $idProducto = DB::table('productos')->insertGetId([
                     'id_medida' => $data['id_medida'],
                     'id_unidad' => $data['id_unidad'],
@@ -87,7 +121,7 @@ class ProductosController extends Controller
                     'precio_base' => $data['precio_base'],
                     'precio_unitario' => $data['precio_unitario'],
                     'codigo_barras' => $data['codigo_barras'] ?? null,
-                    'imagen_url' => $data['imagen_url'] ?? null,
+                    'imagen_url' => $imageUrl,
                 ], 'id_producto');
 
                 $storeId = array_key_exists('id_tienda', $data) && $data['id_tienda'] !== null
@@ -130,6 +164,7 @@ class ProductosController extends Controller
             'precio_unitario' => 'required|numeric|min:0.01',
             'codigo_barras' => 'nullable|string|max:50',
             'imagen_url' => 'nullable|string',
+            'imagen' => 'nullable|image|max:2048', // Soporte para archivo real
             'id_subcategoria' => 'nullable|integer|exists:subcategorias,id_subcategoria',
             'id_tienda' => 'nullable|integer|exists:tiendas,id_tienda',
             'id_estatus' => 'required|integer|exists:estatus,id_estatus',
@@ -137,9 +172,7 @@ class ProductosController extends Controller
 
         $productoExiste = DB::table('productos')
             ->where('id_producto', $idProducto)
-            ->exists();
-
-        \Illuminate\Support\Facades\Log::info('Actualizar Payload', ['idProducto' => $idProducto, 'payload' => $request->all()]);
+            ->first();
 
         if (!$productoExiste) {
             return response()->json([
@@ -148,17 +181,34 @@ class ProductosController extends Controller
         }
 
         try {
+            $imageUrl = $data['imagen_url'] ?? $productoExiste->imagen_url;
+
+            if ($request->hasFile('imagen')) {
+                $file = $request->file('imagen');
+                $filename = 'prod_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $file->move(public_path('productos'), $filename);
+                
+                // Borrar anterior si era una foto local
+                if ($productoExiste->imagen_url && str_contains($productoExiste->imagen_url, '/productos/')) {
+                    $oldPath = public_path(parse_url($productoExiste->imagen_url, PHP_URL_PATH));
+                    if (file_exists($oldPath)) @unlink($oldPath);
+                }
+
+                $baseUrl = $request->getSchemeAndHttpHost();
+                $imageUrl = $baseUrl . '/productos/' . $filename;
+            }
+
             $storeId = array_key_exists('id_tienda', $data) && $data['id_tienda'] !== null
                 ? (int) $data['id_tienda']
                 : $this->resolveUserStoreId($request);
 
-            DB::transaction(function () use ($idProducto, $data, $storeId) {
+            DB::transaction(function () use ($idProducto, $data, $storeId, $imageUrl) {
                 $productUpdate = [
                     'nombre' => $data['nombre'],
                     'precio_base' => $data['precio_base'],
                     'precio_unitario' => $data['precio_unitario'],
                     'codigo_barras' => $data['codigo_barras'] ?? null,
-                    'imagen_url' => $data['imagen_url'] ?? null,
+                    'imagen_url' => $imageUrl,
                     'id_estatus' => $data['id_estatus'],
                 ];
 
@@ -359,6 +409,7 @@ class ProductosController extends Controller
                     'p.precio_base',
                     'p.precio_unitario',
                     'p.id_estatus',
+                    'p.imagen_url',
                     's.nombre as categoria',
                     DB::raw('COALESCE(SUM(st.stock_actual), 0) as stock_actual'),
                     DB::raw('MIN(st.stock_minimo) as stock_minimo')
@@ -372,6 +423,7 @@ class ProductosController extends Controller
                     'p.precio_base',
                     'p.precio_unitario',
                     'p.id_estatus',
+                    'p.imagen_url',
                     's.nombre'
                 )
                 ->first();

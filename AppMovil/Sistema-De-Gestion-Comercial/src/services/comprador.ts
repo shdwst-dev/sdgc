@@ -6,7 +6,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { apiRequest, ApiError } from './apiClient';
+import { apiRequest, ApiError, getApiRootUrl } from './apiClient';
 import type { MeResponse } from './auth';
 
 export { ApiError };
@@ -18,6 +18,22 @@ export type ProductoDestacado = {
   precio_unitario: number;
   categoria: string;
   stock_actual: number;
+};
+
+export type VentaDetalle = {
+  id_venta: number;
+  fecha: string | null;
+  estatus: string;
+  metodo_pago: string;
+  total: number;
+  productos: {
+    id_producto: number;
+    nombre: string;
+    imagen_url: string | null;
+    cantidad: number;
+    precio_unitario: number;
+    subtotal: number;
+  }[];
 };
 
 export type Producto = ProductoDestacado;
@@ -70,11 +86,20 @@ function toText(value: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+function ensureAbsoluteUrl(url: string | null): string | null {
+  if (!url || url.startsWith('http')) {
+    return url;
+  }
+  const cleanPath = url.startsWith('/') ? url.slice(1) : url;
+  const apiRoot = getApiRootUrl();
+  const serverBase = apiRoot.split('/api')[0];
+  return `${serverBase}/${cleanPath}`;
+}
 function mapProducto(raw: Record<string, unknown>): Producto {
   return {
     id: Number(raw.id_producto ?? raw.id ?? 0),
     nombre: toText(raw.nombre) ?? toText(raw.producto) ?? toText(raw.name) ?? 'Producto sin nombre',
-    imagen_url: raw.imagen_url ? String(raw.imagen_url) : null,
+    imagen_url: ensureAbsoluteUrl(toText(raw.imagen_url as string | null)),
     precio_unitario: Number(raw.precio_unitario ?? raw.precio_base ?? 0),
     categoria: String(raw.categoria ?? raw.nombre_subcategoria ?? raw.subcategoria ?? 'Sin categoría'),
     stock_actual: Number(raw.stock_actual ?? raw.stock ?? 0),
@@ -334,5 +359,23 @@ export async function getMisPedidos(token: string): Promise<PedidoResumen[]> {
     estado: resolvePedidoEstado(v as Record<string, unknown>),
     metodo_pago: resolveMetodoPago(v as Record<string, unknown>),
   }));
+}
+
+export async function getDetallePedido(token: string, idVenta: number): Promise<VentaDetalle> {
+  const result = await apiRequest<{ data: VentaDetalle }>(`/ventas/${idVenta}`, {
+    token,
+    fallbackError: 'No se pudo cargar el detalle del pedido.',
+  });
+
+  const data = result.data;
+  // Normalizar URLs de imágenes en los productos del detalle
+  if (data.productos) {
+    data.productos = data.productos.map(p => ({
+      ...p,
+      imagen_url: ensureAbsoluteUrl(p.imagen_url)
+    }));
+  }
+
+  return data;
 }
 

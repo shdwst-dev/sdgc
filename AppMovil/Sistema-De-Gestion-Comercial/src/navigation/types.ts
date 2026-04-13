@@ -6,4 +6,6 @@ export type RootStackParamList = {
   'dashboard-ad': undefined;
   'dashboard-cm': undefined;
   MisPedidos: undefined;
+  DetallePedido: { idVenta: number };
+  DetalleProducto: { idProducto: number };
 };

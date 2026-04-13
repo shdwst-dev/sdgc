@@ -1,12 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, FlatList, Alert, ActivityIndicator, Dimensions } from 'react-native';
-import { Plus, Search, Filter, Trash2, X, PencilLine, Package, Barcode, ChevronRight, RefreshCw } from 'lucide-react-native';
+import { Plus, Search, Filter, Trash2, X, PencilLine, Package, Barcode, ChevronRight, RefreshCw, Camera, Image as ImageIcon } from 'lucide-react-native';
 import { CommonActions, useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { ApiError } from '../../services/auth';
 import {
   actualizarProducto,
+  actualizarProductoFormData,
   crearProducto,
+  crearProductoFormData,
   eliminarProducto,
   getInventarioCatalogos,
   getInventario,
@@ -32,6 +36,7 @@ type UiProduct = {
   precioBase: number | null;
   precioUnitario: number | null;
   idEstatus: number | null;
+  imagenUrl: string | null;
   price: string;
 };
 
@@ -95,6 +100,7 @@ function toUiProduct(product: InventarioProducto): UiProduct {
     precioBase: product.precioBase,
     precioUnitario: product.precioUnitario,
     idEstatus: product.idEstatus,
+    imagenUrl: product.imagenUrl,
     price: formatCurrency(product.precioUnitario),
   };
 }
@@ -114,7 +120,7 @@ function toFormFromProduct(product: InventarioProducto): ProductForm {
     idUnidad: '1',
     idSubcategoria: product.idSubcategoria !== null ? String(product.idSubcategoria) : '1',
     idTienda: '',
-    imagenUrl: '',
+    imagenUrl: product.imagenUrl || '',
   };
 }
 
@@ -133,7 +139,7 @@ function toFormFromUiProduct(product: UiProduct): ProductForm {
     idUnidad: '1',
     idSubcategoria: product.idSubcategoria !== null ? String(product.idSubcategoria) : '1',
     idTienda: '',
-    imagenUrl: '',
+    imagenUrl: product.imagenUrl || '',
   };
 }
 
@@ -182,6 +188,7 @@ export default function Inventario() {
   });
   const [selectorVisible, setSelectorVisible] = useState(false);
   const [selectorKey, setSelectorKey] = useState<CatalogKey>('idSubcategoria');
+  const [selectedImage, setSelectedImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
 
   const goToLogin = useCallback(() => {
     navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'RoleSelect' as never }] }));
@@ -285,6 +292,7 @@ export default function Inventario() {
       idEstatus: String(catalogos.estatus[0]?.id || '1'),
     });
     setModalMode('create');
+    setSelectedImage(null);
     setIsModalVisible(true);
   };
 
@@ -292,6 +300,7 @@ export default function Inventario() {
     setSelectedProduct(product);
     setForm(toFormFromUiProduct(product));
     setModalMode('view');
+    setSelectedImage(null);
     setIsModalVisible(true);
     setIsDetailLoading(true);
 
@@ -310,6 +319,44 @@ export default function Inventario() {
       Alert.alert('Fallo', 'No se pudo cargar el detalle extendido.');
     } finally {
       setIsDetailLoading(false);
+    }
+  };
+
+  const pickImage = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permiso denegado', 'Necesitamos acceso a la cámara para tomar fotos.');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled) {
+      setSelectedImage(result.assets[0]);
+    }
+  };
+
+  const pickFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permiso denegado', 'Necesitamos acceso a tu galería para elegir fotos.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled) {
+      setSelectedImage(result.assets[0]);
     }
   };
 
@@ -334,13 +381,36 @@ export default function Inventario() {
         const idSubcategoria = toPositiveInteger(form.idSubcategoria);
         if (!idMedida || !idUnidad || !idSubcategoria) return;
 
-        await crearProducto(token, {
-          idMedida, idUnidad, idSubcategoria,
-          nombre, precioBase, precioUnitario,
-          codigoBarras: form.sku.trim() || undefined,
-          idTienda: form.idTienda ? Number(form.idTienda) : undefined,
-          idEstatus: Number(form.idEstatus),
-        });
+        if (selectedImage) {
+          const fd = new FormData();
+          fd.append('id_medida', String(idMedida));
+          fd.append('id_unidad', String(idUnidad));
+          fd.append('id_subcategoria', String(idSubcategoria));
+          fd.append('nombre', nombre);
+          fd.append('precio_base', String(precioBase));
+          fd.append('precio_unitario', String(precioUnitario));
+          fd.append('codigo_barras', form.sku.trim() || '');
+          fd.append('id_estatus', form.idEstatus);
+          if (form.idTienda) fd.append('id_tienda', form.idTienda);
+          
+          const uriParts = selectedImage.uri.split('.');
+          const fileType = uriParts[uriParts.length - 1];
+          fd.append('imagen', {
+            uri: selectedImage.uri,
+            name: `photo.${fileType}`,
+            type: `image/${fileType}`,
+          } as any);
+
+          await crearProductoFormData(token, fd);
+        } else {
+          await crearProducto(token, {
+            idMedida, idUnidad, idSubcategoria,
+            nombre, precioBase, precioUnitario,
+            codigoBarras: form.sku.trim() || undefined,
+            idTienda: form.idTienda ? Number(form.idTienda) : undefined,
+            idEstatus: Number(form.idEstatus),
+          });
+        }
         showToast({ message: 'Producto registrado.', type: 'success' });
       } else {
         if (!form.idProducto) return;
@@ -348,19 +418,47 @@ export default function Inventario() {
         const idSubcategoria = Number(form.idSubcategoria);
         if (stock === null) return;
 
-        await actualizarProducto(token, form.idProducto, {
-          nombre, precioBase, precioUnitario, stock,
-          stockMinimo: form.stockMinimo.trim() ? Number(form.stockMinimo) : undefined,
-          idSubcategoria,
-          idTienda: form.idTienda ? Number(form.idTienda) : undefined,
-          idEstatus: Number(form.idEstatus),
-        });
+        if (selectedImage) {
+          const fd = new FormData();
+          fd.append('nombre', nombre);
+          fd.append('precio_base', String(precioBase));
+          fd.append('precio_unitario', String(precioUnitario));
+          fd.append('stock', String(stock));
+          fd.append('stock_minimo', form.stockMinimo.trim() ? form.stockMinimo : '0');
+          fd.append('id_subcategoria', String(idSubcategoria));
+          fd.append('id_estatus', form.idEstatus);
+          fd.append('codigo_barras', form.sku.trim() || '');
+          if (form.idTienda) fd.append('id_tienda', form.idTienda);
+
+          const uriParts = selectedImage.uri.split('.');
+          const fileType = uriParts[uriParts.length - 1];
+          fd.append('imagen', {
+            uri: selectedImage.uri,
+            name: `photo.${fileType}`,
+            type: `image/${fileType}`,
+          } as any);
+
+          await actualizarProductoFormData(token, form.idProducto, fd);
+        } else {
+          await actualizarProducto(token, form.idProducto, {
+            nombre, precioBase, precioUnitario, stock,
+            stockMinimo: form.stockMinimo.trim() ? Number(form.stockMinimo) : undefined,
+            idSubcategoria,
+            idTienda: form.idTienda ? Number(form.idTienda) : undefined,
+            idEstatus: Number(form.idEstatus),
+            imagenUrl: form.imagenUrl || undefined,
+          });
+        }
         showToast({ message: 'Inventario actualizado.', type: 'success' });
       }
       setIsModalVisible(false);
       await loadInventario(false);
     } catch (e) {
-      showToast({ message: 'Error al persistir cambios.', type: 'error' });
+      let message = 'Error al persistir cambios.';
+      if (e instanceof ApiError && e.message) {
+        message = e.message;
+      }
+      showToast({ message, type: 'error' });
     } finally {
       setIsSaving(false);
     }
@@ -374,6 +472,15 @@ export default function Inventario() {
         onPress={() => handleOpenDetail(item)}
       >
         <View style={styles.cardInfo}>
+          <View style={styles.thumbContainer}>
+             {item.imagenUrl ? (
+               <Image source={{ uri: item.imagenUrl }} style={styles.listThumb} />
+             ) : (
+               <View style={styles.listThumbEmpty}>
+                  <Package size={20} color="#94A3B8" />
+               </View>
+             )}
+          </View>
           <View style={styles.itemMain}>
             <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
             <View style={styles.skuRow}>
@@ -466,6 +573,31 @@ export default function Inventario() {
                 <Text style={styles.modalMainTitle}>
                    {modalMode === 'create' ? 'Nuevo' : (modalMode === 'edit' ? 'Editar' : 'Detalles')}
                 </Text>
+
+                {/* Imagen Preview & Picker */}
+                <View style={styles.imageSection}>
+                  {selectedImage ? (
+                    <Image source={{ uri: selectedImage.uri }} style={styles.previewImage} />
+                  ) : form.imagenUrl ? (
+                    <Image source={{ uri: form.imagenUrl }} style={styles.previewImage} />
+                  ) : (
+                    <View style={styles.imagePlaceholder}>
+                      <Camera size={40} color="#94A3B8" />
+                    </View>
+                  )}
+                  {modalMode !== 'view' && (
+                    <View style={styles.imagePickerRow}>
+                      <TouchableOpacity style={styles.pickImageBtn} onPress={pickImage}>
+                        <Camera size={18} color="#FFF" />
+                        <Text style={styles.pickImageBtnText}>Cámara</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.pickImageBtn, styles.galleryBtn]} onPress={pickFromGallery}>
+                        <ImageIcon size={18} color="#FFF" />
+                        <Text style={styles.pickImageBtnText}>Galería</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
 
                 <View style={[styles.field, (modalMode === 'view') && styles.fieldDisabled]}>
                    <Text style={styles.fieldLabel}>Nombre del Producto</Text>
@@ -603,4 +735,14 @@ const styles = StyleSheet.create({
   primaryActionBtnText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
   saveBtn: { backgroundColor: '#10B981', padding: 20, borderRadius: 20, alignItems: 'center' },
   saveBtnText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
+  imageSection: { alignItems: 'center', marginBottom: 24, gap: 12 },
+  previewImage: { width: 120, height: 120, borderRadius: 20, backgroundColor: '#F1F5F9' },
+  imagePlaceholder: { width: 120, height: 120, borderRadius: 20, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
+  pickImageBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1C273F', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, gap: 8, flex: 1, justifyContent: 'center' },
+  galleryBtn: { backgroundColor: '#475569' },
+  pickImageBtnText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+  imagePickerRow: { flexDirection: 'row', gap: 10, width: '100%', paddingHorizontal: 20, marginTop: 10 },
+  thumbContainer: { width: 50, height: 50, borderRadius: 12, overflow: 'hidden', backgroundColor: '#F8FAFC' },
+  listThumb: { width: '100%', height: '100%', resizeMode: 'cover' },
+  listThumbEmpty: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center', backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0', borderStyle: 'dashed' },
 });

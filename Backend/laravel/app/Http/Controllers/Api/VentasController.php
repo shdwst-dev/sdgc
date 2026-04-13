@@ -12,6 +12,82 @@ use Illuminate\Support\Str;
 
 class VentasController extends Controller
 {
+    public function listar(Request $request)
+    {
+        $userId = $request->user()?->id_usuario;
+
+        if (!$userId) {
+            return response()->json(['message' => 'No autenticado.'], 401);
+        }
+
+        $ventas = DB::table('ventas as v')
+            ->leftJoin('estatus as e', 'v.id_estatus', '=', 'e.id_estatus')
+            ->leftJoin('metodos_pago as m', 'v.id_metodo_pago', '=', 'm.id_metodo_pago')
+            ->where('v.id_usuario', $userId)
+            ->select(
+                'v.id_venta',
+                'v.fecha_hora as fecha',
+                'v.id_estatus',
+                'e.nombre as estatus',
+                'm.nombre as metodo_pago',
+                DB::raw('(SELECT SUM(cantidad * precio_unitario) FROM detalle_ventas WHERE venta_id = v.id_venta) as total')
+            )
+            ->orderBy('v.fecha_hora', 'desc')
+            ->get();
+
+        return response()->json([
+            'message' => 'Ventas obtenidas correctamente.',
+            'data' => $ventas
+        ]);
+    }
+
+    public function ver(Request $request, int $idVenta)
+    {
+        $userId = $request->user()?->id_usuario;
+
+        $venta = DB::table('ventas as v')
+            ->leftJoin('estatus as e', 'v.id_estatus', '=', 'e.id_estatus')
+            ->leftJoin('metodos_pago as m', 'v.id_metodo_pago', '=', 'm.id_metodo_pago')
+            ->where('v.id_venta', $idVenta)
+            ->where('v.id_usuario', $userId)
+            ->select(
+                'v.id_venta',
+                'v.fecha_hora as fecha',
+                'e.nombre as estatus',
+                'm.nombre as metodo_pago'
+            )
+            ->first();
+
+        if (!$venta) {
+            return response()->json(['message' => 'Venta no encontrada.'], 404);
+        }
+
+        $detalles = DB::table('detalle_ventas as dv')
+            ->join('productos as p', 'dv.producto_id', '=', 'p.id_producto')
+            ->where('dv.venta_id', $idVenta)
+            ->select(
+                'p.id_producto',
+                'p.nombre',
+                'p.imagen_url',
+                'dv.cantidad',
+                'dv.precio_unitario',
+                DB::raw('(dv.cantidad * dv.precio_unitario) as subtotal')
+            )
+            ->get();
+
+        return response()->json([
+            'message' => 'Detalle de venta obtenido.',
+            'data' => [
+                'id_venta' => $venta->id_venta,
+                'fecha' => $venta->fecha,
+                'estatus' => $venta->estatus,
+                'metodo_pago' => $venta->metodo_pago,
+                'total' => $detalles->sum('subtotal'),
+                'productos' => $detalles
+            ]
+        ]);
+    }
+
     public function registrar(Request $request)
     {
         $data = $request->validate([

@@ -28,6 +28,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/productos/{idProducto}', [ProductosController::class, 'leer'])->whereNumber('idProducto');
 
         Route::middleware('role:Administrador,Super Admin,Vendedor,Comprador')->group(function () {
+            Route::get('/ventas', [VentasController::class, 'listar']);
+            Route::get('/ventas/{idVenta}', [VentasController::class, 'ver'])->whereNumber('idVenta');
             Route::post('/ventas/registrar', [VentasController::class, 'registrar']);
         });
 

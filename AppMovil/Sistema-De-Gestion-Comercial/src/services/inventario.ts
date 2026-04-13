@@ -22,6 +22,7 @@ export type InventarioProducto = {
   precioUnitario: number | null;
   precioBase: number | null;
   idEstatus: number | null;
+  imagenUrl: string | null;
 };
 
 export type CrearProductoPayload = {
@@ -87,6 +88,21 @@ function toText(value: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+function ensureAbsoluteUrl(url: string | null): string | null {
+  if (!url || url.startsWith('http')) {
+    return url;
+  }
+  
+  // Normalizar ruta relativa: quitar slash inicial si existe
+  const cleanPath = url.startsWith('/') ? url.slice(1) : url;
+  
+  // Obtener la base del servidor (quitando la parte de /api/...)
+  const apiRoot = getApiRootUrl(); // ej: http://10.0.2.2:8000/api/v1
+  const serverBase = apiRoot.split('/api')[0]; // ej: http://10.0.2.2:8000
+  
+  return `${serverBase}/${cleanPath}`;
+}
+
 function mapProducto(raw: Record<string, unknown>): InventarioProducto {
   const id = toNumber(raw.id_producto ?? raw.id ?? raw.idProducto) ?? 0;
   const idSubcategoria = toNumber(raw.id_subcategoria ?? raw.idSubcategoria);
@@ -107,6 +123,7 @@ function mapProducto(raw: Record<string, unknown>): InventarioProducto {
     precioBase,
     precioUnitario,
     idEstatus,
+    imagenUrl: ensureAbsoluteUrl(toText(raw.imagen_url) ?? toText(raw.imagenUrl)),
   };
 }
 
@@ -191,6 +208,35 @@ export async function actualizarProducto(
       id_estatus: payload.idEstatus,
     },
     fallbackError: 'No se pudo actualizar el producto.',
+  });
+}
+
+/** Versión FormData para soportar subida de archivos */
+export async function actualizarProductoFormData(
+  token: string,
+  idProducto: number,
+  formData: FormData,
+): Promise<void> {
+  // Laravel suele requerir _method="PUT" cuando se usa multipart/form-data
+  formData.append('_method', 'PUT');
+
+  await apiRequest(`/productos/${idProducto}`, {
+    method: 'POST', // Usamos POST con _method=PUT para archivos en Laravel
+    token,
+    body: formData,
+    fallbackError: 'No se pudo actualizar el producto con imagen.',
+  });
+}
+
+export async function crearProductoFormData(
+  token: string,
+  formData: FormData,
+): Promise<void> {
+  await apiRequest('/productos', {
+    method: 'POST',
+    token,
+    body: formData,
+    fallbackError: 'No se pudo crear el producto con imagen.',
   });
 }
 

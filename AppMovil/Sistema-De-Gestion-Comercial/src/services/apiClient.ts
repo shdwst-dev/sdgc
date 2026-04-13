@@ -180,13 +180,18 @@ export async function apiRequest<T = unknown>(
     ? `${baseUrlFinal}${baseUrlFinal.includes('?') ? '&' : '?'}cb=${Date.now()}` 
     : baseUrlFinal;
 
+  const isFormData = body instanceof FormData;
+
   const headers: Record<string, string> = {
     Accept: 'application/json',
-    'Content-Type': 'application/json',
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     Pragma: 'no-cache',
     Expires: '0',
   };
+
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json';
+  }
 
   if (token) {
     headers.Authorization = `Bearer ${token}`;
@@ -195,7 +200,7 @@ export async function apiRequest<T = unknown>(
   const fetchOptions: RequestInit = {
     method,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: isFormData ? (body as any) : (body !== undefined ? JSON.stringify(body) : undefined),
     cache: 'no-store',
   };
 

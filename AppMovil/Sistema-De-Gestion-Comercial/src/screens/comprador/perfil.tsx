@@ -5,9 +5,11 @@ import { useNavigation, CommonActions, useFocusEffect } from '@react-navigation/
 import { ApiError, getMe, logout, MeResponse } from '../../services/auth';
 import { clearToken, getToken, hydrateToken } from '../../services/storage';
 import { getDireccionesLocal, saveDireccionLocal, deleteDireccionLocal, getMetodosPagoLocal, getFavoritePaymentMethodLocal, setFavoritePaymentMethodLocal, Direccion, MetodoPago } from '../../services/comprador';
+import { useToast } from '../../components/Toast';
 
 export default function Perfil() {
   const navigation = useNavigation();
+  const { showToast } = useToast();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [profileData, setProfileData] = useState<MeResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,7 +33,7 @@ export default function Perfil() {
     navigation.dispatch(
       CommonActions.reset({
         index: 0,
-        routes: [{ name: 'InicioSesion' as never }],
+        routes: [{ name: 'RoleSelect' as never }],
       }),
     );
   }, [navigation]);
@@ -65,7 +67,7 @@ export default function Perfil() {
         ? requestError.message
         : 'No se pudo cargar el perfil.';
       
-      Alert.alert('Error', message);
+      showToast({ message, type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -104,7 +106,7 @@ export default function Perfil() {
 
   const handleSaveDireccion = async () => {
     if (!formData.calle || !formData.numero_exterior || !formData.colonia) {
-      Alert.alert('Campos requeridos', 'Por favor completa los campos obligatorios');
+      showToast({ message: 'Por favor completa los campos obligatorios', type: 'error' });
       return;
     }
 
@@ -125,9 +127,9 @@ export default function Perfil() {
       setShowDireccionModal(false);
       setEditingDireccion(null);
       setFormData({ calle: '', numero_exterior: '', numero_interior: '', colonia: '', ciudad: '', estado: '', codigoPostal: '' });
-      Alert.alert('Éxito', editingDireccion ? 'Dirección actualizada' : 'Dirección agregada');
+      showToast({ message: editingDireccion ? 'Dirección actualizada' : 'Dirección agregada', type: 'success' });
     } catch (error) {
-      Alert.alert('Error', 'No se pudo guardar la dirección');
+      showToast({ message: 'No se pudo guardar la dirección', type: 'error' });
     }
   };
 
@@ -141,9 +143,9 @@ export default function Perfil() {
           try {
             await deleteDireccionLocal(id);
             await loadDirecciones();
-            Alert.alert('Éxito', 'Dirección eliminada');
+            showToast({ message: 'Dirección eliminada', type: 'success' });
           } catch (error) {
-            Alert.alert('Error', 'No se pudo eliminar la dirección');
+            showToast({ message: 'No se pudo eliminar la dirección', type: 'error' });
           }
         }
       }
@@ -168,10 +170,10 @@ export default function Perfil() {
     try {
       await setFavoritePaymentMethodLocal(methodId);
       setMetodoPagoFavorito(methodId);
-      Alert.alert('Éxito', 'Método de pago actualizado');
+      showToast({ message: 'Método de pago actualizado', type: 'success' });
       setShowPaymentModal(false);
     } catch (error) {
-      Alert.alert('Error', 'No se pudo cambiar el método de pago');
+      showToast({ message: 'No se pudo cambiar el método de pago', type: 'error' });
     }
   };
 
@@ -198,7 +200,7 @@ export default function Perfil() {
       icon: Package,
       label: 'Mis Pedidos',
       subtitle: 'No tienes historial de pedidos',
-      onClick: () => Alert.alert('Pedidos', 'No tienes historial de pedidos'),
+      onClick: () => showToast({ message: 'No tienes historial de pedidos' }),
     },
     {
       icon: MapPin,

@@ -21,7 +21,7 @@ export function AdminTabs() {
         navigation.dispatch(
             CommonActions.reset({
                 index: 0,
-                routes: [{ name: 'InicioSesion' as never }],
+                routes: [{ name: 'RoleSelect' as never }],
             }),
         );
     };

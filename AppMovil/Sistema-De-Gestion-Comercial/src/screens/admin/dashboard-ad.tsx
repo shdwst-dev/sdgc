@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Dimensions } from 'react-native';
 import { DollarSign, TrendingUp, TrendingDown, ShoppingCart, RefreshCw } from 'lucide-react-native';
 import { CommonActions, useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
 import {
   DashboardMetricas,
   TopProducto,
@@ -11,6 +12,8 @@ import {
 import { ApiError } from '../../services/apiClient';
 import { clearToken, getToken, hydrateToken } from '../../services/storage';
 import { GoogleChartView } from '../../components/GoogleChartView';
+
+const { width } = Dimensions.get('window');
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('es-MX', {
@@ -33,7 +36,7 @@ export default function DashboardAdmin() {
     navigation.dispatch(
       CommonActions.reset({
         index: 0,
-        routes: [{ name: 'InicioSesion' as never }],
+        routes: [{ name: 'RoleSelect' as never }],
       }),
     );
   }, [navigation]);
@@ -111,10 +114,10 @@ export default function DashboardAdmin() {
 
   const metricsCards = metricas
     ? [
-        { title: 'Ingresos Hoy', icon: DollarSign, value: formatCurrency(metricas.ingresos_hoy) },
-        { title: `Ingresos ${rangeDays}d`, icon: TrendingUp, value: formatCurrency(ingresosPeriodo) },
-        { title: `Gastos ${rangeDays}d`, icon: TrendingDown, value: formatCurrency(gastosPeriodo) },
-        { title: `Ganancia ${rangeDays}d`, icon: ShoppingCart, value: formatCurrency(gananciaPeriodo) },
+        { title: 'Hoy', icon: DollarSign, value: formatCurrency(metricas.ingresos_hoy), colors: ['#1E293B', '#334155'] },
+        { title: `Ingresos ${rangeDays}d`, icon: TrendingUp, value: formatCurrency(ingresosPeriodo), colors: ['#065F46', '#059669'] },
+        { title: `Gastos ${rangeDays}d`, icon: TrendingDown, value: formatCurrency(gastosPeriodo), colors: ['#991B1B', '#DC2626'] },
+        { title: `Ganancia ${rangeDays}d`, icon: ShoppingCart, value: formatCurrency(gananciaPeriodo), colors: ['#92400E', '#D97706'] },
       ]
     : [];
 
@@ -153,7 +156,7 @@ export default function DashboardAdmin() {
   if (error && !metricas) {
     return (
       <View style={[styles.container, styles.centered, { padding: 32 }]}>
-        <Text style={styles.errorTitle}>No se pudo cargar el dashboard</Text>
+        <Text style={styles.errorTitle}>Error de conexión</Text>
         <Text style={styles.errorMessage}>{error}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={() => loadDashboard()}>
           <Text style={styles.retryButtonText}>Reintentar</Text>
@@ -163,37 +166,48 @@ export default function DashboardAdmin() {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       <View style={styles.headerRow}>
-        <Text style={styles.headerTitle}>Dashboard Admin</Text>
-        <TouchableOpacity onPress={() => loadDashboard(false)} disabled={isRefreshing}>
+        <View>
+          <Text style={styles.headerTitle}>Resumen</Text>
+          <Text style={styles.headerSubtitle}>Administradora</Text>
+        </View>
+        <TouchableOpacity 
+          style={styles.refreshBtn}
+          onPress={() => loadDashboard(false)} 
+          disabled={isRefreshing}
+        >
           {isRefreshing ? <ActivityIndicator size="small" color="#1C273F" /> : <RefreshCw size={20} color="#1C273F" />}
         </TouchableOpacity>
       </View>
-
-      {metricas?.periodo_referencia ? <Text style={styles.periodoText}>{metricas.periodo_referencia}</Text> : null}
 
       <View style={styles.filterRow}>
         {[7, 15, 30].map((days) => (
           <TouchableOpacity
             key={days}
-            style={[styles.filterBtn, rangeDays === days ? styles.filterBtnActive : null]}
+            style={[styles.filterBtn, rangeDays === days && styles.filterBtnActive]}
             onPress={() => setRangeDays(days as 7 | 15 | 30)}
           >
-            <Text style={[styles.filterBtnText, rangeDays === days ? styles.filterBtnTextActive : null]}>{days} dias</Text>
+            <Text style={[styles.filterBtnText, rangeDays === days && styles.filterBtnTextActive]}>{days} días</Text>
           </TouchableOpacity>
         ))}
       </View>
 
       <View style={styles.grid}>
         {metricsCards.map((item, index) => (
-          <View key={index} style={styles.metricCard}>
+          <LinearGradient
+            key={index}
+            colors={item.colors as any}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.metricCard}
+          >
             <View style={styles.cardHeader}>
               <Text style={styles.metricTitle}>{item.title}</Text>
-              <item.icon size={20} color="#fff" opacity={0.9} />
+              <item.icon size={18} color="#fff" opacity={0.7} />
             </View>
             <Text style={styles.metricValue}>{item.value}</Text>
-          </View>
+          </LinearGradient>
         ))}
       </View>
 
@@ -202,35 +216,38 @@ export default function DashboardAdmin() {
         <GoogleChartView
           type="BarChart"
           data={topProductosChartData}
-          height={250}
+          height={240}
           options={{
             backgroundColor: 'transparent',
             legend: { position: 'none' },
-            colors: ['#2563EB'],
+            colors: ['#3B82F6'],
             bars: 'horizontal',
-            chartArea: { left: 140, right: 16, top: 20, bottom: 20, width: '100%', height: '78%' },
-            hAxis: { minValue: 0 },
+            chartArea: { left: 100, right: 10, top: 10, bottom: 20, width: '100%', height: '85%' },
+            hAxis: { minValue: 0, textStyle: { fontSize: 10, color: '#94A3B8' } },
+            vAxis: { textStyle: { fontSize: 10, color: '#475569', fontWeight: '500' } },
           }}
-          emptyMessage="No hay datos para graficar productos."
+          emptyMessage="No hay datos de productos."
         />
       </View>
 
       <View style={styles.whiteCard}>
-        <Text style={styles.sectionTitle}>Flujo Mensual</Text>
+        <Text style={styles.sectionTitle}>Flujo de Capital</Text>
         <GoogleChartView
           type="LineChart"
           data={flujoChartData}
-          height={250}
+          height={240}
           options={{
             backgroundColor: 'transparent',
-            colors: ['#16A34A', '#DC2626'],
-            legend: { position: 'top' },
+            colors: ['#10B981', '#EF4444'],
+            legend: { position: 'top', textStyle: { fontSize: 11, color: '#64748B' } },
             curveType: 'function',
             lineWidth: 3,
             pointSize: 4,
-            chartArea: { left: 48, right: 16, top: 24, bottom: 36, width: '100%', height: '74%' },
+            chartArea: { left: 40, right: 10, top: 40, bottom: 30, width: '100%', height: '70%' },
+            hAxis: { textStyle: { fontSize: 9, color: '#94A3B8' } },
+            vAxis: { textStyle: { fontSize: 9, color: '#94A3B8' } },
           }}
-          emptyMessage="No hay flujo mensual disponible para este periodo."
+          emptyMessage="Sin flujo de capital disponible."
         />
       </View>
 
@@ -240,26 +257,27 @@ export default function DashboardAdmin() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc', padding: 16 },
+  container: { flex: 1, backgroundColor: '#F1F5F9', padding: 16 },
   centered: { justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, color: '#6B7280' },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, marginTop: 40 },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#1C273F' },
-  periodoText: { fontSize: 12, color: '#6B7280', marginBottom: 16 },
-  filterRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  filterBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: '#CBD5E1', backgroundColor: '#FFF' },
-  filterBtnActive: { backgroundColor: '#1C273F', borderColor: '#1C273F' },
-  filterBtnText: { color: '#334155', fontSize: 12, fontWeight: '600' },
+  loadingText: { marginTop: 12, color: '#64748B', fontWeight: '600' },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 40, marginBottom: 20 },
+  headerTitle: { fontSize: 32, fontWeight: '900', color: '#1E293B', letterSpacing: -1 },
+  headerSubtitle: { fontSize: 14, color: '#64748B', fontWeight: '500', marginTop: -4 },
+  refreshBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFF', justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 },
+  filterRow: { flexDirection: 'row', gap: 10, marginBottom: 24 },
+  filterBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#E2E8F0' },
+  filterBtnActive: { backgroundColor: '#1E293B' },
+  filterBtnText: { color: '#64748B', fontSize: 13, fontWeight: '700' },
   filterBtnTextActive: { color: '#FFF' },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-  metricCard: { backgroundColor: '#1C273F', width: '48%', padding: 16, borderRadius: 12, marginBottom: 12 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  metricTitle: { color: '#fff', fontSize: 12, opacity: 0.9 },
-  metricValue: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-  whiteCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#e2e8f0' },
-  sectionTitle: { fontSize: 16, fontWeight: '600', color: '#101828', marginBottom: 12 },
-  errorTitle: { color: '#991B1B', fontWeight: '700', fontSize: 16, marginBottom: 8, textAlign: 'center' },
-  errorMessage: { color: '#7F1D1D', fontSize: 13, textAlign: 'center', marginBottom: 16 },
-  retryButton: { backgroundColor: '#1C273F', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 },
-  retryButtonText: { color: '#FFF', fontWeight: '600' },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', gap: 12, marginBottom: 24 },
+  metricCard: { width: (width - 44) / 2, padding: 20, borderRadius: 24, minHeight: 110, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 4 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  metricTitle: { color: '#fff', fontSize: 12, fontWeight: '700', textTransform: 'uppercase', opacity: 0.8 },
+  metricValue: { color: '#fff', fontSize: 22, fontWeight: '900' },
+  whiteCard: { backgroundColor: '#fff', borderRadius: 28, padding: 20, marginBottom: 20, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 15, elevation: 3 },
+  sectionTitle: { fontSize: 18, fontWeight: '800', color: '#1E293B', marginBottom: 16 },
+  errorTitle: { color: '#991B1B', fontWeight: '800', fontSize: 18, marginBottom: 8, textAlign: 'center' },
+  errorMessage: { color: '#64748B', fontSize: 14, textAlign: 'center', marginBottom: 24 },
+  retryButton: { backgroundColor: '#1E293B', paddingHorizontal: 30, paddingVertical: 15, borderRadius: 16 },
+  retryButtonText: { color: '#FFF', fontWeight: '700' },
 });

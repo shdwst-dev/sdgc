@@ -5,6 +5,7 @@ import { useNavigation, useIsFocused } from '@react-navigation/native';
 import { getCarritoLocal, saveCarritoLocal, CartItem, checkout } from '../../services/comprador';
 import { ApiError } from '../../services/auth';
 import { getToken, hydrateToken, clearToken } from '../../services/storage';
+import { useToast } from '../../components/Toast';
 
 const imageMap: { [key: string]: string } = {
   'Smartphone Samsung Galaxy A54': 'https://i.postimg.cc/Snz3Kn0D/A54.png',
@@ -26,6 +27,7 @@ const getProductImage = (nombre: string): string => {
 export default function Carrito() {
   const navigation = useNavigation();
   const isFocused = useIsFocused();
+  const { showToast } = useToast();
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
@@ -34,7 +36,7 @@ export default function Carrito() {
   const [productQuantity, setProductQuantity] = useState(1);
 
   const goToLogin = useCallback(() => {
-    navigation.reset({ index: 0, routes: [{ name: 'InicioSesion' as never }] });
+    navigation.reset({ index: 0, routes: [{ name: 'RoleSelect' as never }] });
   }, [navigation]);
 
   useEffect(() => {
@@ -49,7 +51,7 @@ export default function Carrito() {
       const carritoData = await getCarritoLocal();
       setCart(carritoData);
     } catch (error) {
-      Alert.alert('Error', 'No se pudo cargar el carrito');
+      showToast({ message: 'No se pudo cargar el carrito', type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -98,12 +100,8 @@ export default function Carrito() {
       await saveCarritoLocal([]);
       setCart([]);
       
-      Alert.alert('¡Éxito!', 'Tu compra ha sido procesada correctamente', [
-        {
-          text: 'OK',
-          onPress: () => navigation.navigate('InicioTab' as never)
-        }
-      ]);
+      showToast({ message: '¡Compra procesada correctamente!', type: 'success', duration: 4000 });
+      navigation.navigate('InicioTab' as never);
     } catch (error) {
       if (error instanceof ApiError) {
         if (error.status === 401) {
@@ -112,7 +110,7 @@ export default function Carrito() {
           return;
         }
       }
-      Alert.alert('Error', error instanceof Error ? error.message : 'Error al procesar el pago');
+      showToast({ message: error instanceof Error ? error.message : 'Error al procesar el pago', type: 'error' });
     } finally {
       setIsCheckingOut(false);
     }

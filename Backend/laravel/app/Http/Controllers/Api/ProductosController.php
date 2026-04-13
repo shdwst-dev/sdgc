@@ -139,6 +139,8 @@ class ProductosController extends Controller
             ->where('id_producto', $idProducto)
             ->exists();
 
+        \Illuminate\Support\Facades\Log::info('Actualizar Payload', ['idProducto' => $idProducto, 'payload' => $request->all()]);
+
         if (!$productoExiste) {
             return response()->json([
                 'message' => 'El producto no existe.',
@@ -343,14 +345,12 @@ class ProductosController extends Controller
 
             $producto = DB::table('productos as p')
                 ->leftJoin('subcategorias as s', 's.id_subcategoria', '=', 'p.id_subcategoria')
-                ->when(
-                    $storeId,
-                    fn ($query) => $query->join('stock as st', function ($join) use ($storeId) {
-                        $join->on('st.id_producto', '=', 'p.id_producto')
-                            ->where('st.id_tienda', '=', $storeId);
-                    }),
-                    fn ($query) => $query->leftJoin('stock as st', 'st.id_producto', '=', 'p.id_producto')
-                )
+                ->leftJoin('stock as st', function ($join) use ($storeId) {
+                    $join->on('st.id_producto', '=', 'p.id_producto');
+                    if ($storeId) {
+                        $join->where('st.id_tienda', '=', $storeId);
+                    }
+                })
                 ->select(
                     'p.id_producto',
                     'p.id_subcategoria',

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, FlatList, Dimensions, Alert, ActivityIndicator, ScrollView, Modal } from 'react-native';
 import { Search, SlidersHorizontal, X, Minus, Plus } from 'lucide-react-native';
 import { useNavigation, CommonActions } from '@react-navigation/native';
@@ -6,6 +6,7 @@ import { Image } from 'react-native';
 import { ApiError } from '../../services/auth';
 import { buscarProductos, Producto, addToCarritoLocal } from '../../services/comprador';
 import { clearToken, getToken, hydrateToken } from '../../services/storage';
+import { useToast } from '../../components/Toast';
 
 const { width } = Dimensions.get('window');
 const columnWidth = (width - 40) / 2;
@@ -40,6 +41,7 @@ const categories = [
 
 export default function Buscar() {
   const navigation = useNavigation();
+  const { showToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [productos, setProductos] = useState<Producto[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -49,12 +51,13 @@ export default function Buscar() {
   const [showProductModal, setShowProductModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Producto | null>(null);
   const [productQuantity, setProductQuantity] = useState(1);
+  const [displayCount, setDisplayCount] = useState(20);
 
   const goToLogin = useCallback(() => {
     navigation.dispatch(
       CommonActions.reset({
         index: 0,
-        routes: [{ name: 'InicioSesion' as never }],
+        routes: [{ name: 'RoleSelect' as never }],
       }),
     );
   }, [navigation]);
@@ -74,6 +77,7 @@ export default function Buscar() {
 
     try {
       setIsLoading(true);
+      setDisplayCount(20);
       const results = await buscarProductos(token, query);
       let filteredResults = [...results];
 
@@ -104,7 +108,7 @@ export default function Buscar() {
         ? requestError.message
         : 'Error en la búsqueda.';
       
-      Alert.alert('Error', message);
+      showToast({ message, type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -141,6 +145,16 @@ export default function Buscar() {
     );
   };
 
+  const paginatedProductos = useMemo(() => {
+    return productos.slice(0, displayCount);
+  }, [productos, displayCount]);
+
+  const handleLoadMore = useCallback(() => {
+    if (displayCount < productos.length) {
+      setDisplayCount((prev) => prev + 20);
+    }
+  }, [displayCount, productos.length]);
+
   const renderProduct = ({ item }: { item: Producto }) => (
     <TouchableOpacity 
       style={styles.productCard}
@@ -166,9 +180,14 @@ export default function Buscar() {
         <Text style={styles.productPrice}>${item.precio_unitario.toLocaleString('es-MX')}</Text>
         <TouchableOpacity 
           style={styles.addButton}
-          onPress={(e) => {
+          onPress={async (e) => {
             e.stopPropagation();
-            addToCarritoLocal(item, 1);
+            try {
+              await addToCarritoLocal(item, 1);
+              showToast({ message: `${item.nombre} agregado al carrito`, type: 'success' });
+            } catch (error) {
+              showToast({ message: 'No se pudo agregar al carrito', type: 'error' });
+            }
           }}
         >
           <Text style={styles.addButtonText}>Agregar</Text>
@@ -254,12 +273,21 @@ export default function Buscar() {
 
           {productos.length > 0 ? (
             <FlatList
-              data={productos}
+              data={paginatedProductos}
               renderItem={renderProduct}
               keyExtractor={(item) => item.id.toString()}
               numColumns={2}
               columnWrapperStyle={{ justifyContent: 'space-between' }}
               scrollEnabled={true}
+              onEndReached={handleLoadMore}
+              onEndReachedThreshold={0.3}
+              ListFooterComponent={
+                displayCount < productos.length ? (
+                  <View style={{ paddingVertical: 12, alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color="#1C273F" />
+                  </View>
+                ) : null
+              }
             />
           ) : searchQuery.trim().length > 0 ? (
             <View style={styles.emptyContainer}>
@@ -399,16 +427,11 @@ export default function Buscar() {
                       for (let i = 0; i < productQuantity; i++) {
                         await addToCarritoLocal(selectedProduct, 1);
                       }
-                      Alert.alert(
-                        "¡Éxito!",
-                        `${selectedProduct.nombre} agregado al carrito`,
-                        [{ text: "OK", onPress: () => {
-                          setShowProductModal(false);
-                          setProductQuantity(1);
-                        }}]
-                      );
+                      showToast({ message: `${productQuantity} × ${selectedProduct.nombre} agregado al carrito`, type: 'success' });
+                      setShowProductModal(false);
+                      setProductQuantity(1);
                     } catch (error) {
-                      Alert.alert("Error", "No se pudo agregar al carrito");
+                      showToast({ message: 'No se pudo agregar al carrito', type: 'error' });
                     }
                   }}
                   disabled={selectedProduct.stock_actual === 0}

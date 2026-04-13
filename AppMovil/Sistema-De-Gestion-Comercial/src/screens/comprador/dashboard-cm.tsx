@@ -6,6 +6,7 @@ import { useNavigation, CommonActions } from '@react-navigation/native';
 import { ApiError, getMe } from '../../services/auth';
 import { getDashboardCompradorData, ProductoDestacado, addToCarritoLocal, buscarProductos, Producto } from '../../services/comprador';
 import { clearToken, getToken, hydrateToken } from '../../services/storage';
+import { useToast } from '../../components/Toast';
 
 const { width } = Dimensions.get('window');
 const columnWidth = (width - 40) / 2;
@@ -40,6 +41,7 @@ const getProductImage = (nombre: string): string => {
 
 export default function Inicio() {
   const navigation = useNavigation();
+  const { showToast } = useToast();
   const [productos, setProductos] = useState<ProductoDestacado[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,7 +56,7 @@ export default function Inicio() {
     navigation.dispatch(
       CommonActions.reset({
         index: 0,
-        routes: [{ name: 'InicioSesion' as never }],
+        routes: [{ name: 'RoleSelect' as never }],
       }),
     );
   }, [navigation]);
@@ -91,7 +93,7 @@ export default function Inicio() {
         ? requestError.message
         : 'No se pudo cargar los datos del dashboard.';
 
-      Alert.alert('Error', message);
+      showToast({ message, type: 'error' });
     } finally {
       setIsLoading(false);
     }
@@ -106,11 +108,11 @@ export default function Inicio() {
   const handleAddToCart = useCallback(async (product: ProductoDestacado) => {
     try {
       await addToCarritoLocal(product, 1);
-      Alert.alert("¡Éxito!", `${product.nombre} agregado al carrito`);
+      showToast({ message: `${product.nombre} agregado al carrito`, type: 'success' });
     } catch (error) {
-      Alert.alert("Error", "No se pudo agregar al carrito");
+      showToast({ message: 'No se pudo agregar al carrito', type: 'error' });
     }
-  }, []);
+  }, [showToast]);
 
   const performSearch = useCallback(async (query: string) => {
     if (query.trim().length === 0) {
@@ -414,11 +416,11 @@ export default function Inicio() {
                       for (let i = 0; i < productQuantity; i++) {
                         await addToCarritoLocal(selectedProduct, 1);
                       }
-                      Alert.alert("¡Éxito!", `${productQuantity} × ${selectedProduct.nombre} agregado al carrito`);
+                      showToast({ message: `${productQuantity} × ${selectedProduct.nombre} agregado al carrito`, type: 'success' });
                       setShowProductModal(false);
                       setProductQuantity(1);
                     } catch (error) {
-                      Alert.alert("Error", "No se pudo agregar al carrito");
+                      showToast({ message: 'No se pudo agregar al carrito', type: 'error' });
                     }
                   }}
                   disabled={selectedProduct.stock_actual === 0}

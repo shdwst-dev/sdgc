@@ -123,7 +123,7 @@ function extractDataArray(body: unknown): Record<string, unknown>[] {
 // ─── API functions ───────────────────────────────────────────────────────────
 
 export async function getInventario(token: string): Promise<InventarioProducto[]> {
-  const body = await apiRequest<unknown>('/inventario?catalogo_global=1&incluir_inactivos=1', {
+  const body = await apiRequest<unknown>('/inventario?incluir_inactivos=1', {
     token,
     baseUrl: getApiRootUrl(),
     fallbackError: 'No se pudo cargar el inventario.',

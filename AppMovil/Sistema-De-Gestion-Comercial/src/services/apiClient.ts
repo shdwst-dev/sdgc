@@ -174,11 +174,18 @@ export async function apiRequest<T = unknown>(
     fallbackError = 'Ocurrió un error inesperado. Intenta de nuevo.',
   } = opts;
 
-  const url = `${baseUrl}${path}`;
+  const baseUrlFinal = `${baseUrl}${path}`;
+  const isGet = method.toUpperCase() === 'GET';
+  const url = isGet 
+    ? `${baseUrlFinal}${baseUrlFinal.includes('?') ? '&' : '?'}cb=${Date.now()}` 
+    : baseUrlFinal;
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
     'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    Pragma: 'no-cache',
+    Expires: '0',
   };
 
   if (token) {
@@ -189,6 +196,7 @@ export async function apiRequest<T = unknown>(
     method,
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    cache: 'no-store',
   };
 
   let lastError: unknown;

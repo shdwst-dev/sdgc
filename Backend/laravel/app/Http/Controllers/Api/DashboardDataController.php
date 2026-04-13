@@ -97,9 +97,13 @@ class DashboardDataController extends Controller
         $productos = DB::table('productos as p')
             ->leftJoin('subcategorias as s', 's.id_subcategoria', '=', 'p.id_subcategoria')
             ->leftJoin('categorias as c', 'c.id_categoria', '=', 's.id_categoria')
-            ->leftJoin('stock as st', 'st.id_producto', '=', 'p.id_producto')
+            ->leftJoin('stock as st', function ($join) use ($assignedStoreId) {
+                $join->on('st.id_producto', '=', 'p.id_producto');
+                if ($assignedStoreId) {
+                    $join->where('st.id_tienda', '=', $assignedStoreId);
+                }
+            })
             ->leftJoin('estatus as e', 'e.id_estatus', '=', 'p.id_estatus')
-            ->when($assignedStoreId, fn ($query) => $query->where('st.id_tienda', $assignedStoreId))
             ->when(!$incluirInactivos, fn ($query) => $query->where('e.nombre', '!=', 'Inactivo'))
             ->select(
                 'p.id_producto',

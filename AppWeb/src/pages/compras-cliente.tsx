@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Layout from "./layout";
 import "../styles/dashboard.css";
 import { useApiData } from "../hooks/useApiData";
 import { formatCurrency } from "../lib/format";
-import { postApi } from "../lib/api";
-import { getStoredUser } from "../lib/auth";
+import { fetchApi, postApi, putApi } from "../lib/api";
+import { getStoredUser, updateStoredUser } from "../lib/auth";
+import { downloadInvoicePdf, type InvoicePdfData } from "../lib/pdf";
 import { ProductCatalog } from "../components/sales/CatalogoProductos";
 import { useSaleCheckout } from "../hooks/useSaleCheckout";
 import type { MetodoPago, ProductoVenta } from "../components/sales/types";
@@ -24,11 +25,108 @@ type ProductoInventario = {
   }>;
 };
 
+type CompraHistorial = {
+  id_venta: number;
+  folio: string;
+  fecha: string;
+  metodo_pago: string;
+  estado: string;
+  tienda: string | null;
+  articulos: number;
+  total: number;
+  detalles: Array<{
+    producto_id: number;
+    nombre: string;
+    cantidad: number;
+    precio_unitario: number;
+    subtotal: number;
+  }>;
+};
+
+type UsuarioSesion = {
+  id_usuario?: number;
+  email?: string;
+  rol?: string;
+  estatus?: string;
+  tienda?: {
+    id_tienda?: number;
+    nombre?: string;
+  } | null;
+  persona?: {
+    nombre?: string;
+    apellido_paterno?: string;
+    apellido_materno?: string | null;
+    telefono?: string;
+    direccion?: {
+      numero_ext?: string | null;
+      numero_int?: string | null;
+      calle?: {
+        nombre?: string;
+        colonia?: {
+          nombre?: string;
+          cp?: string | null;
+          municipio?: {
+            nombre?: string;
+            estado?: {
+              nombre?: string;
+              pais?: {
+                nombre?: string;
+              } | null;
+            } | null;
+          } | null;
+        } | null;
+      } | null;
+    } | null;
+  } | null;
+};
+
+type InfoSection = "perfil" | "historial";
+
+type ProfileForm = {
+  nombre: string;
+  apellido_paterno: string;
+  apellido_materno: string;
+  telefono: string;
+  email: string;
+  contrasena: string;
+};
+
+function formatDateTime(value: string) {
+  const normalizedValue = value.includes("T") ? value : value.replace(" ", "T");
+  const parsedDate = new Date(normalizedValue);
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "Fecha invalida";
+  }
+
+  return new Intl.DateTimeFormat("es-MX", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsedDate);
+}
+
 export default function ComprasCliente() {
-  const usuario = getStoredUser();
+  const historialRef = useRef<HTMLDivElement | null>(null);
+  const [usuario, setUsuario] = useState<UsuarioSesion | null>(() => getStoredUser() as UsuarioSesion | null);
   const [busqueda, setBusqueda] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [guardandoCompra, setGuardandoCompra] = useState(false);
+  const [historialAbierto, setHistorialAbierto] = useState(false);
+  const [seccionInfoAbierta, setSeccionInfoAbierta] = useState<InfoSection>("perfil");
+  const [editandoPerfil, setEditandoPerfil] = useState(false);
+  const [guardandoPerfil, setGuardandoPerfil] = useState(false);
+  const [perfilMensaje, setPerfilMensaje] = useState<string | null>(null);
+  const [perfilError, setPerfilError] = useState<string | null>(null);
+  const [facturaError, setFacturaError] = useState<string | null>(null);
+  const [descargandoFacturaId, setDescargandoFacturaId] = useState<number | null>(null);
+  const [perfilEditable, setPerfilEditable] = useState<ProfileForm>({
+    nombre: "",
+    apellido_paterno: "",
+    apellido_materno: "",
+    telefono: "",
+    email: "",
+    contrasena: "",
+  });
   const { data: inventarioData, loading, error } = useApiData(`/inventario?refresh=${reloadKey}&catalogo_global=1&incluir_inactivos=1`, {
     metricas: {
       productos_activos: 0,
@@ -74,6 +172,9 @@ export default function ComprasCliente() {
       },
     },
   });
+  const { data: historialData, loading: historialLoading, error: historialError } = useApiData("/v1/ventas/historial", {
+    compras: [] as CompraHistorial[],
+  });
 
   const productos = useMemo<ProductoVenta[]>(
     () => inventarioData.productos.map((producto) => ({
@@ -96,6 +197,61 @@ export default function ComprasCliente() {
     () => ventasData.catalogos.metodos_pago.find((metodo) => metodo.nombre.toLowerCase() === "transferencia"),
     [ventasData.catalogos.metodos_pago],
   );
+
+  const nombreCompletoUsuario = useMemo(() => {
+    const persona = usuario?.persona;
+
+    return [
+      persona?.nombre,
+      persona?.apellido_paterno,
+      persona?.apellido_materno,
+    ]
+      .filter((value) => typeof value === "string" && value.trim().length > 0)
+      .join(" ") || "Comprador";
+  }, [usuario]);
+
+  const direccionUsuario = useMemo(() => {
+    const direccion = usuario?.persona?.direccion;
+
+    if (!direccion?.calle?.nombre) {
+      return "Sin dirección registrada";
+    }
+
+    return [
+      direccion.calle.nombre,
+      direccion.numero_ext ? `Ext. ${direccion.numero_ext}` : null,
+      direccion.numero_int ? `Int. ${direccion.numero_int}` : null,
+      direccion.calle.colonia?.nombre,
+      direccion.calle.colonia?.municipio?.nombre,
+      direccion.calle.colonia?.municipio?.estado?.nombre,
+      direccion.calle.colonia?.cp ? `CP ${direccion.calle.colonia.cp}` : null,
+      direccion.calle.colonia?.municipio?.estado?.pais?.nombre,
+    ]
+      .filter((value) => typeof value === "string" && value.trim().length > 0)
+      .join(", ");
+  }, [usuario]);
+
+  useEffect(() => {
+    setPerfilEditable({
+      nombre: usuario?.persona?.nombre ?? "",
+      apellido_paterno: usuario?.persona?.apellido_paterno ?? "",
+      apellido_materno: usuario?.persona?.apellido_materno ?? "",
+      telefono: usuario?.persona?.telefono ?? "",
+      email: usuario?.email ?? "",
+      contrasena: "",
+    });
+  }, [usuario]);
+
+  const restablecerPerfilEditable = () => {
+    setPerfilEditable({
+      nombre: usuario?.persona?.nombre ?? "",
+      apellido_paterno: usuario?.persona?.apellido_paterno ?? "",
+      apellido_materno: usuario?.persona?.apellido_materno ?? "",
+      telefono: usuario?.persona?.telefono ?? "",
+      email: usuario?.email ?? "",
+      contrasena: "",
+    });
+  };
 
   const {
     carrito,
@@ -133,6 +289,24 @@ export default function ComprasCliente() {
       producto.sku.toLowerCase().includes(query),
     );
   }, [busqueda, productos, productosOcultos]);
+
+  useEffect(() => {
+    if (!historialAbierto) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!historialRef.current?.contains(event.target as Node)) {
+        setHistorialAbierto(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [historialAbierto]);
 
   const completarCompra = async () => {
     if (!usuario?.id_usuario) {
@@ -179,12 +353,267 @@ export default function ComprasCliente() {
     }
   };
 
+  const guardarPerfil = async () => {
+    setGuardandoPerfil(true);
+    setPerfilMensaje(null);
+    setPerfilError(null);
+
+    try {
+      const response = await putApi<{ message: string; usuario: UsuarioSesion }>("/v1/auth/profile", {
+        nombre: perfilEditable.nombre,
+        apellido_paterno: perfilEditable.apellido_paterno,
+        apellido_materno: perfilEditable.apellido_materno || null,
+        telefono: perfilEditable.telefono,
+        email: perfilEditable.email,
+        contrasena: perfilEditable.contrasena || null,
+      });
+
+      updateStoredUser(response.usuario);
+      setUsuario(response.usuario);
+      setEditandoPerfil(false);
+      setPerfilEditable((actual) => ({ ...actual, contrasena: "" }));
+      setPerfilMensaje(response.message);
+    } catch (submitError) {
+      setPerfilError(submitError instanceof Error ? submitError.message : "No fue posible actualizar tu información.");
+    } finally {
+      setGuardandoPerfil(false);
+    }
+  };
+
+  const descargarFactura = async (idVenta: number) => {
+    setDescargandoFacturaId(idVenta);
+    setFacturaError(null);
+
+    try {
+      const response = await fetchApi<{ factura: InvoicePdfData }>(`/v1/ventas/${idVenta}/factura`);
+      downloadInvoicePdf(response.factura);
+    } catch (submitError) {
+      setFacturaError(submitError instanceof Error ? submitError.message : "No fue posible descargar la factura.");
+    } finally {
+      setDescargandoFacturaId(null);
+    }
+  };
+
   return (
     <Layout>
       <section className="inventory-header">
         <div>
           <h1>Compras</h1>
           <p>Explora el catálogo, agrega artículos al carrito y genera tu compra con pago por transferencia.</p>
+        </div>
+
+        <div className="purchase-history-trigger" ref={historialRef}>
+          <button
+            type="button"
+            className="inventory-secondary-button"
+            onClick={() => {
+              setHistorialAbierto((actual) => !actual);
+              setSeccionInfoAbierta("perfil");
+            }}
+          >
+            Mi información
+          </button>
+
+          {historialAbierto ? (
+            <section className="panel purchase-history-popover">
+              <div className="purchase-info-header">
+                <div>
+                  <h3>{nombreCompletoUsuario}</h3>
+                  <p>Consulta tus datos personales y revisa tu historial de compras.</p>
+                </div>
+                <strong>{usuario?.rol ?? "Comprador"}</strong>
+              </div>
+
+              <div className="purchase-info-tabs">
+                <button
+                  type="button"
+                  className={seccionInfoAbierta === "perfil" ? "purchase-info-tab purchase-info-tab-active" : "purchase-info-tab"}
+                  onClick={() => setSeccionInfoAbierta("perfil")}
+                >
+                  Ver información
+                </button>
+                <button
+                  type="button"
+                  className={seccionInfoAbierta === "historial" ? "purchase-info-tab purchase-info-tab-active" : "purchase-info-tab"}
+                  onClick={() => setSeccionInfoAbierta("historial")}
+                >
+                  Historial de compras
+                </button>
+              </div>
+
+              {seccionInfoAbierta === "perfil" ? (
+                <>
+                  <div className="purchase-info-toolbar">
+                    <button
+                      type="button"
+                      className="purchase-edit-button"
+                      onClick={() => {
+                        setPerfilMensaje(null);
+                        setPerfilError(null);
+                        setEditandoPerfil(true);
+                      }}
+                      disabled={editandoPerfil}
+                    >
+                      <span aria-hidden="true">✎</span>
+                      Editar información
+                    </button>
+                  </div>
+
+                  <div className="purchase-info-grid">
+                    <label className="purchase-info-card">
+                      <span>Nombre</span>
+                      <input
+                        disabled={!editandoPerfil}
+                        value={perfilEditable.nombre}
+                        onChange={(event) => setPerfilEditable((actual) => ({ ...actual, nombre: event.target.value }))}
+                      />
+                    </label>
+                    <label className="purchase-info-card">
+                      <span>Apellido paterno</span>
+                      <input
+                        disabled={!editandoPerfil}
+                        value={perfilEditable.apellido_paterno}
+                        onChange={(event) => setPerfilEditable((actual) => ({ ...actual, apellido_paterno: event.target.value }))}
+                      />
+                    </label>
+                    <label className="purchase-info-card">
+                      <span>Apellido materno</span>
+                      <input
+                        disabled={!editandoPerfil}
+                        value={perfilEditable.apellido_materno}
+                        onChange={(event) => setPerfilEditable((actual) => ({ ...actual, apellido_materno: event.target.value }))}
+                      />
+                    </label>
+                    <label className="purchase-info-card">
+                      <span>Teléfono</span>
+                      <input
+                        disabled={!editandoPerfil}
+                        value={perfilEditable.telefono}
+                        onChange={(event) => setPerfilEditable((actual) => ({ ...actual, telefono: event.target.value }))}
+                      />
+                    </label>
+                    <label className="purchase-info-card">
+                      <span>Correo</span>
+                      <input
+                        disabled={!editandoPerfil}
+                        type="email"
+                        value={perfilEditable.email}
+                        onChange={(event) => setPerfilEditable((actual) => ({ ...actual, email: event.target.value }))}
+                      />
+                    </label>
+                    <label className="purchase-info-card">
+                      <span>Nueva contraseña</span>
+                      <input
+                        disabled={!editandoPerfil}
+                        type="password"
+                        placeholder="Déjala vacía si no cambia"
+                        value={perfilEditable.contrasena}
+                        onChange={(event) => setPerfilEditable((actual) => ({ ...actual, contrasena: event.target.value }))}
+                      />
+                    </label>
+                    <article className="purchase-info-card">
+                      <span>Estatus</span>
+                      <strong>{usuario?.estatus ?? "Sin estatus"}</strong>
+                    </article>
+                    <article className="purchase-info-card">
+                      <span>Tienda</span>
+                      <strong>{usuario?.tienda?.nombre ?? "Sin tienda asignada"}</strong>
+                    </article>
+                    <article className="purchase-info-card purchase-info-card-wide">
+                      <span>Dirección</span>
+                      <strong>{direccionUsuario}</strong>
+                    </article>
+                  </div>
+
+                  {perfilMensaje ? <p className="sales-feedback sales-feedback-success">{perfilMensaje}</p> : null}
+                  {perfilError ? <p className="sales-feedback sales-feedback-error">{perfilError}</p> : null}
+
+                  {editandoPerfil ? (
+                    <div className="purchase-info-actions">
+                      <button
+                        type="button"
+                        className="inventory-secondary-button"
+                        onClick={() => {
+                          setEditandoPerfil(false);
+                          setPerfilMensaje(null);
+                          setPerfilError(null);
+                          restablecerPerfilEditable();
+                        }}
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        className="inventory-primary-button"
+                        onClick={guardarPerfil}
+                        disabled={guardandoPerfil}
+                      >
+                        {guardandoPerfil ? "Guardando..." : "Guardar cambios"}
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+
+              {seccionInfoAbierta === "historial" ? (
+                <>
+                  {facturaError ? <p className="sales-feedback sales-feedback-error">{facturaError}</p> : null}
+                  {historialLoading ? <p className="form-message">Cargando historial...</p> : null}
+                  {historialError ? <p className="form-message">{historialError}</p> : null}
+
+                  {!historialLoading && !historialError && historialData.compras.length === 0 ? (
+                    <p className="purchase-history-empty">Aún no tienes compras registradas.</p>
+                  ) : null}
+
+                  <div className="purchase-history-list">
+                    {historialData.compras.map((compra) => (
+                      <article key={compra.id_venta} className="purchase-history-card">
+                        <div className="purchase-history-card-top">
+                          <div>
+                            <p className="detail-eyebrow">{compra.folio}</p>
+                            <h4>{formatCurrency(compra.total)}</h4>
+                            <p>{formatDateTime(compra.fecha)}</p>
+                          </div>
+                          <div className="purchase-history-badges">
+                            <span>{compra.estado}</span>
+                            <span>{compra.metodo_pago}</span>
+                            <span>{compra.articulos} artículo(s)</span>
+                          </div>
+                        </div>
+
+                        <div className="purchase-history-meta">
+                          <span>Tienda: {compra.tienda ?? "Asignada automáticamente"}</span>
+                        </div>
+
+                        <div className="purchase-history-actions">
+                          <button
+                            type="button"
+                            className="inventory-secondary-button inventory-table-button"
+                            onClick={() => descargarFactura(compra.id_venta)}
+                            disabled={descargandoFacturaId === compra.id_venta}
+                          >
+                            {descargandoFacturaId === compra.id_venta ? "Descargando..." : "Descargar factura"}
+                          </button>
+                        </div>
+
+                        <div className="purchase-history-items">
+                          {compra.detalles.map((detalle) => (
+                            <div key={`${compra.id_venta}-${detalle.producto_id}`} className="purchase-history-item">
+                              <div>
+                                <strong>{detalle.nombre}</strong>
+                                <p>{detalle.cantidad} x {formatCurrency(detalle.precio_unitario)}</p>
+                              </div>
+                              <strong>{formatCurrency(detalle.subtotal)}</strong>
+                            </div>
+                          ))}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </section>
+          ) : null}
         </div>
       </section>
 

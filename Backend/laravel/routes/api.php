@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Route;
 Route::prefix('v1')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'login']);
     Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword']);
+    Route::post('/auth/register-buyer', [ClientesController::class, 'registrar']);
     Route::post('/usuarios/registrar', [UsuariosController::class, 'registrar']);
 
     Route::middleware('auth:sanctum')->group(function () {
@@ -28,6 +29,8 @@ Route::prefix('v1')->group(function () {
         Route::get('/productos/{idProducto}', [ProductosController::class, 'leer'])->whereNumber('idProducto');
 
         Route::middleware('role:Administrador,Super Admin,Vendedor,Comprador')->group(function () {
+            Route::get('/ventas/historial', [VentasController::class, 'historial']);
+            Route::get('/ventas/{idVenta}/factura', [VentasController::class, 'factura'])->whereNumber('idVenta');
             Route::post('/ventas/registrar', [VentasController::class, 'registrar']);
         });
 
@@ -92,4 +95,3 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/inventario', [DashboardDataController::class, 'inventario']);
     });
 });
-

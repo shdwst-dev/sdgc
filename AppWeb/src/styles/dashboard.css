@@ -192,6 +192,225 @@ body {
   font-size: 12px;
 }
 
+.purchase-history-trigger {
+  position: relative;
+  align-self: flex-start;
+}
+
+.purchase-history-popover {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: min(720px, calc(100vw - 48px));
+  max-height: min(70vh, 760px);
+  overflow-y: auto;
+  z-index: 20;
+  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.14);
+}
+
+.purchase-info-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.purchase-info-header h3 {
+  margin: 0 0 6px;
+}
+
+.purchase-info-header p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.purchase-info-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.purchase-info-tab {
+  border: 1px solid rgba(21, 67, 143, 0.14);
+  background: #ffffff;
+  color: var(--text-strong);
+  border-radius: 999px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.purchase-info-tab-active {
+  background: var(--brand-900);
+  border-color: var(--brand-900);
+  color: #ffffff;
+}
+
+.purchase-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.purchase-info-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 14px;
+}
+
+.purchase-edit-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(21, 67, 143, 0.14);
+  background: #ffffff;
+  color: var(--text-strong);
+  border-radius: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.purchase-edit-button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.purchase-info-card {
+  border: 1px solid rgba(21, 67, 143, 0.12);
+  border-radius: 16px;
+  padding: 16px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.purchase-info-card span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.purchase-info-card input {
+  width: 100%;
+  height: 42px;
+  border: 1px solid #cfd5df;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 0 14px;
+  outline: none;
+  font-size: 14px;
+  color: var(--text-strong);
+}
+
+.purchase-info-card input:disabled {
+  background: #f8fafc;
+  color: #64748b;
+  cursor: not-allowed;
+}
+
+.purchase-info-card input:focus {
+  border-color: #94a3b8;
+}
+
+.purchase-info-card strong {
+  color: var(--text-strong);
+  line-height: 1.45;
+}
+
+.purchase-info-card-wide {
+  grid-column: 1 / -1;
+}
+
+.purchase-info-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.purchase-history-list {
+  display: grid;
+  gap: 16px;
+}
+
+.purchase-history-card {
+  border: 1px solid rgba(21, 67, 143, 0.12);
+  border-radius: 18px;
+  padding: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.purchase-history-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.purchase-history-card-top h4 {
+  margin: 4px 0;
+  font-size: 24px;
+}
+
+.purchase-history-card-top p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.purchase-history-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.purchase-history-badges span {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--brand-050);
+  color: var(--brand-900);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.purchase-history-meta {
+  margin-top: 12px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+.purchase-history-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.purchase-history-items {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.purchase-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(247, 250, 252, 0.95);
+}
+
+.purchase-history-item p,
+.purchase-history-empty {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+}
+
 .dashboard-user-dropdown {
   position: absolute;
   top: calc(100% + 10px);
@@ -2014,6 +2233,21 @@ tbody tr:hover {
   .inventory-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .purchase-history-trigger {
+    align-self: stretch;
+  }
+
+  .purchase-history-popover {
+    position: static;
+    width: 100%;
+    max-height: none;
+    margin-top: 12px;
+  }
+
+  .purchase-info-grid {
+    grid-template-columns: 1fr;
   }
 
   .inventory-filters {

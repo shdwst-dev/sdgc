@@ -250,8 +250,15 @@ export default function Inicio() {
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
-              <TouchableOpacity onPress={() => setShowSearchModal(false)}>
-                <X size={20} color="#64748B" />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} style={{ marginRight: 8 }}>
+                  <View style={{ backgroundColor: '#E2E8F0', borderRadius: 12, padding: 4 }}>
+                    <X size={14} color="#64748B" />
+                  </View>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={() => { setShowSearchModal(false); setSearchQuery(''); }}>
+                <Text style={{ color: '#0f2f6f', fontWeight: '700' }}>Cerrar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -260,23 +267,36 @@ export default function Inicio() {
             {isSearching ? (
               <ActivityIndicator style={{ marginTop: 40 }} color="#0f2f6f" />
             ) : searchSuggestions.length > 0 ? (
-              searchSuggestions.map(item => (
+              <View>
+                {searchSuggestions.map(item => (
+                  <TouchableOpacity 
+                    key={item.id} 
+                    style={styles.searchResultItem}
+                    onPress={() => {
+                      navigation.navigate('DetalleProducto', { idProducto: item.id });
+                      setShowSearchModal(false);
+                    }}
+                  >
+                    <Image source={{ uri: getProductImage(item.nombre, item.imagen_url) }} style={styles.searchResultImg} />
+                    <View style={styles.searchResultInfo}>
+                      <Text style={styles.searchResultName}>{item.nombre}</Text>
+                      <Text style={styles.searchResultPrice}>${item.precio_unitario.toLocaleString()}</Text>
+                    </View>
+                    <ChevronRight size={18} color="#CBD5E1" />
+                  </TouchableOpacity>
+                ))}
                 <TouchableOpacity 
-                  key={item.id} 
-                  style={styles.searchResultItem}
+                  style={{ marginTop: 16, padding: 14, backgroundColor: '#F1F5F9', borderRadius: 12, alignItems: 'center' }}
                   onPress={() => {
-                    navigation.navigate('DetalleProducto', { idProducto: item.id });
+                    const currentQuery = searchQuery;
                     setShowSearchModal(false);
+                    setSearchQuery('');
+                    navigation.navigate('BuscarTab' as any, { query: currentQuery } as any);
                   }}
                 >
-                  <Image source={{ uri: getProductImage(item.nombre, item.imagen_url) }} style={styles.searchResultImg} />
-                  <View style={styles.searchResultInfo}>
-                    <Text style={styles.searchResultName}>{item.nombre}</Text>
-                    <Text style={styles.searchResultPrice}>${item.precio_unitario.toLocaleString()}</Text>
-                  </View>
-                  <ChevronRight size={18} color="#CBD5E1" />
+                  <Text style={{ color: '#0f2f6f', fontWeight: '700', fontSize: 14 }}>Ver todos los resultados</Text>
                 </TouchableOpacity>
-              ))
+              </View>
             ) : searchQuery.length > 0 ? (
               <View style={styles.noResults}>
                 <Text style={styles.noResultsText}>No encontramos resultados para "{searchQuery}"</Text>

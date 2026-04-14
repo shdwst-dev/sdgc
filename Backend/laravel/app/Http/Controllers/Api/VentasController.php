@@ -363,21 +363,7 @@ class VentasController extends Controller
 
     private function resolveUserStoreId(Request $request, ?int $userId = null): ?int
     {
-        $resolvedUserId = $request->user()?->id_usuario ?? $userId;
-
-        if (!$resolvedUserId) {
-            return null;
-        }
-
-        if ($this->isSuperAdmin($request)) {
-            return null;
-        }
-
-        $storeId = DB::table('tiendas_empleados')
-            ->where('id_empleado', $resolvedUserId)
-            ->value('id_tienda');
-
-        return $storeId ? (int) $storeId : null;
+        return 1; // Fuerza siempre la tienda central para evitar conflictos móviles/web.
     }
 
     private function storeCanFulfillDetails(int $storeId, array $detalles): bool

@@ -3,7 +3,7 @@ import Layout from "./layout";
 import "../styles/dashboard.css";
 import { useApiData } from "../hooks/useApiData";
 import { formatCurrency } from "../lib/format";
-import { deleteApi, postApi, putApi } from "../lib/api";
+import { deleteApi, postApi, putApi, getAssetUrl } from "../lib/api";
 
 type ProductoInventario = {
   id_producto: number;
@@ -486,7 +486,7 @@ export default function Inventario() {
           {nuevoProducto.imagen_url ? (
             <div className="inventory-image-preview">
               <span className="detail-section-label">Vista previa</span>
-              <img src={nuevoProducto.imagen_url} alt="Vista previa del producto" className="inventory-image-preview-tag" />
+              <img src={getAssetUrl(nuevoProducto.imagen_url)} alt="Vista previa del producto" className="inventory-image-preview-tag" />
             </div>
           ) : null}
 
@@ -649,7 +649,7 @@ export default function Inventario() {
                 {productoEditable.imagen_url ? (
                   <div className="inventory-image-preview">
                     <span className="detail-section-label">Vista previa</span>
-                    <img src={productoEditable.imagen_url} alt="Vista previa del producto" className="inventory-image-preview-tag" />
+                    <img src={getAssetUrl(productoEditable.imagen_url)} alt="Vista previa del producto" className="inventory-image-preview-tag" />
                   </div>
                 ) : null}
 

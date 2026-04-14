@@ -106,9 +106,8 @@ class ProductosController extends Controller
                 $file = $request->file('imagen');
                 $filename = 'prod_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
                 $file->move(public_path('productos'), $filename);
-                // Usamos ruta absoluta para que el móvil la vea siempre
-                $baseUrl = $request->getSchemeAndHttpHost();
-                $imageUrl = $baseUrl . '/productos/' . $filename;
+                // Usamos ruta relativa para que funcione sin importar la IP
+                $imageUrl = '/productos/' . $filename;
             }
 
             DB::transaction(function () use ($request, $data, $imageUrl) {
@@ -194,8 +193,7 @@ class ProductosController extends Controller
                     if (file_exists($oldPath)) @unlink($oldPath);
                 }
 
-                $baseUrl = $request->getSchemeAndHttpHost();
-                $imageUrl = $baseUrl . '/productos/' . $filename;
+                $imageUrl = '/productos/' . $filename;
             }
 
             $storeId = array_key_exists('id_tienda', $data) && $data['id_tienda'] !== null
@@ -448,21 +446,7 @@ class ProductosController extends Controller
 
     private function resolveUserStoreId(Request $request): ?int
     {
-        $userId = $request->user()?->id_usuario;
-
-        if (!$userId) {
-            return null;
-        }
-
-        if ($this->isSuperAdmin($request)) {
-            return null;
-        }
-
-        $storeId = DB::table('tiendas_empleados')
-            ->where('id_empleado', $userId)
-            ->value('id_tienda');
-
-        return $storeId ? (int) $storeId : null;
+        return 1; // Fuerza siempre la tienda central para evitar conflictos móviles/web.
     }
 
     private function isSuperAdmin(Request $request): bool

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList, Dimensions, Alert, ActivityIndicator, TextInput, Modal, StatusBar, Platform } from 'react-native';
-import { Search, X, ShoppingCart, Star, MapPin, Package, RefreshCw, ChevronRight, Bell, Gift } from 'lucide-react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, ActivityIndicator, TextInput, Modal, StatusBar, Platform } from 'react-native';
+import { Search, X, ShoppingCart, Package, ChevronRight, Gift } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -12,12 +12,6 @@ import { useToast } from '../../components/Toast';
 
 const { width } = Dimensions.get('window');
 const columnWidth = (width - 48) / 2;
-
-
-const banners = [
-  { id: 1, image: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800', title: 'Venta de Temporada', subtitle: 'Hasta 50% OFF', color: '#4F46E5' },
-  { id: 2, image: 'https://images.unsplash.com/photo-1607082350899-7e105aa886ae?w=800', title: 'Tecnología Pro', subtitle: 'Nuevos Gadgets', color: '#0F172A' },
-];
 
 const getProductImage = (nombre: string, imagenUrl?: string | null): string => {
   if (imagenUrl && imagenUrl.includes('http')) return imagenUrl;
@@ -157,10 +151,6 @@ export default function Inicio() {
               <Text style={styles.welcomeText}>Hola, {userName} 👋</Text>
               <Text style={styles.appName}>Tienda Departamental</Text>
             </View>
-            <TouchableOpacity style={styles.notificationBtn}>
-              <Bell size={22} color="#FFF" />
-              <View style={styles.notificationBadge} />
-            </TouchableOpacity>
           </View>
 
           <TouchableOpacity 
@@ -172,28 +162,6 @@ export default function Inicio() {
             <Text style={styles.searchPlaceholder}>¿Qué estás buscando hoy?</Text>
           </TouchableOpacity>
         </LinearGradient>
-
-        <View style={styles.contentBody}>
-          {/* Banners */}
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false} 
-            pagingEnabled 
-            style={styles.bannersSection}
-          >
-            {banners.map(banner => (
-              <View key={banner.id} style={styles.bannerWrapper}>
-                <Image source={{ uri: banner.image }} style={styles.bannerImg} />
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.8)']}
-                  style={styles.bannerTextOverlay}
-                >
-                  <Text style={styles.bannerSub}>{banner.subtitle}</Text>
-                  <Text style={styles.bannerTtl}>{banner.title}</Text>
-                </LinearGradient>
-              </View>
-            ))}
-          </ScrollView>
 
           {/* Último Pedido - Estilo Dinámico */}
           {ultimoPedido && (
@@ -234,7 +202,6 @@ export default function Inicio() {
               {productos.map(item => renderProduct(item))}
             </View>
           </View>
-        </View>
       </ScrollView>
 
       {/* Search Modal Refactorizado */}

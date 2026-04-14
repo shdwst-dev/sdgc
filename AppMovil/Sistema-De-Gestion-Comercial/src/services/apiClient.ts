@@ -29,18 +29,8 @@ function resolveApiBaseUrl(): string {
 
   try {
     const parsed = new URL(configuredUrl);
-    const localhostHosts = new Set(['localhost', '127.0.0.1']);
-
-    if (Platform.OS === 'android' && localhostHosts.has(parsed.hostname)) {
-      parsed.hostname = '10.0.2.2';
-      return parsed.toString().replace(/\/$/, '');
-    }
-
-    if (Platform.OS === 'web' && parsed.hostname === '10.0.2.2') {
-      parsed.hostname = 'localhost';
-      return parsed.toString().replace(/\/$/, '');
-    }
-
+    // Si hay una URL en .env (ej. localhost), la respetamos tal cual.
+    // Esto permite usar el puente USB `adb reverse tcp:8000 tcp:8000` en Android físico.
     return configuredUrl.replace(/\/$/, '');
   } catch {
     return fallback;

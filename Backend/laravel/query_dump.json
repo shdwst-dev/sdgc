@@ -1,0 +1,13 @@
+{
+    "id_producto": 1,
+    "id_subcategoria": 1,
+    "nombre": "Samsung Galaxy A54",
+    "codigo_barras": "7501234567890",
+    "precio_base": "5000.00",
+    "precio_unitario": "6500.00",
+    "id_estatus": 1,
+    "imagen_url": "http:\/\/192.168.100.48:8000\/productos\/prod_1776045028_69dc4be4b0f48.png",
+    "categoria": "Smartphones",
+    "stock_actual": 24,
+    "stock_minimo": 5
+}

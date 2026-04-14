@@ -1,0 +1,135 @@
+[
+    {
+        "id_stock": 4,
+        "id_tienda": 1,
+        "id_producto": 4,
+        "stock_minimo": 20,
+        "stock_actual": 100
+    },
+    {
+        "id_stock": 9,
+        "id_tienda": 3,
+        "id_producto": 8,
+        "stock_minimo": 20,
+        "stock_actual": 90
+    },
+    {
+        "id_stock": 17,
+        "id_tienda": 1,
+        "id_producto": 8,
+        "stock_minimo": 20,
+        "stock_actual": 30
+    },
+    {
+        "id_stock": 18,
+        "id_tienda": 1,
+        "id_producto": 9,
+        "stock_minimo": 5,
+        "stock_actual": 5
+    },
+    {
+        "id_stock": 5,
+        "id_tienda": 1,
+        "id_producto": 5,
+        "stock_minimo": 15,
+        "stock_actual": 79
+    },
+    {
+        "id_stock": 19,
+        "id_tienda": 1,
+        "id_producto": 7,
+        "stock_minimo": 2,
+        "stock_actual": 3
+    },
+    {
+        "id_stock": 3,
+        "id_tienda": 1,
+        "id_producto": 3,
+        "stock_minimo": 10,
+        "stock_actual": 48
+    },
+    {
+        "id_stock": 2,
+        "id_tienda": 1,
+        "id_producto": 2,
+        "stock_minimo": 3,
+        "stock_actual": 11
+    },
+    {
+        "id_stock": 12,
+        "id_tienda": 2,
+        "id_producto": 3,
+        "stock_minimo": 10,
+        "stock_actual": 48
+    },
+    {
+        "id_stock": 7,
+        "id_tienda": 2,
+        "id_producto": 6,
+        "stock_minimo": 30,
+        "stock_actual": 110
+    },
+    {
+        "id_stock": 15,
+        "id_tienda": 1,
+        "id_producto": 6,
+        "stock_minimo": 30,
+        "stock_actual": 244
+    },
+    {
+        "id_stock": 6,
+        "id_tienda": 2,
+        "id_producto": 1,
+        "stock_minimo": 5,
+        "stock_actual": 0
+    },
+    {
+        "id_stock": 8,
+        "id_tienda": 2,
+        "id_producto": 7,
+        "stock_minimo": 25,
+        "stock_actual": 119
+    },
+    {
+        "id_stock": 16,
+        "id_tienda": 1,
+        "id_producto": 10,
+        "stock_minimo": 0,
+        "stock_actual": 0
+    },
+    {
+        "id_stock": 1,
+        "id_tienda": 1,
+        "id_producto": 1,
+        "stock_minimo": 5,
+        "stock_actual": 24
+    },
+    {
+        "id_stock": 13,
+        "id_tienda": 2,
+        "id_producto": 11,
+        "stock_minimo": 3,
+        "stock_actual": 996
+    },
+    {
+        "id_stock": 11,
+        "id_tienda": 1,
+        "id_producto": 11,
+        "stock_minimo": 3,
+        "stock_actual": 17
+    },
+    {
+        "id_stock": 10,
+        "id_tienda": 3,
+        "id_producto": 9,
+        "stock_minimo": 2,
+        "stock_actual": 4
+    },
+    {
+        "id_stock": 14,
+        "id_tienda": 2,
+        "id_producto": 9,
+        "stock_minimo": 0,
+        "stock_actual": 49
+    }
+]

@@ -1,0 +1,47 @@
+[
+    {
+        "id_tienda_empleado": 1,
+        "id_tienda": 1,
+        "id_empleado": 1
+    },
+    {
+        "id_tienda_empleado": 2,
+        "id_tienda": 1,
+        "id_empleado": 3
+    },
+    {
+        "id_tienda_empleado": 3,
+        "id_tienda": 1,
+        "id_empleado": 4
+    },
+    {
+        "id_tienda_empleado": 4,
+        "id_tienda": 2,
+        "id_empleado": 2
+    },
+    {
+        "id_tienda_empleado": 5,
+        "id_tienda": 2,
+        "id_empleado": 6
+    },
+    {
+        "id_tienda_empleado": 6,
+        "id_tienda": 3,
+        "id_empleado": 5
+    },
+    {
+        "id_tienda_empleado": 7,
+        "id_tienda": 3,
+        "id_empleado": 7
+    },
+    {
+        "id_tienda_empleado": 8,
+        "id_tienda": 4,
+        "id_empleado": 8
+    },
+    {
+        "id_tienda_empleado": 9,
+        "id_tienda": 5,
+        "id_empleado": 10
+    }
+]

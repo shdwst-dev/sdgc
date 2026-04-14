@@ -58,8 +58,8 @@ export default function DetalleProducto() {
       };
       await addToCarritoLocal(compradorProd, 1);
       showToast({ message: `📦 ${producto.nombre} añadido`, type: 'success' });
-    } catch (error) {
-      showToast({ message: 'No se pudo agregar', type: 'error' });
+    } catch (error: any) {
+      showToast({ message: error?.message || 'No se pudo agregar', type: 'error' });
     } finally {
       setIsAdding(false);
     }

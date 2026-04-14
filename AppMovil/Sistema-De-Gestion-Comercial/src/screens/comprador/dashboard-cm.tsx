@@ -76,8 +76,8 @@ export default function Inicio() {
     try {
       await addToCarritoLocal(product, 1);
       showToast({ message: `🎁 ${product.nombre} añadido`, type: 'success' });
-    } catch {
-      showToast({ message: 'Error al agregar', type: 'error' });
+    } catch (error: any) {
+      showToast({ message: error?.message || 'Error al agregar', type: 'error' });
     }
   }, [showToast]);
 

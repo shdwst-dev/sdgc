@@ -348,15 +348,21 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {ventasRecientesData.ventas_recientes.map((venta) => (
-                <tr key={venta.factura}>
-                  <td>{venta.factura}</td>
-                  <td>{venta.cliente}</td>
-                  <td>{venta.responsable}</td>
-                  <td>{formatCurrency(venta.monto)}</td>
-                  <td>{formatDate(venta.fecha)}</td>
+              {ventasRecientesData.ventas_recientes.length > 0 ? (
+                ventasRecientesData.ventas_recientes.map((venta) => (
+                  <tr key={venta.factura}>
+                    <td>{venta.factura}</td>
+                    <td>{venta.cliente}</td>
+                    <td>{venta.responsable}</td>
+                    <td>{formatCurrency(venta.monto)}</td>
+                    <td>{formatDate(venta.fecha)}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={5}>No hay ventas recientes para mostrar.</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -373,14 +379,20 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {alertasStockData.alertas_stock.map((item) => (
-                <tr key={item.sku}>
-                  <td>{item.sku}</td>
-                  <td>{item.producto}</td>
-                  <td>{item.actual}</td>
-                  <td>{item.minimo}</td>
+              {alertasStockData.alertas_stock.length > 0 ? (
+                alertasStockData.alertas_stock.map((item) => (
+                  <tr key={item.sku}>
+                    <td>{item.sku}</td>
+                    <td>{item.producto}</td>
+                    <td>{item.actual}</td>
+                    <td>{item.minimo}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={4}>No hay alertas de stock activas.</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

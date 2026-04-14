@@ -100,9 +100,9 @@ function mapProducto(raw: Record<string, unknown>): Producto {
     id: Number(raw.id_producto ?? raw.id ?? 0),
     nombre: toText(raw.nombre) ?? toText(raw.producto) ?? toText(raw.name) ?? 'Producto sin nombre',
     imagen_url: ensureAbsoluteUrl(toText(raw.imagen_url as string | null)),
-    precio_unitario: Number(raw.precio_unitario ?? raw.precio_base ?? 0),
+    precio_unitario: Number(raw.precio_unitario ?? raw.precioUnitario ?? raw.precio_base ?? raw.precioBase ?? 0),
     categoria: String(raw.categoria ?? raw.nombre_subcategoria ?? raw.subcategoria ?? 'Sin categoría'),
-    stock_actual: Number(raw.stock_actual ?? raw.stock ?? 0),
+    stock_actual: Number(raw.stock_actual ?? raw.stockActual ?? raw.stock ?? 0),
   };
 }
 

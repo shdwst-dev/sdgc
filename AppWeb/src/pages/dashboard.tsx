@@ -334,57 +334,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      <section className="tables-grid">
-        <div className="panel">
-          <h4>Ventas recientes</h4>
-          <table>
-            <thead>
-              <tr>
-                <th>Factura</th>
-                <th>Cliente</th>
-                <th>Responsable</th>
-                <th>Monto</th>
-                <th>Fecha</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ventasRecientesData.ventas_recientes.map((venta) => (
-                <tr key={venta.factura}>
-                  <td>{venta.factura}</td>
-                  <td>{venta.cliente}</td>
-                  <td>{venta.responsable}</td>
-                  <td>{formatCurrency(venta.monto)}</td>
-                  <td>{formatDate(venta.fecha)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
 
-        <div className="panel">
-          <h4>Alertas de bajo stock</h4>
-          <table>
-            <thead>
-              <tr>
-                <th>SKU</th>
-                <th>Producto</th>
-                <th>Actual</th>
-                <th>Mínimo</th>
-              </tr>
-            </thead>
-            <tbody>
-              {alertasStockData.alertas_stock.map((item) => (
-                <tr key={item.sku}>
-                  <td>{item.sku}</td>
-                  <td>{item.producto}</td>
-                  <td>{item.actual}</td>
-                  <td>{item.minimo}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
 
       {loading ? <p className="panel">Cargando informacion del dashboard...</p> : null}
       {error ? <p className="panel">Error al cargar datos: {error}</p> : null}

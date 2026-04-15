@@ -26,7 +26,6 @@ class VentasController extends Controller
         $ventas = DB::table('ventas as v')
             ->leftJoin('metodos_pago as mp', 'mp.id_metodo_pago', '=', 'v.id_metodo_pago')
             ->leftJoin('estatus as e', 'e.id_estatus', '=', 'v.id_estatus')
-            ->leftJoin('tiendas as t', 't.id_tienda', '=', 'v.id_tienda')
             ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'v.id_venta')
             ->where('v.id_usuario', $userId)
             ->select(
@@ -34,11 +33,10 @@ class VentasController extends Controller
                 'v.fecha_hora',
                 'mp.nombre as metodo_pago',
                 'e.nombre as estado',
-                't.nombre as tienda',
                 DB::raw('COALESCE(SUM(dv.cantidad * dv.precio_unitario), 0) as total'),
                 DB::raw('COALESCE(SUM(dv.cantidad), 0) as articulos')
             )
-            ->groupBy('v.id_venta', 'v.fecha_hora', 'mp.nombre', 'e.nombre', 't.nombre')
+            ->groupBy('v.id_venta', 'v.fecha_hora', 'mp.nombre', 'e.nombre')
             ->orderByDesc('v.fecha_hora')
             ->get();
 
@@ -64,7 +62,7 @@ class VentasController extends Controller
                 'fecha' => $venta->fecha_hora,
                 'metodo_pago' => $venta->metodo_pago ?? 'Sin método',
                 'estado' => $venta->estado ?? 'Sin estado',
-                'tienda' => $venta->tienda,
+                'tienda' => null,
                 'articulos' => (int) $venta->articulos,
                 'total' => (float) $venta->total,
                 'detalles' => ($detalles->get($venta->id_venta) ?? collect())

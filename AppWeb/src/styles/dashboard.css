@@ -1541,7 +1541,7 @@ body {
   color: #6b7280;
 }
 
-.sales-product-meta h4 {
+.sales-product-card .sales-product-meta h4 {
   margin: 0 0 8px;
   font-size: 22px;
   font-weight: 500;

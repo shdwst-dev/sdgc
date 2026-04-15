@@ -1,6 +1,6 @@
 export type ProductoVenta = {
   id_producto: number;
-  sku: string;
+  sku?: string | null;
   nombre: string;
   imagen?: string | null;
   precio: number;

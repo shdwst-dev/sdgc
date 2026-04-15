@@ -1,4 +1,5 @@
 import { formatCurrency } from "../../lib/format";
+import { getAssetUrl } from "../../lib/api";
 import type { ProductoVenta } from "./types";
 
 const hpImageUrl = "https://i.postimg.cc/W4hPK4y4/HP.png";
@@ -70,7 +71,7 @@ export function ProductCatalog({
       return manzanaImageUrl;
     }
 
-    return producto.imagen;
+    return getAssetUrl(producto.imagen);
   };
 
   const resolveImageStyle = (producto: ProductoVenta) => {
@@ -105,14 +106,14 @@ export function ProductCatalog({
 
               return (
                 <article
-                  key={producto.sku}
+                  key={producto.id_producto}
                   className={`sales-product-card ${stockDisponible > 0 ? "sales-product-card-clickable" : "sales-product-card-disabled"}`}
                 >
                   <div className="sales-product-image">
                     {imageUrl ? <img src={imageUrl} alt={producto.nombre} className="sales-product-image-tag" style={imageStyle} /> : "Imagen del producto"}
                   </div>
                   <div className="sales-product-meta">
-                    <span className="sales-product-sku">{producto.sku}</span>
+                    <span className="sales-product-sku">{producto.sku ?? "Sin SKU"}</span>
                     <h4>{producto.nombre}</h4>
                     <div className="sales-product-row">
                       <strong>{formatCurrency(producto.precio)}</strong>

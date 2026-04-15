@@ -286,8 +286,8 @@ export default function ComprasCliente() {
     }
 
     return productosDisponibles.filter((producto) =>
-      producto.nombre.toLowerCase().includes(query) ||
-      producto.sku.toLowerCase().includes(query),
+      (producto.nombre ?? "").toLowerCase().includes(query) ||
+      (producto.sku ?? "").toLowerCase().includes(query),
     );
   }, [busqueda, productos, productosOcultos]);
 

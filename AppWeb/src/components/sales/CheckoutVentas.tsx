@@ -45,7 +45,7 @@ export function SaleCheckout({
       <aside className="panel sales-cart sales-cart-placeholder">
         <div className="sales-placeholder-content">
           <h3>Selecciona un producto</h3>
-          <p>Cuando des clic en uno del catalogo, aqui aparecera todo lo necesario para completar la venta.</p>
+          <p>Cuando des clic en uno del catálogo, aquí aparecerá todo lo necesario para completar la venta.</p>
         </div>
       </aside>
     );
@@ -56,7 +56,7 @@ export function SaleCheckout({
       <div className="sales-cart-topbar">
         <h3>Completar venta</h3>
         <button type="button" className="inventory-secondary-button" onClick={onOcultarCheckout}>
-          Ver mas productos
+          Ver más productos
         </button>
       </div>
 
@@ -75,7 +75,7 @@ export function SaleCheckout({
       </div>
 
       <div className="sales-cart-header">
-        <h4>Articulos seleccionados</h4>
+        <h4>Artículos seleccionados</h4>
       </div>
 
       <div className="sales-cart-items">
@@ -120,9 +120,9 @@ export function SaleCheckout({
       </div>
 
       <div className="sales-payment-block">
-        <label htmlFor="metodo-pago">Metodo de pago</label>
+        <label htmlFor="metodo-pago">Método de pago</label>
         <select id="metodo-pago" value={metodoPagoSeleccionado} onChange={(e) => onMetodoPagoChange(e.target.value)}>
-          <option value="">Selecciona un metodo</option>
+          <option value="">Selecciona un método</option>
           {metodosPago.map((metodo) => (
             <option key={metodo.id_metodo_pago} value={metodo.id_metodo_pago}>
               {metodo.nombre}

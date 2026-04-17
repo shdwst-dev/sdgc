@@ -138,7 +138,7 @@ export function ProductCatalog({
           </div>
         ) : (
           <div className="sales-empty-state">
-            Selecciona una tienda para habilitar el catalogo de productos.
+            Selecciona una tienda para habilitar el catálogo de productos.
           </div>
         )}
       </div>

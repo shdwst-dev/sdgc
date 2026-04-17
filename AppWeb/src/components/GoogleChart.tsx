@@ -28,7 +28,7 @@ let googleChartsPromise: Promise<void> | null = null;
 
 function waitForGoogleVisualization() {
   if (!window.google?.charts) {
-    return Promise.reject(new Error("Google Charts no esta disponible."));
+    return Promise.reject(new Error("Google Charts no está disponible."));
   }
 
   return new Promise<void>((resolve) => {
@@ -57,7 +57,7 @@ function loadGoogleCharts() {
     script.async = true;
     script.onload = () => {
       if (!window.google?.charts) {
-        reject(new Error("Google Charts no se cargo correctamente."));
+        reject(new Error("Google Charts no se cargó correctamente."));
         return;
       }
 
@@ -84,7 +84,7 @@ export function GoogleChart({
   data,
   options,
   className = "google-chart",
-  emptyMessage = "No hay datos disponibles para esta grafica.",
+  emptyMessage = "No hay datos disponibles para esta gráfica.",
   onImageUriChange,
 }: GoogleChartProps) {
   const chartRef = useRef<HTMLDivElement | null>(null);

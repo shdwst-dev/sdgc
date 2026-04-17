@@ -57,7 +57,7 @@ export function GoogleChartView({
   data,
   options = {},
   height = 220,
-  emptyMessage = 'No hay datos disponibles para esta grafica.',
+  emptyMessage = 'No hay datos disponibles para esta gráfica.',
 }: GoogleChartViewProps) {
   const html = useMemo(() => buildChartHtml(type, data, options), [type, data, options]);
 
@@ -107,4 +107,3 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
-

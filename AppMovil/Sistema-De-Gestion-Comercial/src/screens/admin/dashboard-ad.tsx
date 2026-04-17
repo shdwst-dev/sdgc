@@ -72,7 +72,7 @@ export default function DashboardAdmin() {
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
         await clearToken();
-        Alert.alert('Sesion expirada', 'Inicia sesion nuevamente.');
+        Alert.alert('Sesión expirada', 'Inicia sesión nuevamente.');
         goToLogin();
         return;
       }
@@ -123,11 +123,11 @@ export default function DashboardAdmin() {
 
   const flujoChartData = useMemo<(string | number)[][]>(() => {
     if (!filteredFlow.labels.length) {
-      return [['Dia', 'Ingresos', 'Gastos']];
+      return [['Día', 'Ingresos', 'Gastos']];
     }
 
     return [
-      ['Dia', 'Ingresos', 'Gastos'],
+      ['Día', 'Ingresos', 'Gastos'],
       ...filteredFlow.labels.map((label, index) => [
         label,
         filteredFlow.ingresos[index] ?? 0,

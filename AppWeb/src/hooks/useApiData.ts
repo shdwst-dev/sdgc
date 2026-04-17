@@ -20,7 +20,7 @@ export function useApiData<T>(path: string, initialData: T) {
         }
       } catch (err) {
         if (active) {
-          setError(err instanceof Error ? err.message : "No fue posible cargar la informacion.");
+          setError(err instanceof Error ? err.message : "No fue posible cargar la información.");
         }
       } finally {
         if (active) {

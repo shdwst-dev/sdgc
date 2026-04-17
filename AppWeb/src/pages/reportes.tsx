@@ -82,7 +82,7 @@ export default function Reportes() {
 
   const reportFlowChartData = useMemo(
     () => [
-      ["Dia", "Ventas", "Costos", "Utilidad"],
+      ["Día", "Ventas", "Costos", "Utilidad"],
       ...data.flujo_periodo.labels.map((label, index) => [
         label,
         data.flujo_periodo.ingresos[index] ?? 0,
@@ -94,7 +94,7 @@ export default function Reportes() {
   );
   const ingresosChartData = useMemo(
     () => [
-      ["Dia", "Ingresos"],
+      ["Día", "Ingresos"],
       ...ingresosVsGastosData.series.labels.map((label, index) => [
         label,
         ingresosVsGastosData.series.ingresos[index] ?? 0,
@@ -104,7 +104,7 @@ export default function Reportes() {
   );
   const gastosChartData = useMemo(
     () => [
-      ["Dia", "Gastos"],
+      ["Día", "Gastos"],
       ...ingresosVsGastosData.series.labels.map((label, index) => [
         label,
         ingresosVsGastosData.series.gastos[index] ?? 0,
@@ -218,7 +218,7 @@ export default function Reportes() {
         fileName,
       });
     } catch {
-      setDescargaError("No fue posible generar el PDF de la grafica.");
+      setDescargaError("No fue posible generar el PDF de la gráfica.");
     } finally {
       setDescargandoGrafica(null);
     }
@@ -308,7 +308,7 @@ export default function Reportes() {
                 "Utilidad a lo largo del tiempo",
                 "Ventas, costos y utilidad del periodo",
                 "reporte-utilidad-tiempo.pdf",
-                ["Dia", "Ventas", "Costos", "Utilidad"],
+                ["Día", "Ventas", "Costos", "Utilidad"],
                 utilidadRows,
                 [
                   { label: "Ventas", value: formatCurrency(data.metricas.ventas_totales) },
@@ -360,7 +360,7 @@ export default function Reportes() {
                 "Ingresos",
                 "Comportamiento de ingresos del periodo",
                 "reporte-ingresos.pdf",
-                ["Dia", "Ingresos"],
+                ["Día", "Ingresos"],
                 ingresosRows,
                 [{ label: "Total ingresos", value: formatCurrency(ingresosVsGastosData.totales.ingresos) }],
               )
@@ -389,7 +389,7 @@ export default function Reportes() {
             lineWidth: 3,
             pointSize: 5,
           }}
-          emptyMessage={loadingIngresosVsGastos ? "Cargando grafica..." : "No hay datos de ingresos para este periodo."}
+          emptyMessage={loadingIngresosVsGastos ? "Cargando gráfica..." : "No hay datos de ingresos para este periodo."}
         />
       </section>
 
@@ -408,7 +408,7 @@ export default function Reportes() {
                 "Gastos",
                 "Comportamiento de gastos del periodo",
                 "reporte-gastos.pdf",
-                ["Dia", "Gastos"],
+                ["Día", "Gastos"],
                 gastosRows,
                 [{ label: "Total gastos", value: formatCurrency(ingresosVsGastosData.totales.gastos) }],
               )
@@ -437,14 +437,14 @@ export default function Reportes() {
             lineWidth: 3,
             pointSize: 5,
           }}
-          emptyMessage={loadingIngresosVsGastos ? "Cargando grafica..." : "No hay datos de gastos para este periodo."}
+          emptyMessage={loadingIngresosVsGastos ? "Cargando gráfica..." : "No hay datos de gastos para este periodo."}
         />
       </section>
 
       <section className="panel reportes-panel-grafica">
         <div className="reportes-encabezado-grafica">
           <div>
-            <h4>Productos mas vendidos</h4>
+            <h4>Productos más vendidos</h4>
             <small>{productosMasVendidosData.periodo_referencia.mes || data.periodo_referencia.mes}</small>
           </div>
           <button
@@ -453,7 +453,7 @@ export default function Reportes() {
             onClick={() =>
               descargarGrafica(
                 "productos",
-                "Productos mas vendidos",
+                "Productos más vendidos",
                 "Ranking de productos con mayor demanda",
                 "reporte-productos-mas-vendidos.pdf",
                 ["Producto", "Cantidad"],
@@ -482,7 +482,7 @@ export default function Reportes() {
             vAxis: { textStyle: { color: "#475569", fontSize: 11 } },
             bars: "horizontal",
           }}
-          emptyMessage={loadingProductosMasVendidos ? "Cargando grafica..." : "No hay ventas suficientes para mostrar productos mas vendidos."}
+          emptyMessage={loadingProductosMasVendidos ? "Cargando gráfica..." : "No hay ventas suficientes para mostrar productos más vendidos."}
         />
       </section>
 

@@ -121,7 +121,7 @@ export default function Ventas() {
     }
 
     if (!metodoPagoSeleccionado) {
-      setVentaError("Selecciona un metodo de pago.");
+      setVentaError("Selecciona un método de pago.");
       setVentaSuccess(null);
       return;
     }
@@ -150,7 +150,7 @@ export default function Ventas() {
       setVentaSuccess("Venta registrada correctamente.");
       localStorage.setItem("sdgc_inventory_refresh", String(Date.now()));
       window.dispatchEvent(new CustomEvent("sdgc:inventory-refresh"));
-      window.alert("Se completo la venta correctamente.");
+      window.alert("Se completó la venta correctamente.");
       setReloadKey((actual) => actual + 1);
     } catch (submitError) {
       setVentaError(submitError instanceof Error ? submitError.message : "No fue posible registrar la venta.");

@@ -218,7 +218,7 @@ export default function Facturacion() {
     <Layout>
       <section className="inventory-header">
         <div>
-          <h1>Facturacion</h1>
+          <h1>Facturación</h1>
           <p>Consulta el registro de ventas facturadas, revisa sus conceptos, exporta comprobantes y elimina registros cuando sea necesario.</p>
         </div>
       </section>
@@ -239,11 +239,11 @@ export default function Facturacion() {
               </button>
             </div>
             <div className="invoice-preview-page">
-              <div className="invoice-preview-band">FACTURA ELECTRONICA {CFDI_VERSION} (CFDI)</div>
+              <div className="invoice-preview-band">FACTURA ELECTRÓNICA {CFDI_VERSION} (CFDI)</div>
 
               <div className="invoice-preview-top">
                 <div className="invoice-preview-brand">
-                  <img src={logoPi} alt="PI Gestion" className="invoice-preview-logo" />
+                  <img src={logoPi} alt="PI Gestión" className="invoice-preview-logo" />
                     <div>
                     <h4>{ISSUER_NAME}</h4>
                     <p>RFC: {ISSUER_RFC}</p>
@@ -256,14 +256,14 @@ export default function Facturacion() {
                   <p>FACTURA:</p>
                   <strong>{facturaSeleccionada.folio}</strong>
                   <span>{facturaSeleccionada.registro_venta}</span>
-                  <small>Fecha y hora de emision:</small>
+                  <small>Fecha y hora de emisión:</small>
                   <small>{formatInvoiceDateTime(facturaSeleccionada.fecha)}</small>
                 </div>
               </div>
 
               <div className="invoice-preview-meta">
                 <div>
-                  <span>LUGAR DE EXPEDICION:</span>
+                  <span>LUGAR DE EXPEDICIÓN:</span>
                   <strong>{LUGAR_EXPEDICION}</strong>
                 </div>
                 <div>
@@ -284,8 +284,8 @@ export default function Facturacion() {
                     <strong>{getReceiverName(facturaSeleccionada.cliente)}</strong>
                     <span>RFC:</span>
                     <strong>XAXX010101000</strong>
-                    <span>Direccion:</span>
-                    <strong>Datos no disponibles en el sistema actual</strong>
+                    <span>Dirección:</span>
+                    <strong>Datos no disponibles en el sistema actual.</strong>
                     <span>Uso CFDI:</span>
                     <strong>{USO_CFDI}</strong>
                   </div>
@@ -299,7 +299,7 @@ export default function Facturacion() {
                       <th>Cantidad</th>
                       <th>Unidad</th>
                       <th>Clave</th>
-                      <th>Descripcion</th>
+                      <th>Descripción</th>
                       <th>P. unitario</th>
                       <th>Importe</th>
                     </tr>
@@ -322,7 +322,7 @@ export default function Facturacion() {
               <div className="invoice-preview-footer">
                 <div className="invoice-preview-notes">
                   <div className="invoice-preview-qr-section">
-                    <div className="invoice-preview-qr" aria-label="Codigo QR de factura">
+                    <div className="invoice-preview-qr" aria-label="Código QR de factura">
                       {qrMatrix.flatMap((row, rowIndex) =>
                         row.map((cell, columnIndex) => (
                           <span
@@ -336,15 +336,15 @@ export default function Facturacion() {
                   <div className="invoice-preview-note-grid">
                     <span>Forma de pago:</span>
                     <strong>{FORMA_PAGO}</strong>
-                    <span>Regimen fiscal:</span>
+                    <span>Régimen fiscal:</span>
                     <strong>{REGIMEN_FISCAL}</strong>
                     <span>Moneda:</span>
                     <strong>MXN - Peso Mexicano</strong>
-                    <span>Metodo de pago:</span>
+                    <span>Método de pago:</span>
                     <strong>{METODO_PAGO}</strong>
                   </div>
                   <p className="invoice-preview-legend">
-                    Esta vista es una representacion visual del CFDI con los datos actualmente disponibles en el modulo.
+                    Esta vista es una representación visual del CFDI con los datos actualmente disponibles en el módulo.
                   </p>
                 </div>
 
@@ -375,7 +375,7 @@ export default function Facturacion() {
 
               <div className="invoice-preview-bottom">
                 <span>No de serie del certificado del SAT: 00001000000500000000</span>
-                <span>Fecha y hora de certificacion: {formatInvoiceDateTime(facturaSeleccionada.fecha)}</span>
+                <span>Fecha y hora de certificación: {formatInvoiceDateTime(facturaSeleccionada.fecha)}</span>
               </div>
             </div>
           </div>
@@ -477,8 +477,8 @@ export default function Facturacion() {
         </div>
       </section>
 
-      {loading ? <p className="panel">Cargando facturacion...</p> : null}
-      {error ? <p className="panel">Error al cargar facturacion: {error}</p> : null}
+      {loading ? <p className="panel">Cargando facturación...</p> : null}
+      {error ? <p className="panel">Error al cargar facturación: {error}</p> : null}
     </Layout>
   );
 }

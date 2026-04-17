@@ -139,7 +139,7 @@ export default function Dashboard() {
 
   const flowChartData = useMemo(
     () => [
-      ["Dia", "Ingresos", "Gastos"],
+      ["Día", "Ingresos", "Gastos"],
       ...graficaFlujo.series.labels.map((label, index) => [
         label,
         graficaFlujo.series.ingresos[index] ?? 0,
@@ -245,7 +245,7 @@ export default function Dashboard() {
                 Ajustes
               </button>
               <button type="button" className="dashboard-user-dropdown-item dashboard-user-dropdown-item-danger" onClick={cerrarSesion}>
-                Cerrar sesion
+                Cerrar sesión
               </button>
             </div>
           ) : null}
@@ -398,7 +398,7 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {loading ? <p className="panel">Cargando informacion del dashboard...</p> : null}
+      {loading ? <p className="panel">Cargando información del dashboard...</p> : null}
       {error ? <p className="panel">Error al cargar datos: {error}</p> : null}
 
       {ajustesAbiertos ? (
@@ -407,7 +407,7 @@ export default function Dashboard() {
             <div className="detail-card-header">
               <div>
                 <p className="detail-section-label">Ajustes</p>
-                <h3 id="profile-modal-title">Editar informacion personal</h3>
+                <h3 id="profile-modal-title">Editar información personal</h3>
               </div>
               <button type="button" className="inventory-secondary-button" onClick={() => setAjustesAbiertos(false)}>
                 Cerrar
@@ -431,7 +431,7 @@ export default function Dashboard() {
                 <input id="profile-apellido-materno" value={perfilEditable.apellido_materno} onChange={(event) => setPerfilEditable((actual) => ({ ...actual, apellido_materno: event.target.value }))} />
               </div>
               <div className="settings-field">
-                <label htmlFor="profile-telefono">Telefono</label>
+                <label htmlFor="profile-telefono">Teléfono</label>
                 <input id="profile-telefono" value={perfilEditable.telefono} onChange={(event) => setPerfilEditable((actual) => ({ ...actual, telefono: event.target.value }))} />
               </div>
               <div className="settings-field settings-field-full">
@@ -439,9 +439,9 @@ export default function Dashboard() {
                 <input id="profile-email" type="email" value={perfilEditable.email} onChange={(event) => setPerfilEditable((actual) => ({ ...actual, email: event.target.value }))} />
               </div>
               <div className="settings-field settings-field-full">
-                <label htmlFor="profile-password">Nueva contrasena</label>
-                <input id="profile-password" type="password" placeholder="Dejala vacia si no deseas cambiarla" value={perfilEditable.contrasena} onChange={(event) => setPerfilEditable((actual) => ({ ...actual, contrasena: event.target.value }))} />
-                <small>Si la capturas, se actualizara en la base de datos.</small>
+                <label htmlFor="profile-password">Nueva contraseña</label>
+                <input id="profile-password" type="password" placeholder="Déjala vacía si no deseas cambiarla" value={perfilEditable.contrasena} onChange={(event) => setPerfilEditable((actual) => ({ ...actual, contrasena: event.target.value }))} />
+                <small>Si la capturas, se actualizará en la base de datos.</small>
               </div>
             </div>
 

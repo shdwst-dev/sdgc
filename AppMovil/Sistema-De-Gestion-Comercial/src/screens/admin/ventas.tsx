@@ -13,6 +13,8 @@ import { useToast } from '../../components/Toast';
 
 const { width } = Dimensions.get('window');
 
+const CHART_COLORS = ['#1D4ED8', '#F59E0B', '#10B981', '#EF4444', '#7C3AED', '#0EA5E9'];
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatCurrency(value: number): string {
@@ -304,11 +306,11 @@ export default function Ventas() {
           height={220}
           options={{
             backgroundColor: 'transparent',
-            colors: ['#1C273F'],
+            colors: [CHART_COLORS[0]],
             legend: { position: 'none' },
             chartArea: { left: 40, right: 10, top: 20, bottom: 40, width: '100%', height: '70%' },
-            hAxis: { slantedText: true, slantedTextAngle: 45, textStyle: { fontSize: 10 } },
-            vAxis: { minValue: 0, textStyle: { fontSize: 10 } },
+            hAxis: { slantedText: true, slantedTextAngle: 45, textStyle: { fontSize: 10, color: '#374151' } },
+            vAxis: { minValue: 0, textStyle: { fontSize: 10, color: '#374151' } },
           }}
           emptyMessage="No hay datos de tendencia."
         />
@@ -323,8 +325,8 @@ export default function Ventas() {
           options={{
             backgroundColor: 'transparent',
             pieHole: 0.5,
-            colors: ['#1C273F', '#3B4B6B', '#5A6B8A', '#8E9AAF'],
-            legend: { position: 'right', textStyle: { fontSize: 11 } },
+            colors: CHART_COLORS,
+            legend: { position: 'right', textStyle: { fontSize: 11, color: '#111827' } },
             chartArea: { left: 10, right: 10, top: 20, bottom: 20, width: '100%', height: '80%' },
           }}
           emptyMessage="No hay datos de pago."

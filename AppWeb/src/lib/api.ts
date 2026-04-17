@@ -77,6 +77,13 @@ export async function postApi<T>(path: string, payload: Record<string, unknown>)
   });
 }
 
+export async function postApiFormData<T>(path: string, formData: FormData): Promise<T> {
+  return requestApi<T>(path, {
+    method: "POST",
+    body: formData,
+  });
+}
+
 export async function putApi<T>(path: string, payload: Record<string, unknown>): Promise<T> {
   return requestApi<T>(path, {
     method: "PUT",

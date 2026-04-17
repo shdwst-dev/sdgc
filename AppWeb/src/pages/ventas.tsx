@@ -95,7 +95,7 @@ export default function Ventas() {
     );
     setTiendaSeleccionada((actual) => actual || tiendaUsuarioId || data.venta_en_curso.id_tienda?.toString() || "");
     reiniciarVenta();
-  }, [data, tiendaUsuarioId]);
+  }, [data, tiendaUsuarioId, reiniciarVenta]);
 
   const productosFiltrados = useMemo(() => {
     const query = busqueda.trim().toLowerCase();
@@ -109,7 +109,7 @@ export default function Ventas() {
 
     return productosDisponibles.filter((producto) =>
       producto.nombre.toLowerCase().includes(query) ||
-      producto.sku.toLowerCase().includes(query),
+      (producto.sku ?? "").toLowerCase().includes(query),
     );
   }, [busqueda, data.productos, productosOcultos]);
 

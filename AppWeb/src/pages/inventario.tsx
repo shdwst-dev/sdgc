@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import Layout from "./layout";
 import "../styles/dashboard.css";
 import { useApiData } from "../hooks/useApiData";
 import { formatCurrency } from "../lib/format";
-import { deleteApi, postApi, putApi, getAssetUrl } from "../lib/api";
+import { deleteApi, postApi, postApiFormData, putApi, getAssetUrl } from "../lib/api";
 
 type ProductoInventario = {
   id_producto: number;
@@ -65,6 +65,10 @@ export default function Inventario() {
     imagen_url: "",
     id_estatus: "1",
   });
+  const [imagenArchivo, setImagenArchivo] = useState<File | null>(null);
+  const [imagenPreviewLocal, setImagenPreviewLocal] = useState<string | null>(null);
+  const [nuevoImagenArchivo, setNuevoImagenArchivo] = useState<File | null>(null);
+  const [nuevoImagenPreviewLocal, setNuevoImagenPreviewLocal] = useState<string | null>(null);
   const { data, loading, error } = useApiData(`/inventario?refresh=${reloadKey}`, {
     metricas: {
       productos_activos: 0,
@@ -105,6 +109,22 @@ export default function Inventario() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (imagenPreviewLocal) {
+        URL.revokeObjectURL(imagenPreviewLocal);
+      }
+    };
+  }, [imagenPreviewLocal]);
+
+  useEffect(() => {
+    return () => {
+      if (nuevoImagenPreviewLocal) {
+        URL.revokeObjectURL(nuevoImagenPreviewLocal);
+      }
+    };
+  }, [nuevoImagenPreviewLocal]);
+
   const productosFiltrados = productosActivos.filter((producto) => {
     const coincideBusqueda =
       producto.producto.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -123,17 +143,32 @@ export default function Inventario() {
     setFormSuccess(null);
 
     try {
-      await postApi("/v1/productos", {
-        nombre: nuevoProducto.nombre,
-        codigo_barras: nuevoProducto.codigo_barras || null,
-        id_subcategoria: Number(nuevoProducto.id_subcategoria),
-        id_medida: Number(nuevoProducto.id_medida),
-        id_unidad: Number(nuevoProducto.id_unidad),
-        precio_base: Number(nuevoProducto.precio_base),
-        precio_unitario: Number(nuevoProducto.precio_unitario),
-        imagen_url: nuevoProducto.imagen_url || null,
-        id_estatus: Number(nuevoProducto.id_estatus),
-      });
+      if (nuevoImagenArchivo) {
+        const formData = new FormData();
+        formData.append("nombre", nuevoProducto.nombre);
+        formData.append("codigo_barras", nuevoProducto.codigo_barras || "");
+        formData.append("id_subcategoria", String(Number(nuevoProducto.id_subcategoria)));
+        formData.append("id_medida", String(Number(nuevoProducto.id_medida)));
+        formData.append("id_unidad", String(Number(nuevoProducto.id_unidad)));
+        formData.append("precio_base", String(Number(nuevoProducto.precio_base)));
+        formData.append("precio_unitario", String(Number(nuevoProducto.precio_unitario)));
+        formData.append("id_estatus", String(Number(nuevoProducto.id_estatus)));
+        formData.append("imagen", nuevoImagenArchivo);
+
+        await postApiFormData("/v1/productos", formData);
+      } else {
+        await postApi("/v1/productos", {
+          nombre: nuevoProducto.nombre,
+          codigo_barras: nuevoProducto.codigo_barras || null,
+          id_subcategoria: Number(nuevoProducto.id_subcategoria),
+          id_medida: Number(nuevoProducto.id_medida),
+          id_unidad: Number(nuevoProducto.id_unidad),
+          precio_base: Number(nuevoProducto.precio_base),
+          precio_unitario: Number(nuevoProducto.precio_unitario),
+          imagen_url: nuevoProducto.imagen_url || null,
+          id_estatus: Number(nuevoProducto.id_estatus),
+        });
+      }
 
       setFormSuccess("Producto creado correctamente.");
       setNuevoProducto({
@@ -147,6 +182,7 @@ export default function Inventario() {
         imagen_url: "",
         id_estatus: "1",
       });
+      limpiarImagenNuevoProducto();
       setReloadKey((current) => current + 1);
     } catch (submitError) {
       setFormError(submitError instanceof Error ? submitError.message : "No fue posible crear el producto.");
@@ -163,6 +199,11 @@ export default function Inventario() {
   };
 
   const abrirEdicion = (producto: ProductoInventario) => {
+    if (imagenPreviewLocal) {
+      URL.revokeObjectURL(imagenPreviewLocal);
+    }
+    setImagenArchivo(null);
+    setImagenPreviewLocal(null);
     setProductoEditando(producto);
     setProductoSeleccionado(null);
     setAccionError(null);
@@ -204,19 +245,34 @@ export default function Inventario() {
     setAccionSuccess(null);
 
     try {
-      await putApi(`/v1/productos/${productoEditando.id_producto}`, {
-        nombre: productoEditable.nombre,
-        codigo_barras: productoEditable.codigo_barras || null,
-        stock: productoEditando.stock,
-        precio_base: Number(productoEditable.precio_base),
-        precio_unitario: Number(productoEditable.precio_unitario),
-        imagen_url: productoEditable.imagen_url || null,
-        id_estatus: Number(productoEditable.id_estatus),
-      });
+      if (imagenArchivo) {
+        const formData = new FormData();
+        formData.append("_method", "PUT");
+        formData.append("nombre", productoEditable.nombre);
+        formData.append("codigo_barras", productoEditable.codigo_barras || "");
+        formData.append("stock", String(productoEditando.stock));
+        formData.append("precio_base", String(Number(productoEditable.precio_base)));
+        formData.append("precio_unitario", String(Number(productoEditable.precio_unitario)));
+        formData.append("id_estatus", String(Number(productoEditable.id_estatus)));
+        formData.append("imagen", imagenArchivo);
+
+        await postApiFormData(`/v1/productos/${productoEditando.id_producto}`, formData);
+      } else {
+        await putApi(`/v1/productos/${productoEditando.id_producto}`, {
+          nombre: productoEditable.nombre,
+          codigo_barras: productoEditable.codigo_barras || null,
+          stock: productoEditando.stock,
+          precio_base: Number(productoEditable.precio_base),
+          precio_unitario: Number(productoEditable.precio_unitario),
+          imagen_url: productoEditable.imagen_url || null,
+          id_estatus: Number(productoEditable.id_estatus),
+        });
+      }
 
       setAccionSuccess("Producto actualizado correctamente.");
       setReloadKey((current) => current + 1);
       setProductoEditando(null);
+      limpiarImagenSeleccionada();
     } catch (submitError) {
       setAccionError(submitError instanceof Error ? submitError.message : "No fue posible actualizar el producto.");
     } finally {
@@ -352,6 +408,68 @@ export default function Inventario() {
     }
   };
 
+  const previewImagenEdicion =
+    imagenPreviewLocal ||
+    (productoEditable.imagen_url ? getAssetUrl(productoEditable.imagen_url) : "");
+
+  const manejarSeleccionImagen = (event: ChangeEvent<HTMLInputElement>) => {
+    const archivo = event.target.files?.[0] ?? null;
+
+    if (imagenPreviewLocal) {
+      URL.revokeObjectURL(imagenPreviewLocal);
+    }
+
+    if (!archivo) {
+      setImagenArchivo(null);
+      setImagenPreviewLocal(null);
+      return;
+    }
+
+    setImagenArchivo(archivo);
+    setImagenPreviewLocal(URL.createObjectURL(archivo));
+    setProductoEditable((actual) => ({ ...actual, imagen_url: "" }));
+  };
+
+  const limpiarImagenSeleccionada = () => {
+    if (imagenPreviewLocal) {
+      URL.revokeObjectURL(imagenPreviewLocal);
+    }
+
+    setImagenArchivo(null);
+    setImagenPreviewLocal(null);
+  };
+
+  const manejarSeleccionImagenNuevoProducto = (event: ChangeEvent<HTMLInputElement>) => {
+    const archivo = event.target.files?.[0] ?? null;
+
+    if (nuevoImagenPreviewLocal) {
+      URL.revokeObjectURL(nuevoImagenPreviewLocal);
+    }
+
+    if (!archivo) {
+      setNuevoImagenArchivo(null);
+      setNuevoImagenPreviewLocal(null);
+      return;
+    }
+
+    setNuevoImagenArchivo(archivo);
+    setNuevoImagenPreviewLocal(URL.createObjectURL(archivo));
+    setNuevoProducto((actual) => ({ ...actual, imagen_url: "" }));
+  };
+
+  const limpiarImagenNuevoProducto = () => {
+    if (nuevoImagenPreviewLocal) {
+      URL.revokeObjectURL(nuevoImagenPreviewLocal);
+    }
+
+    setNuevoImagenArchivo(null);
+    setNuevoImagenPreviewLocal(null);
+  };
+
+  const previewNuevoProducto =
+    nuevoImagenPreviewLocal ||
+    (nuevoProducto.imagen_url ? getAssetUrl(nuevoProducto.imagen_url) : "");
+
   return (
     <Layout>
       <section className="inventory-header">
@@ -477,16 +595,34 @@ export default function Inventario() {
               <span>Imagen URL</span>
               <input
                 value={nuevoProducto.imagen_url}
-                onChange={(e) => setNuevoProducto((actual) => ({ ...actual, imagen_url: e.target.value }))}
+                onChange={(e) => {
+                  if (nuevoImagenArchivo) {
+                    limpiarImagenNuevoProducto();
+                  }
+                  setNuevoProducto((actual) => ({ ...actual, imagen_url: e.target.value }));
+                }}
                 placeholder="https://..."
               />
             </label>
+
+            <label className="form-field form-field-full">
+              <span>Subir imagen desde tu laptop</span>
+              <input type="file" accept="image/*" onChange={manejarSeleccionImagenNuevoProducto} />
+            </label>
           </div>
 
-          {nuevoProducto.imagen_url ? (
-            <div className="inventory-image-preview">
-              <span className="detail-section-label">Vista previa</span>
-              <img src={getAssetUrl(nuevoProducto.imagen_url)} alt="Vista previa del producto" className="inventory-image-preview-tag" />
+          {previewNuevoProducto ? (
+             <div className="inventory-image-preview">
+               <span className="detail-section-label">Vista previa</span>
+              <img src={previewNuevoProducto} alt="Vista previa del producto" className="inventory-image-preview-tag" />
+             </div>
+           ) : null}
+
+          {nuevoImagenArchivo ? (
+            <div className="form-actions">
+              <button className="inventory-secondary-button" type="button" onClick={limpiarImagenNuevoProducto}>
+                Quitar imagen seleccionada
+              </button>
             </div>
           ) : null}
 
@@ -589,7 +725,14 @@ export default function Inventario() {
                 <p className="detail-section-label">Modo edición</p>
                 <h3>Editar producto</h3>
               </div>
-              <button type="button" className="inventory-secondary-button" onClick={() => setProductoEditando(null)}>
+              <button
+                type="button"
+                className="inventory-secondary-button"
+                onClick={() => {
+                  limpiarImagenSeleccionada();
+                  setProductoEditando(null);
+                }}
+              >
                 Cancelar
               </button>
             </div>
@@ -644,12 +787,24 @@ export default function Inventario() {
                     <span>Imagen URL</span>
                     <input value={productoEditable.imagen_url} onChange={(e) => setProductoEditable((actual) => ({ ...actual, imagen_url: e.target.value }))} />
                   </label>
+                  <label className="form-field form-field-full">
+                    <span>Subir imagen desde tu laptop</span>
+                    <input type="file" accept="image/*" onChange={manejarSeleccionImagen} />
+                  </label>
                 </div>
 
-                {productoEditable.imagen_url ? (
+                {previewImagenEdicion ? (
                   <div className="inventory-image-preview">
                     <span className="detail-section-label">Vista previa</span>
-                    <img src={getAssetUrl(productoEditable.imagen_url)} alt="Vista previa del producto" className="inventory-image-preview-tag" />
+                    <img src={previewImagenEdicion} alt="Vista previa del producto" className="inventory-image-preview-tag" />
+                  </div>
+                ) : null}
+
+                {imagenArchivo ? (
+                  <div className="form-actions">
+                    <button className="inventory-secondary-button" type="button" onClick={limpiarImagenSeleccionada}>
+                      Quitar imagen seleccionada
+                    </button>
                   </div>
                 ) : null}
 

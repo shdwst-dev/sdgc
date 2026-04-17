@@ -89,7 +89,7 @@ export function useSaleCheckout({
         ...actual,
         {
           producto_id: producto.id_producto,
-          sku: producto.sku,
+          sku: producto.sku ?? "",
           nombre: producto.nombre,
           precio_unitario: producto.precio,
           cantidad: 1,

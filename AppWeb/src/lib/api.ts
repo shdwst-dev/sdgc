@@ -39,11 +39,7 @@ async function requestApi<T>(path: string, options: ApiRequestOptions = {}): Pro
 
   if (response.status === 401) {
     clearSession();
-
-    if (window.location.pathname !== "/") {
-      window.location.replace("/");
-    }
-
+    window.dispatchEvent(new CustomEvent("app:session-expired"));
     throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
   }
 

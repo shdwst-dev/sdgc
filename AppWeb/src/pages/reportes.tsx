@@ -75,10 +75,16 @@ export default function Reportes() {
     }>,
   });
 
+  const inicioFromApi = data.periodo_referencia.inicio;
+  const finFromApi = data.periodo_referencia.fin;
   useEffect(() => {
-    setFechaInicio((actual) => actual || data.periodo_referencia.inicio);
-    setFechaFin((actual) => actual || data.periodo_referencia.fin);
-  }, [data.periodo_referencia.inicio, data.periodo_referencia.fin]);
+    if (inicioFromApi) {
+      setFechaInicio((actual) => actual || inicioFromApi);
+    }
+    if (finFromApi) {
+      setFechaFin((actual) => actual || finFromApi);
+    }
+  }, [inicioFromApi, finFromApi]);
 
   const reportFlowChartData = useMemo(
     () => [

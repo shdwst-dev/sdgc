@@ -76,6 +76,23 @@ export default function Dashboard() {
       cantidad: number;
     }>,
   });
+  const { data: ventasRecientesData } = useApiData("/dashboard/ventas-recientes", {
+    ventas_recientes: [] as Array<{
+      factura: string;
+      cliente: string;
+      responsable: string;
+      monto: number;
+      fecha: string;
+    }>,
+  });
+  const { data: alertasStockData } = useApiData("/dashboard/alertas-stock", {
+    alertas_stock: [] as Array<{
+      sku: string;
+      producto: string;
+      actual: number;
+      minimo: number;
+    }>,
+  });
 
   useEffect(() => {
     const usuario = getStoredUser() as SessionUser | null;

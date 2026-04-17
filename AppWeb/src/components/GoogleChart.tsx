@@ -88,6 +88,10 @@ export function GoogleChart({
   onImageUriChange,
 }: GoogleChartProps) {
   const chartRef = useRef<HTMLDivElement | null>(null);
+  // Stable serialized deps — avoids re-drawing the chart on every render
+  // caused by inline object/array literals creating new references each time.
+  const dataKey = JSON.stringify(data);
+  const optionsKey = JSON.stringify(options);
 
   useEffect(() => {
     if (data.length <= 1 || !chartRef.current) {
@@ -122,7 +126,8 @@ export function GoogleChart({
     return () => {
       cancelled = true;
     };
-  }, [data, onImageUriChange, options, type]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dataKey, optionsKey, type]);
 
   if (data.length <= 1) {
     return <div className={`${className} google-chart-empty`}>{emptyMessage}</div>;

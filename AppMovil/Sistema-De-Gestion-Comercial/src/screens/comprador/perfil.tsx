@@ -164,9 +164,6 @@ export default function Perfil() {
               <View style={styles.avatar}>
                 <User size={40} color="#0f2f6f" />
               </View>
-              <TouchableOpacity style={styles.editAvatarBtn}>
-                <Edit2 size={16} color="#FFF" />
-              </TouchableOpacity>
             </View>
             <Text style={styles.userName}>{userFullName}</Text>
             <Text style={styles.userEmail}>{profileData?.email}</Text>

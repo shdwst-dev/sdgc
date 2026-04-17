@@ -5,13 +5,13 @@ import { postApi } from "../lib/api";
 
 const menuItems = [
   { to: "/dashboard", label: "Inicio" },
-  { to: "/inventario", label: "Inventario / Almacen" },
+  { to: "/inventario", label: "Inventario / Almacén" },
   { to: "/compras", label: "Compras a proveedor" },
   { to: "/compras-cliente", label: "Compras" },
   { to: "/ventas", label: "Ventas" },
   { to: "/clientes", label: "Clientes" },
   { to: "/proveedores", label: "Proveedores" },
-  { to: "/facturacion", label: "Facturacion" },
+  { to: "/facturacion", label: "Facturación" },
   { to: "/reportes", label: "Reportes" },
 ];
 
@@ -32,7 +32,7 @@ export default function Sidebar() {
         <img src={logo} alt="Logo del proyecto" className="project-logo" />
       </div>
 
-      <nav className="sidebar-menu" aria-label="Navegacion principal">
+      <nav className="sidebar-menu" aria-label="Navegación principal">
         {menuVisible.map((item) => (
           <NavLink
             key={item.to}
@@ -51,7 +51,7 @@ export default function Sidebar() {
               to="/configuracion"
               className={({ isActive }) => `sidebar-action${isActive ? " active" : ""}`}
             >
-              Configuracion
+              Configuración
             </NavLink>
           ) : null}
 
@@ -71,7 +71,7 @@ export default function Sidebar() {
               }
             }}
           >
-            Cerrar sesion
+            Cerrar sesión
           </button>
         </div>
       </nav>

@@ -227,7 +227,7 @@ export default function Inventario() {
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
         await clearToken();
-        Alert.alert('Sesion expirada', 'Inicia sesion nuevamente.');
+        Alert.alert('Sesión expirada', 'Inicia sesión nuevamente.');
         goToLogin();
         return;
       }

@@ -317,13 +317,13 @@ export default function ComprasCliente() {
     }
 
     if (!metodoTransferencia) {
-      setVentaError("No existe el metodo de pago Transferencia.");
+      setVentaError("No existe el método de pago Transferencia.");
       setVentaSuccess(null);
       return;
     }
 
     if (carrito.length === 0) {
-      setVentaError("Agrega al menos un articulo al carrito.");
+      setVentaError("Agrega al menos un artículo al carrito.");
       setVentaSuccess(null);
       return;
     }
@@ -671,7 +671,7 @@ export default function ComprasCliente() {
             </div>
 
             <div className="sales-payment-block">
-              <label htmlFor="metodo-compra">Metodo de pago</label>
+              <label htmlFor="metodo-compra">Método de pago</label>
               <input id="metodo-compra" value={metodoTransferencia?.nombre ?? "Transferencia"} readOnly />
             </div>
 

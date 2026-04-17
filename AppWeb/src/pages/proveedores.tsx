@@ -169,7 +169,7 @@ export default function Proveedores() {
 
   const registrarProveedor = async () => {
     if (formularioInvalido(nuevoProveedor)) {
-      setFormError("Completa los campos obligatorios del proveedor y un numero exterior valido.");
+      setFormError("Completa los campos obligatorios del proveedor y un número exterior válido.");
       setFormSuccess(null);
       return;
     }
@@ -232,7 +232,7 @@ export default function Proveedores() {
     }
 
     if (formularioInvalido(proveedorEditable)) {
-      setAccionError("Completa los campos obligatorios del proveedor y un numero exterior valido.");
+      setAccionError("Completa los campos obligatorios del proveedor y un número exterior válido.");
       setAccionSuccess(null);
       return;
     }
@@ -294,16 +294,16 @@ export default function Proveedores() {
         <section className="panel form-panel">
           <div className="form-panel-header">
             <h3>Nuevo proveedor</h3>
-            <p>Registra razon social, contacto principal, direccion y metodo de pago.</p>
+            <p>Registra razón social, contacto principal, dirección y método de pago.</p>
           </div>
 
           <div className="form-grid">
             <label className="form-field">
-              <span>Razon social</span>
+              <span>Razón social</span>
               <input value={nuevoProveedor.razon_social} onChange={(e) => setNuevoProveedor((actual) => ({ ...actual, razon_social: e.target.value }))} />
             </label>
             <label className="form-field">
-              <span>Metodo de pago</span>
+              <span>Método de pago</span>
               <select value={nuevoProveedor.id_metodo_pago} onChange={(e) => setNuevoProveedor((actual) => ({ ...actual, id_metodo_pago: e.target.value }))}>
                 <option value="">Sin definir</option>
                 {data.catalogos.metodos_pago.map((metodo) => (
@@ -326,7 +326,7 @@ export default function Proveedores() {
               <input value={nuevoProveedor.apellido_materno} onChange={(e) => setNuevoProveedor((actual) => ({ ...actual, apellido_materno: e.target.value }))} />
             </label>
             <label className="form-field">
-              <span>Telefono</span>
+              <span>Teléfono</span>
               <input value={nuevoProveedor.telefono} onChange={(e) => setNuevoProveedor((actual) => ({ ...actual, telefono: e.target.value }))} />
             </label>
             <label className="form-field">
@@ -350,11 +350,11 @@ export default function Proveedores() {
               <input value={nuevoProveedor.calle} onChange={(e) => setNuevoProveedor((actual) => ({ ...actual, calle: e.target.value }))} />
             </label>
             <label className="form-field">
-              <span>Numero exterior</span>
+              <span>Número exterior</span>
               <input value={nuevoProveedor.num_ext} onChange={(e) => setNuevoProveedor((actual) => ({ ...actual, num_ext: e.target.value }))} />
             </label>
             <label className="form-field">
-              <span>Numero interior</span>
+              <span>Número interior</span>
               <input value={nuevoProveedor.num_int} onChange={(e) => setNuevoProveedor((actual) => ({ ...actual, num_int: e.target.value }))} />
             </label>
           </div>
@@ -379,7 +379,7 @@ export default function Proveedores() {
           <div className="detail-card detail-card-view">
             <div className="detail-card-header">
               <div>
-                <p className="detail-section-label">Vista rapida</p>
+                <p className="detail-section-label">Vista rápida</p>
                 <h3>Detalle del proveedor</h3>
               </div>
               <button type="button" className="inventory-secondary-button" onClick={() => setProveedorSeleccionado(null)}>
@@ -406,17 +406,17 @@ export default function Proveedores() {
                 <strong>{proveedorSeleccionado.productos}</strong>
               </div>
               <div className="detail-summary-card">
-                <span>Ultimo pedido</span>
+                <span>Último pedido</span>
                 <strong>{formatDate(proveedorSeleccionado.ultimo_pedido)}</strong>
               </div>
             </div>
             <div className="detail-card-grid">
-              <div className="detail-field"><span>Telefono</span><strong>{proveedorSeleccionado.telefono}</strong></div>
+              <div className="detail-field"><span>Teléfono</span><strong>{proveedorSeleccionado.telefono}</strong></div>
               <div className="detail-field"><span>Estado</span><strong>{proveedorSeleccionado.direccion.estado}</strong></div>
               <div className="detail-field"><span>Municipio</span><strong>{proveedorSeleccionado.direccion.municipio}</strong></div>
               <div className="detail-field"><span>Colonia</span><strong>{proveedorSeleccionado.direccion.colonia}</strong></div>
               <div className="detail-field"><span>Calle</span><strong>{proveedorSeleccionado.direccion.calle}</strong></div>
-              <div className="detail-field"><span>Numero</span><strong>{proveedorSeleccionado.direccion.num_ext}{proveedorSeleccionado.direccion.num_int ? ` Int ${proveedorSeleccionado.direccion.num_int}` : ""}</strong></div>
+              <div className="detail-field"><span>Número</span><strong>{proveedorSeleccionado.direccion.num_ext}{proveedorSeleccionado.direccion.num_int ? ` Int. ${proveedorSeleccionado.direccion.num_int}` : ""}</strong></div>
             </div>
           </div>
         ) : null}
@@ -425,7 +425,7 @@ export default function Proveedores() {
           <div className="detail-card detail-card-edit">
             <div className="detail-card-header">
               <div>
-                <p className="detail-section-label">Modo edicion</p>
+                <p className="detail-section-label">Modo edición</p>
                 <h3>Editar proveedor</h3>
               </div>
               <button type="button" className="inventory-secondary-button" onClick={() => setProveedorEditando(null)}>
@@ -435,11 +435,11 @@ export default function Proveedores() {
             <div className="detail-edit-main">
               <div className="form-grid">
                 <label className="form-field">
-                  <span>Razon social</span>
+                  <span>Razón social</span>
                   <input value={proveedorEditable.razon_social} onChange={(e) => setProveedorEditable((actual) => ({ ...actual, razon_social: e.target.value }))} />
                 </label>
                 <label className="form-field">
-                  <span>Metodo de pago</span>
+                  <span>Método de pago</span>
                   <select value={proveedorEditable.id_metodo_pago} onChange={(e) => setProveedorEditable((actual) => ({ ...actual, id_metodo_pago: e.target.value }))}>
                     <option value="">Sin definir</option>
                     {data.catalogos.metodos_pago.map((metodo) => (
@@ -462,7 +462,7 @@ export default function Proveedores() {
                   <input value={proveedorEditable.apellido_materno} onChange={(e) => setProveedorEditable((actual) => ({ ...actual, apellido_materno: e.target.value }))} />
                 </label>
                 <label className="form-field">
-                  <span>Telefono</span>
+                  <span>Teléfono</span>
                   <input value={proveedorEditable.telefono} onChange={(e) => setProveedorEditable((actual) => ({ ...actual, telefono: e.target.value }))} />
                 </label>
                 <label className="form-field">
@@ -486,11 +486,11 @@ export default function Proveedores() {
                   <input value={proveedorEditable.calle} onChange={(e) => setProveedorEditable((actual) => ({ ...actual, calle: e.target.value }))} />
                 </label>
                 <label className="form-field">
-                  <span>Numero exterior</span>
+                  <span>Número exterior</span>
                   <input value={proveedorEditable.num_ext} onChange={(e) => setProveedorEditable((actual) => ({ ...actual, num_ext: e.target.value }))} />
                 </label>
                 <label className="form-field">
-                  <span>Numero interior</span>
+                  <span>Número interior</span>
                   <input value={proveedorEditable.num_int} onChange={(e) => setProveedorEditable((actual) => ({ ...actual, num_int: e.target.value }))} />
                 </label>
               </div>
@@ -504,9 +504,9 @@ export default function Proveedores() {
         ) : null}
 
         <div className="customers-filters">
-          <input type="text" placeholder="Buscar proveedores por razon social, contacto o telefono..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
+          <input type="text" placeholder="Buscar proveedores por razón social, contacto o teléfono..." value={busqueda} onChange={(e) => setBusqueda(e.target.value)} />
           <select value={metodoPagoSeleccionado} onChange={(e) => setMetodoPagoSeleccionado(e.target.value)}>
-            <option value="Todos">Todos los metodos</option>
+            <option value="Todos">Todos los métodos</option>
             {[...new Set(data.proveedores.map((proveedor) => proveedor.metodo_pago ?? "Sin definir"))].map((metodo) => (
               <option key={metodo} value={metodo}>
                 {metodo}
@@ -519,11 +519,11 @@ export default function Proveedores() {
           <table>
             <thead>
               <tr>
-                <th>Razon social</th>
+                <th>Razón social</th>
                 <th>Contacto</th>
-                <th>Metodo de pago</th>
+                <th>Método de pago</th>
                 <th>Productos surtidos</th>
-                <th>Ultimo pedido</th>
+                <th>Último pedido</th>
                 <th>Acciones</th>
               </tr>
             </thead>

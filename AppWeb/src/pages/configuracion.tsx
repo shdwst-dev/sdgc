@@ -213,7 +213,7 @@ export default function Configuracion() {
     <Layout>
       <section className="inventory-header">
         <div>
-          <h1>Configuracion</h1>
+          <h1>Configuración</h1>
           <p>
             {data.tienda.id_tienda
               ? "Consulta y administra los empleados dados de alta en la tienda asignada a tu usuario."
@@ -245,11 +245,11 @@ export default function Configuracion() {
           </div>
 
           <section className="panel">
-            <p className="detail-section-label">Grafica administrativa</p>
-            <h4>Distribucion de empleados por estatus</h4>
+            <p className="detail-section-label">Gráfica administrativa</p>
+            <h4>Distribución de empleados por estatus</h4>
             <p>Total de empleados: {stats.total_empleados}</p>
-            {statsLoading ? <p className="form-message">Cargando grafica...</p> : null}
-            {statsError ? <p className="form-message form-message-error">Error al cargar grafica: {statsError}</p> : null}
+            {statsLoading ? <p className="form-message">Cargando gráfica...</p> : null}
+            {statsError ? <p className="form-message form-message-error">Error al cargar gráfica: {statsError}</p> : null}
             {!statsLoading && !statsError ? (
               <GoogleChart
                 type="BarChart"
@@ -293,8 +293,8 @@ export default function Configuracion() {
                   <strong>{empleadoSeleccionado.email}</strong>
                 </div>
                 <div className="detail-summary-card">
-                  <span>Telefono</span>
-                  <strong>{empleadoSeleccionado.telefono || "Sin telefono"}</strong>
+                  <span>Teléfono</span>
+                  <strong>{empleadoSeleccionado.telefono || "Sin teléfono"}</strong>
                 </div>
                 <div className="detail-summary-card">
                   <span>Rol</span>
@@ -312,7 +312,7 @@ export default function Configuracion() {
             <div className="detail-card detail-card-view">
               <div className="detail-card-header">
                 <div>
-                  <p className="detail-section-label">Edicion</p>
+                  <p className="detail-section-label">Edición</p>
                   <h3>Actualizar empleado</h3>
                 </div>
                 <button type="button" className="inventory-primary-button settings-save-button" onClick={guardarEdicion} disabled={guardandoEdicion}>
@@ -334,7 +334,7 @@ export default function Configuracion() {
                   <input id="empleado-am" value={empleadoEditable.apellido_materno} onChange={(e) => setEmpleadoEditable((actual) => ({ ...actual, apellido_materno: e.target.value }))} />
                 </div>
                 <div className="settings-field">
-                  <label htmlFor="empleado-telefono">Telefono</label>
+                  <label htmlFor="empleado-telefono">Teléfono</label>
                   <input id="empleado-telefono" value={empleadoEditable.telefono} onChange={(e) => setEmpleadoEditable((actual) => ({ ...actual, telefono: e.target.value }))} />
                 </div>
                 <div className="settings-field settings-field-full">
@@ -367,7 +367,7 @@ export default function Configuracion() {
                 <tr>
                   <th>Empleado</th>
                   <th>Correo</th>
-                  <th>Telefono</th>
+                  <th>Teléfono</th>
                   <th>Rol</th>
                   <th>Estatus</th>
                   <th>Acciones</th>
@@ -378,7 +378,7 @@ export default function Configuracion() {
                   <tr key={empleado.id_usuario}>
                     <td>{empleado.nombre}</td>
                     <td>{empleado.email}</td>
-                    <td>{empleado.telefono || "Sin telefono"}</td>
+                    <td>{empleado.telefono || "Sin teléfono"}</td>
                     <td>{empleado.rol}</td>
                     <td>
                       <span className={`inventory-status ${empleado.estatus === "Activo" ? "inventory-status-ok" : "inventory-status-low"}`}>
@@ -416,8 +416,8 @@ export default function Configuracion() {
         </section>
       </section>
 
-      {loading ? <p className="panel">Cargando configuracion...</p> : null}
-      {error ? <p className="panel">Error al cargar configuracion: {error}</p> : null}
+      {loading ? <p className="panel">Cargando configuración...</p> : null}
+      {error ? <p className="panel">Error al cargar configuración: {error}</p> : null}
     </Layout>
   );
 }

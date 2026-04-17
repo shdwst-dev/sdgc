@@ -293,7 +293,7 @@ function createReportTablePdfDocument(report: Omit<ReportChartPdfData, "fileName
     const lines: PdfTextLine[] = [
       { text: report.title, x: 42, y: 748, size: 16, font: "F2", color: [1, 1, 1] },
       { text: report.subtitle || "Reporte tabular", x: 42, y: 714, size: 11, font: "F2", color: [0.145, 0.173, 0.239] },
-      { text: `PI Gestion - Reporte PDF${pageRowGroups.length > 1 ? ` (${pageIndex + 1}/${pageRowGroups.length})` : ""}`, x: 340, y: 748, size: 10, font: "F2", color: [1, 1, 1] },
+      { text: `PI Gestión - Reporte PDF${pageRowGroups.length > 1 ? ` (${pageIndex + 1}/${pageRowGroups.length})` : ""}`, x: 340, y: 748, size: 10, font: "F2", color: [1, 1, 1] },
     ];
 
     if (isFirstPage) {
@@ -516,7 +516,7 @@ export function downloadInvoicePdf(invoice: InvoicePdfData) {
   ];
 
   const lines: PdfTextLine[] = [
-    { text: "FACTURA ELECTRONICA 4.0 (CFDI)", x: 145, y: 771, size: 13, font: "F2", color: [1, 1, 1] },
+    { text: "FACTURA ELECTRÓNICA 4.0 (CFDI)", x: 145, y: 771, size: 13, font: "F2", color: [1, 1, 1] },
     { text: "CFDI", x: 48, y: 710, size: 20, font: "F2", color: [0.082, 0.2, 0.62] },
     { text: ISSUER_NAME, x: 150, y: 742, size: 18, font: "F2", color: [0.12, 0.12, 0.12] },
     { text: `RFC: ${ISSUER_RFC}`, x: 132, y: 710, size: 9 },

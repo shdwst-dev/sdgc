@@ -1284,6 +1284,7 @@ class DashboardDataController extends Controller
             ->leftJoin('detalle_ventas as dv', 'dv.venta_id', '=', 'v.id_venta')
             ->when($storeId && $this->tableHasStoreColumn('ventas'), fn ($query) => $query->where('v.id_tienda', $storeId))
             ->select(
+                'v.id_venta',
                 DB::raw("COALESCE(c.numero_correlativo, v.id_venta) as factura"),
                 DB::raw("CONCAT(p.nombre, ' ', p.apellido_paterno) as responsable"),
                 'v.fecha_hora as fecha',
@@ -1316,7 +1317,7 @@ class DashboardDataController extends Controller
                 DB::raw('COALESCE(SUM(s.stock_minimo), 0) as minimo')
             )
             ->groupBy('pr.id_producto', 'pr.codigo_barras', 'pr.nombre')
-            ->havingRaw('COALESCE(SUM(s.stock_actual), 0) <= COALESCE(SUM(s.stock_minimo), 0)')
+            ->havingRaw('COALESCE(SUM(s.stock_actual), 0) = 0 OR (COALESCE(SUM(s.stock_minimo), 0) > 0 AND COALESCE(SUM(s.stock_actual), 0) <= COALESCE(SUM(s.stock_minimo), 0))')
             ->orderByRaw('COALESCE(SUM(s.stock_actual), 0) asc')
             ->limit($limit)
             ->get()

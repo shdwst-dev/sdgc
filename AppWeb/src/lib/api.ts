@@ -44,11 +44,11 @@ async function requestApi<T>(path: string, options: ApiRequestOptions = {}): Pro
       window.location.replace("/");
     }
 
-    throw new Error("Tu sesion expiro. Inicia sesion nuevamente.");
+    throw new Error("Tu sesión expiró. Inicia sesión nuevamente.");
   }
 
   if (!response.ok) {
-    let message = `La API respondio con estado ${response.status}`;
+    let message = `La API respondió con estado ${response.status}`;
 
     try {
       const errorData = (await response.json()) as { message?: string; error?: string };

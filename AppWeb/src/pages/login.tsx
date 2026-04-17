@@ -119,7 +119,7 @@ export default function Login() {
         navegarSegunRol(data.usuario.rol);
       }
     } catch (submitError: unknown) {
-      setError(submitError instanceof Error ? submitError.message : "No fue posible iniciar sesion.");
+      setError(submitError instanceof Error ? submitError.message : "No fue posible iniciar sesión.");
     } finally {
       setIsLoading(false);
     }
@@ -275,7 +275,7 @@ export default function Login() {
           </div>
 
           <button type="button" className="boton-enlace-inicio-sesion" onClick={abrirModalRecuperacion}>
-            Olvidaste tu contraseña?
+            ¿Olvidaste tu contraseña?
           </button>
 
           <button type="button" className="boton-enlace-inicio-sesion boton-enlace-inicio-sesion-left" onClick={abrirModalRegistro}>
@@ -319,7 +319,7 @@ export default function Login() {
                 <div className="caja-contrasena-temporal">
                   <strong>Contraseña temporal generada</strong>
                   <span>{temporaryPassword}</span>
-                  <p>Usa esta contraseña para iniciar sesion. Al entrar, te pediremos definir una nueva.</p>
+                  <p>Usa esta contraseña para iniciar sesión. Al entrar, te pediremos definir una nueva.</p>
                 </div>
               ) : null}
 
@@ -431,7 +431,7 @@ export default function Login() {
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Minimo 8 caracteres"
+                  placeholder="Mínimo 8 caracteres"
                   required
                 />
               </div>

@@ -10,7 +10,7 @@ export function SalesStoreStep({ tiendaSeleccionada, tiendas }: SalesStoreStepPr
     <section className="panel sales-store-panel">
       <div className="sales-store-panel-copy">
         <h3>1. Tienda asignada</h3>
-        <p>El catalogo y el stock disponible se muestran segun la sucursal registrada para tu usuario.</p>
+        <p>El catálogo y el stock disponible se muestran según la sucursal registrada para tu usuario.</p>
       </div>
       <div className="sales-store-panel-control">
         <label htmlFor="tienda-inicial">Tienda</label>

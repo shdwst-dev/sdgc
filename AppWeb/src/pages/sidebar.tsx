@@ -51,7 +51,7 @@ export default function Sidebar() {
               to="/configuracion"
               className={({ isActive }) => `sidebar-action${isActive ? " active" : ""}`}
             >
-              Configuración
+              Configuración de la tienda
             </NavLink>
           ) : null}
 

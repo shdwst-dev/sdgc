@@ -128,7 +128,7 @@ export default function ComprasCliente() {
     email: "",
     contrasena: "",
   });
-  const { data: inventarioData, loading, error } = useApiData(`/inventario?refresh=${reloadKey}&catalogo_global=1&incluir_inactivos=1`, {
+  const { data: inventarioData, loading, error } = useApiData(`/inventario?refresh=${reloadKey}&catalogo_global=1`, {
     metricas: {
       productos_activos: 0,
       stock_total: 0,

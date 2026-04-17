@@ -498,21 +498,7 @@ class DashboardDataController extends Controller
 
     private function resolveUserStoreId(Request $request): ?int
     {
-        $userId = $request->user()?->id_usuario;
-
-        if (!$userId) {
-            return null;
-        }
-
-        if ($this->isSuperAdmin($request)) {
-            return null;
-        }
-
-        $storeId = DB::table('tiendas_empleados')
-            ->where('id_empleado', $userId)
-            ->value('id_tienda');
-
-        return $storeId ? (int) $storeId : null;
+        return 1; // Fuerza siempre la tienda central para evitar conflictos móviles/web.
     }
 
     private function isSuperAdmin(Request $request): bool

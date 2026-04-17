@@ -3,6 +3,13 @@ import { clearSession, getToken } from "./auth";
 const defaultApiBaseUrl = `http://${window.location.hostname}:8000/api`;
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? defaultApiBaseUrl;
 
+export function getAssetUrl(path: string | null | undefined): string {
+  if (!path) return "";
+  if (path.startsWith("http")) return path;
+  const SERVER_URL = API_BASE_URL.replace("/api", "");
+  return `${SERVER_URL}${path.startsWith("/") ? "" : "/"}${path}`;
+}
+
 type ApiRequestOptions = {
   method?: string;
   body?: BodyInit | null;

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, FlatList, Dimensions, Alert, ActivityIndicator, TextInput, Modal, StatusBar, Platform } from 'react-native';
-import { Search, X, ShoppingCart, Star, MapPin, Package, RefreshCw, ChevronRight, Bell, Gift } from 'lucide-react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, ActivityIndicator, TextInput, Modal, StatusBar, Platform } from 'react-native';
+import { Search, X, ShoppingCart, Package, ChevronRight, Gift } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, CommonActions } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -12,12 +12,6 @@ import { useToast } from '../../components/Toast';
 
 const { width } = Dimensions.get('window');
 const columnWidth = (width - 48) / 2;
-
-
-const banners = [
-  { id: 1, image: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800', title: 'Venta de Temporada', subtitle: 'Hasta 50% OFF', color: '#4F46E5' },
-  { id: 2, image: 'https://images.unsplash.com/photo-1607082350899-7e105aa886ae?w=800', title: 'Tecnología Pro', subtitle: 'Nuevos Gadgets', color: '#0F172A' },
-];
 
 const getProductImage = (nombre: string, imagenUrl?: string | null): string => {
   if (imagenUrl && imagenUrl.includes('http')) return imagenUrl;
@@ -157,10 +151,6 @@ export default function Inicio() {
               <Text style={styles.welcomeText}>Hola, {userName} 👋</Text>
               <Text style={styles.appName}>Tienda Departamental</Text>
             </View>
-            <TouchableOpacity style={styles.notificationBtn}>
-              <Bell size={22} color="#FFF" />
-              <View style={styles.notificationBadge} />
-            </TouchableOpacity>
           </View>
 
           <TouchableOpacity 
@@ -173,68 +163,48 @@ export default function Inicio() {
           </TouchableOpacity>
         </LinearGradient>
 
-        <View style={styles.contentBody}>
-          {/* Banners */}
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false} 
-            pagingEnabled 
-            style={styles.bannersSection}
-          >
-            {banners.map(banner => (
-              <View key={banner.id} style={styles.bannerWrapper}>
-                <Image source={{ uri: banner.image }} style={styles.bannerImg} />
-                <LinearGradient
-                  colors={['transparent', 'rgba(0,0,0,0.8)']}
-                  style={styles.bannerTextOverlay}
-                >
-                  <Text style={styles.bannerSub}>{banner.subtitle}</Text>
-                  <Text style={styles.bannerTtl}>{banner.title}</Text>
-                </LinearGradient>
-              </View>
-            ))}
-          </ScrollView>
+          <View style={styles.contentBody}>
 
-          {/* Último Pedido - Estilo Dinámico */}
-          {ultimoPedido && (
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTtl}>Seguimiento de Pedido</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('MisPedidos' as never)}>
-                <Text style={styles.viewMoreText}>Ver todos</Text>
+            {/* Último Pedido - Estilo Dinámico */}
+            {ultimoPedido && (
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTtl}>Seguimiento de Pedido</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('MisPedidos' as never)}>
+                  <Text style={styles.viewMoreText}>Ver todos</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {ultimoPedido && (
+              <TouchableOpacity 
+                style={styles.orderTrackingCard}
+                onPress={() => navigation.navigate('DetallePedido', { idVenta: ultimoPedido.id })}
+              >
+                <View style={styles.orderIconBox}>
+                  <Package size={24} color="#0f2f6f" />
+                </View>
+                <View style={styles.orderMainInfo}>
+                  <Text style={styles.orderId}>Pedido #{ultimoPedido.id}</Text>
+                  <Text style={styles.orderSts}>{ultimoPedido.estado}</Text>
+                </View>
+                <View style={styles.orderRight}>
+                  <ChevronRight size={20} color="#94A3B8" />
+                </View>
               </TouchableOpacity>
-            </View>
-          )}
+            )}
 
-          {ultimoPedido && (
-            <TouchableOpacity 
-              style={styles.orderTrackingCard}
-              onPress={() => navigation.navigate('DetallePedido', { idVenta: ultimoPedido.id })}
-            >
-              <View style={styles.orderIconBox}>
-                <Package size={24} color="#0f2f6f" />
+            {/* Recomendados con Grid Moderno */}
+            <View style={styles.recommendedSection}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTtl}>Recomendados para ti</Text>
+                <Gift size={20} color="#4F46E5" />
               </View>
-              <View style={styles.orderMainInfo}>
-                <Text style={styles.orderId}>Pedido #{ultimoPedido.id}</Text>
-                <Text style={styles.orderSts}>{ultimoPedido.estado}</Text>
+              <View style={styles.grid}>
+                {productos.map(item => renderProduct(item))}
               </View>
-              <View style={styles.orderRight}>
-                <ChevronRight size={20} color="#94A3B8" />
-              </View>
-            </TouchableOpacity>
-          )}
-
-
-          {/* Recomendados con Grid Moderno */}
-          <View style={styles.recommendedSection}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTtl}>Recomendados para ti</Text>
-              <Gift size={20} color="#4F46E5" />
             </View>
-            <View style={styles.grid}>
-              {productos.map(item => renderProduct(item))}
-            </View>
+
           </View>
-        </View>
       </ScrollView>
 
       {/* Search Modal Refactorizado */}
@@ -250,8 +220,15 @@ export default function Inicio() {
                 value={searchQuery}
                 onChangeText={setSearchQuery}
               />
-              <TouchableOpacity onPress={() => setShowSearchModal(false)}>
-                <X size={20} color="#64748B" />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')} style={{ marginRight: 8 }}>
+                  <View style={{ backgroundColor: '#E2E8F0', borderRadius: 12, padding: 4 }}>
+                    <X size={14} color="#64748B" />
+                  </View>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity onPress={() => { setShowSearchModal(false); setSearchQuery(''); }}>
+                <Text style={{ color: '#0f2f6f', fontWeight: '700' }}>Cerrar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -260,23 +237,36 @@ export default function Inicio() {
             {isSearching ? (
               <ActivityIndicator style={{ marginTop: 40 }} color="#0f2f6f" />
             ) : searchSuggestions.length > 0 ? (
-              searchSuggestions.map(item => (
+              <View>
+                {searchSuggestions.map(item => (
+                  <TouchableOpacity 
+                    key={item.id} 
+                    style={styles.searchResultItem}
+                    onPress={() => {
+                      navigation.navigate('DetalleProducto', { idProducto: item.id });
+                      setShowSearchModal(false);
+                    }}
+                  >
+                    <Image source={{ uri: getProductImage(item.nombre, item.imagen_url) }} style={styles.searchResultImg} />
+                    <View style={styles.searchResultInfo}>
+                      <Text style={styles.searchResultName}>{item.nombre}</Text>
+                      <Text style={styles.searchResultPrice}>${item.precio_unitario.toLocaleString()}</Text>
+                    </View>
+                    <ChevronRight size={18} color="#CBD5E1" />
+                  </TouchableOpacity>
+                ))}
                 <TouchableOpacity 
-                  key={item.id} 
-                  style={styles.searchResultItem}
+                  style={{ marginTop: 16, padding: 14, backgroundColor: '#F1F5F9', borderRadius: 12, alignItems: 'center' }}
                   onPress={() => {
-                    navigation.navigate('DetalleProducto', { idProducto: item.id });
+                    const currentQuery = searchQuery;
                     setShowSearchModal(false);
+                    setSearchQuery('');
+                    navigation.navigate('BuscarTab' as any, { query: currentQuery } as any);
                   }}
                 >
-                  <Image source={{ uri: getProductImage(item.nombre, item.imagen_url) }} style={styles.searchResultImg} />
-                  <View style={styles.searchResultInfo}>
-                    <Text style={styles.searchResultName}>{item.nombre}</Text>
-                    <Text style={styles.searchResultPrice}>${item.precio_unitario.toLocaleString()}</Text>
-                  </View>
-                  <ChevronRight size={18} color="#CBD5E1" />
+                  <Text style={{ color: '#0f2f6f', fontWeight: '700', fontSize: 14 }}>Ver todos los resultados</Text>
                 </TouchableOpacity>
-              ))
+              </View>
             ) : searchQuery.length > 0 ? (
               <View style={styles.noResults}>
                 <Text style={styles.noResultsText}>No encontramos resultados para "{searchQuery}"</Text>
@@ -306,7 +296,7 @@ const styles = StyleSheet.create({
   notificationBadge: { position: 'absolute', top: 12, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: '#F87171', borderWidth: 1.5, borderColor: '#1c3a5c' },
   searchBarPremium: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 16, paddingHorizontal: 16, height: 50, gap: 12, elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8 },
   searchPlaceholder: { color: '#94A3B8', fontSize: 14 },
-  contentBody: { paddingHorizontal: 20, paddingTop: 24 },
+  contentBody: { paddingHorizontal: 20, paddingTop: 20 },
   bannersSection: { marginBottom: 28 },
   bannerWrapper: { width: width - 40, height: 200, marginRight: 16, borderRadius: 24, overflow: 'hidden', elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.15, shadowRadius: 10 },
   bannerImg: { width: '100%', height: '100%', position: 'absolute' },
@@ -314,9 +304,9 @@ const styles = StyleSheet.create({
   bannerTtl: { color: '#FFF', fontSize: 26, fontWeight: '900' },
   bannerSub: { color: 'rgba(255,255,255,0.9)', fontSize: 14, fontWeight: '600' },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  sectionTtl: { fontSize: 18, fontWeight: '800', color: '#1E293B', marginBottom: 16 },
+  sectionTtl: { fontSize: 18, fontWeight: '800', color: '#1E293B' },
   viewMoreText: { color: '#0f2f6f', fontWeight: '700', fontSize: 13 },
-  orderTrackingCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 20, padding: 16, marginBottom: 28, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, borderWidth: 1, borderColor: '#F1F5F9' },
+  orderTrackingCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 20, padding: 16, marginBottom: 20, elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, borderWidth: 1, borderColor: '#F1F5F9' },
   orderIconBox: { width: 50, height: 50, borderRadius: 15, backgroundColor: 'rgba(15, 47, 111, 0.08)', justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   orderMainInfo: { flex: 1 },
   orderId: { fontSize: 15, fontWeight: '700', color: '#334155' },

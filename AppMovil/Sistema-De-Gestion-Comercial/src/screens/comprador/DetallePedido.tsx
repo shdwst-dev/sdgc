@@ -10,7 +10,7 @@ import { useToast } from '../../components/Toast';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { getFacturaHtml, getReciboHtml } from '../../services/comprobantes';
+import { apiRequest } from '../../services/apiClient';
 import { FileText, Download } from 'lucide-react-native';
 
 type DetallePedidoRouteProp = RouteProp<RootStackParamList, 'DetallePedido'>;
@@ -179,20 +179,90 @@ export default function DetallePedido() {
 
     try {
       setIsGenerating(type);
-      const html = type === 'factura' 
-        ? await getFacturaHtml(token, pedido.id_venta)
-        : await getReciboHtml(token, pedido.id_venta);
 
-      if (!html || typeof html !== 'string' || html.length < 10) {
-        throw new Error('El servidor devolvió un documento vacío o inválido.');
-      }
+      // El backend devuelve JSON con los datos de la factura.
+      // Construimos el HTML localmente a partir de esos datos.
+      const response = await apiRequest<{ factura: {
+        id_comprobante: number;
+        id_venta: number;
+        folio: string;
+        cliente: string;
+        fecha: string;
+        estado: string;
+        total: number;
+        detalles: Array<{ producto_id: number; producto: string; cantidad: number; precio_unitario: number; subtotal: number }>;
+      } }>(`/ventas/${pedido.id_venta}/factura`, { token });
 
-      // printAsync abre directamente el dialogo del sistema (más estable)
+      const factura = response.factura;
+
+      const formatCurrency = (n: number) =>
+        new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n);
+
+      const filas = factura.detalles.map(d =>
+        `<tr>
+          <td>${d.producto}</td>
+          <td style="text-align:center">${d.cantidad}</td>
+          <td style="text-align:right">${formatCurrency(d.precio_unitario)}</td>
+          <td style="text-align:right">${formatCurrency(d.subtotal)}</td>
+        </tr>`
+      ).join('');
+
+      const html = `<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <title>${factura.folio}</title>
+    <style>
+      body { margin: 0; padding: 24px; font-family: Arial, sans-serif; color: #101828; background: #f8fafc; }
+      .page { max-width: 720px; margin: 0 auto; background: #fff; border: 1px solid #dbe4f0; border-radius: 16px; overflow: hidden; }
+      .header { background: #1c273f; color: #fff; padding: 22px 24px; }
+      .header h1 { margin: 0 0 4px; font-size: 22px; }
+      .header p { margin: 0; opacity: 0.8; font-size: 13px; }
+      .content { padding: 24px; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+      .card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 14px; background: #f9fafb; }
+      .card .label { display: block; font-size: 11px; color: #6b7280; text-transform: uppercase; margin-bottom: 4px; }
+      .card .value { font-size: 14px; font-weight: 700; color: #101828; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+      th, td { border: 1px solid #dbe4f0; padding: 10px 8px; font-size: 12px; text-align: left; }
+      th { background: #1c273f; color: #fff; }
+      tfoot td { font-weight: 700; background: #f8fafc; text-align: right; }
+      .footer { padding: 16px 24px; font-size: 12px; color: #64748b; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <div class="header">
+        <h1>Factura Oficial</h1>
+        <p>${factura.folio} &mdash; ${factura.fecha}</p>
+      </div>
+      <div class="content">
+        <div class="grid">
+          <div class="card"><span class="label">Folio</span><div class="value">${factura.folio}</div></div>
+          <div class="card"><span class="label">Fecha</span><div class="value">${factura.fecha}</div></div>
+          <div class="card"><span class="label">Cliente</span><div class="value">${factura.cliente}</div></div>
+          <div class="card"><span class="label">Estado</span><div class="value">${factura.estado}</div></div>
+        </div>
+        <table>
+          <thead>
+            <tr><th>Producto</th><th>Cant.</th><th>Precio</th><th>Subtotal</th></tr>
+          </thead>
+          <tbody>${filas}</tbody>
+          <tfoot>
+            <tr><td colspan="3">Total</td><td>${formatCurrency(factura.total)}</td></tr>
+          </tfoot>
+        </table>
+      </div>
+      <div class="footer">SDGC &mdash; Documento generado desde la app móvil.</div>
+    </div>
+  </body>
+</html>`;
+
       await Print.printAsync({ html });
-      
+
     } catch (error: any) {
       console.error('Document Error:', error);
-      Alert.alert('Error', `No se pudo generar el documento: ${error.message || 'Error desconocido'}`);
+      Alert.alert('Error', `No se pudo generar la factura: ${error.message || 'Error desconocido'}`);
     } finally {
       setIsGenerating(null);
     }

@@ -32,7 +32,7 @@ const getProductImage = (nombre: string, imagenUrl?: string | null): string => {
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
-export default function Buscar() {
+export default function Buscar({ route }: { route?: any }) {
   const navigation = useNavigation<NavigationProp>();
   const { showToast } = useToast();
   
@@ -42,6 +42,13 @@ export default function Buscar() {
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState('relevance');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (route?.params?.query) {
+      setSearchQuery(route.params.query);
+      navigation.setParams({ query: undefined } as any);
+    }
+  }, [route?.params?.query, navigation]);
 
   const goToLogin = useCallback(() => {
     navigation.dispatch(CommonActions.reset({ index: 0, routes: [{ name: 'RoleSelect' as never }] }));
@@ -75,7 +82,7 @@ export default function Buscar() {
     const timer = setTimeout(() => {
         if (searchQuery.trim() || selectedCategory) performSearch(searchQuery);
         else if (!selectedCategory) setProductos([]);
-    }, 400);
+    }, 300);
     return () => clearTimeout(timer);
   }, [searchQuery, selectedCategory, sortBy, performSearch]);
 
@@ -127,10 +134,12 @@ export default function Buscar() {
             onChangeText={setSearchQuery}
             style={styles.searchInput}
             placeholderTextColor="#94A3B8"
+            autoCapitalize="sentences"
+            returnKeyType="search"
           />
           {searchQuery !== '' && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <X size={20} color="#64748B" />
+            <TouchableOpacity onPress={() => setSearchQuery('')} style={{ padding: 4, backgroundColor: '#E2E8F0', borderRadius: 12 }}>
+              <X size={14} color="#64748B" />
             </TouchableOpacity>
           )}
         </View>

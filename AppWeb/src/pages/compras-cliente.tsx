@@ -3,7 +3,7 @@ import Layout from "./layout";
 import "../styles/dashboard.css";
 import { useApiData } from "../hooks/useApiData";
 import { formatCurrency } from "../lib/format";
-import { fetchApi, postApi, putApi } from "../lib/api";
+import { fetchApi, postApi, putApi, getAssetUrl } from "../lib/api";
 import { getStoredUser, updateStoredUser } from "../lib/auth";
 import { downloadInvoicePdf, type InvoicePdfData } from "../lib/pdf";
 import { ProductCatalog } from "../components/sales/CatalogoProductos";
@@ -40,6 +40,7 @@ type CompraHistorial = {
     cantidad: number;
     precio_unitario: number;
     subtotal: number;
+    imagen_url?: string | null;
   }>;
 };
 
@@ -285,8 +286,8 @@ export default function ComprasCliente() {
     }
 
     return productosDisponibles.filter((producto) =>
-      producto.nombre.toLowerCase().includes(query) ||
-      producto.sku.toLowerCase().includes(query),
+      (producto.nombre ?? "").toLowerCase().includes(query) ||
+      (producto.sku ?? "").toLowerCase().includes(query),
     );
   }, [busqueda, productos, productosOcultos]);
 
@@ -599,6 +600,9 @@ export default function ComprasCliente() {
                         <div className="purchase-history-items">
                           {compra.detalles.map((detalle) => (
                             <div key={`${compra.id_venta}-${detalle.producto_id}`} className="purchase-history-item">
+                              {detalle.imagen_url && (
+                                <img src={getAssetUrl(detalle.imagen_url)} alt={detalle.nombre} className="product-image" />
+                              )}
                               <div>
                                 <strong>{detalle.nombre}</strong>
                                 <p>{detalle.cantidad} x {formatCurrency(detalle.precio_unitario)}</p>
